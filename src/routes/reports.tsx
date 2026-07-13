@@ -1,66 +1,52 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { salesReports, productReports } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
     meta: [
-      { title: "Reports — DhiPOS" },
-      { name: "description", content: "Sales analytics and performance reports." },
+      { title: "Reports — Dhipos" },
+      { name: "description", content: "Sales and product reports for Dhipos." },
     ],
   }),
   component: ReportsPage,
 });
 
-const weekly = [
-  { d: "Mon", v: 62 },
-  { d: "Tue", v: 78 },
-  { d: "Wed", v: 54 },
-  { d: "Thu", v: 92 },
-  { d: "Fri", v: 100 },
-  { d: "Sat", v: 84 },
-  { d: "Sun", v: 70 },
-];
+function ReportSection({ title, items }: { title: string; items: { title: string; desc: string }[] }) {
+  return (
+    <Card className="overflow-hidden">
+      <div className="border-b border-border p-5">
+        <p className="text-xl font-bold text-foreground">{title}</p>
+      </div>
+      <div className="border-b border-border bg-muted/40 px-5 py-2 text-sm font-medium text-muted-foreground">
+        Report
+      </div>
+      <div className="divide-y divide-border">
+        {items.map((r) => (
+          <div key={r.title} className="flex items-center justify-between gap-3 px-5 py-4">
+            <div>
+              <p className="font-medium text-foreground">{r.title}</p>
+              <p className="text-sm text-muted-foreground">{r.desc}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={() => toast(`Opening ${r.title}`)}>
+              View
+            </Button>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+}
 
 function ReportsPage() {
-  const max = Math.max(...weekly.map((w) => w.v));
   return (
-    <AppShell title="Reports">
-      <div className="mx-auto flex max-w-7xl flex-col gap-4">
-        <div>
-          <h2 className="text-2xl font-bold tracking-tight">Weekly Performance</h2>
-          <p className="text-sm text-muted-foreground">Sales overview for the last 7 days</p>
-        </div>
-        <Card>
-          <CardHeader><CardTitle className="text-base">Sales by Day</CardTitle></CardHeader>
-          <CardContent>
-            <div className="flex h-64 items-end justify-between gap-3">
-              {weekly.map((w) => (
-                <div key={w.d} className="flex flex-1 flex-col items-center gap-2">
-                  <div
-                    className="w-full rounded-t-md bg-[image:var(--gradient-primary)] transition-all"
-                    style={{ height: `${(w.v / max) * 100}%` }}
-                  />
-                  <span className="text-xs text-muted-foreground">{w.d}</span>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-        <div className="grid gap-4 md:grid-cols-3">
-          {[
-            { l: "Total Revenue", v: "$8,942.10" },
-            { l: "Orders", v: "312" },
-            { l: "Avg. Ticket", v: "$28.65" },
-          ].map((s) => (
-            <Card key={s.l}>
-              <CardContent className="p-5">
-                <p className="text-xs uppercase tracking-wider text-muted-foreground">{s.l}</p>
-                <p className="mt-2 text-2xl font-bold">{s.v}</p>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+    <AppShell>
+      <div className="flex flex-col gap-4 p-4 md:p-6">
+        <ReportSection title="Sales" items={salesReports} />
+        <ReportSection title="Product" items={productReports} />
       </div>
     </AppShell>
   );

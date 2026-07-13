@@ -9,19 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ProductsRouteImport } from './routes/products'
-import { Route as PosRouteImport } from './routes/pos'
-import { Route as OrdersRouteImport } from './routes/orders'
+import { Route as LoginRouteImport } from './routes/login'
+import { Route as InventoryRouteImport } from './routes/inventory'
+import { Route as ExpensesRouteImport } from './routes/expenses'
+import { Route as EcommerceRouteImport } from './routes/ecommerce'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as PosSellRouteImport } from './routes/pos.sell'
+import { Route as PosRegisterSessionsRouteImport } from './routes/pos.register-sessions'
+import { Route as PosRegisterRouteImport } from './routes/pos.register'
+import { Route as PosQuotationsRouteImport } from './routes/pos.quotations'
+import { Route as PosOnlinePaymentsRouteImport } from './routes/pos.online-payments'
+import { Route as PosBillHistoryRouteImport } from './routes/pos.bill-history'
+import { Route as AnalyticsSalesRouteImport } from './routes/analytics.sales'
+import { Route as AnalyticsInventoryRouteImport } from './routes/analytics.inventory'
+import { Route as AdminUsersRouteImport } from './routes/admin.users'
+import { Route as AdminTaxesRouteImport } from './routes/admin.taxes'
+import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
+import { Route as AdminPrintTemplatesRouteImport } from './routes/admin.print-templates'
+import { Route as AdminNotificationRouteImport } from './routes/admin.notification'
+import { Route as AdminLoyaltyProgramsRouteImport } from './routes/admin.loyalty-programs'
+import { Route as AdminLocationsRouteImport } from './routes/admin.locations'
+import { Route as AdminIntegrationsRouteImport } from './routes/admin.integrations'
+import { Route as AdminEmployeesRouteImport } from './routes/admin.employees'
+import { Route as AdminBillingRouteImport } from './routes/admin.billing'
+import { Route as AdminAuditLogsRouteImport } from './routes/admin.audit-logs'
 
-const SettingsRoute = SettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
@@ -32,14 +47,24 @@ const ProductsRoute = ProductsRouteImport.update({
   path: '/products',
   getParentRoute: () => rootRouteImport,
 } as any)
-const PosRoute = PosRouteImport.update({
-  id: '/pos',
-  path: '/pos',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const OrdersRoute = OrdersRouteImport.update({
-  id: '/orders',
-  path: '/orders',
+const InventoryRoute = InventoryRouteImport.update({
+  id: '/inventory',
+  path: '/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ExpensesRoute = ExpensesRouteImport.update({
+  id: '/expenses',
+  path: '/expenses',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EcommerceRoute = EcommerceRouteImport.update({
+  id: '/ecommerce',
+  path: '/ecommerce',
   getParentRoute: () => rootRouteImport,
 } as any)
 const CustomersRoute = CustomersRouteImport.update({
@@ -52,84 +77,312 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PosSellRoute = PosSellRouteImport.update({
+  id: '/pos/sell',
+  path: '/pos/sell',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosRegisterSessionsRoute = PosRegisterSessionsRouteImport.update({
+  id: '/pos/register-sessions',
+  path: '/pos/register-sessions',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosRegisterRoute = PosRegisterRouteImport.update({
+  id: '/pos/register',
+  path: '/pos/register',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosQuotationsRoute = PosQuotationsRouteImport.update({
+  id: '/pos/quotations',
+  path: '/pos/quotations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosOnlinePaymentsRoute = PosOnlinePaymentsRouteImport.update({
+  id: '/pos/online-payments',
+  path: '/pos/online-payments',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PosBillHistoryRoute = PosBillHistoryRouteImport.update({
+  id: '/pos/bill-history',
+  path: '/pos/bill-history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsSalesRoute = AnalyticsSalesRouteImport.update({
+  id: '/analytics/sales',
+  path: '/analytics/sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AnalyticsInventoryRoute = AnalyticsInventoryRouteImport.update({
+  id: '/analytics/inventory',
+  path: '/analytics/inventory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminUsersRoute = AdminUsersRouteImport.update({
+  id: '/admin/users',
+  path: '/admin/users',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminTaxesRoute = AdminTaxesRouteImport.update({
+  id: '/admin/taxes',
+  path: '/admin/taxes',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminSettingsRoute = AdminSettingsRouteImport.update({
+  id: '/admin/settings',
+  path: '/admin/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminPrintTemplatesRoute = AdminPrintTemplatesRouteImport.update({
+  id: '/admin/print-templates',
+  path: '/admin/print-templates',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminNotificationRoute = AdminNotificationRouteImport.update({
+  id: '/admin/notification',
+  path: '/admin/notification',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLoyaltyProgramsRoute = AdminLoyaltyProgramsRouteImport.update({
+  id: '/admin/loyalty-programs',
+  path: '/admin/loyalty-programs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminLocationsRoute = AdminLocationsRouteImport.update({
+  id: '/admin/locations',
+  path: '/admin/locations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminIntegrationsRoute = AdminIntegrationsRouteImport.update({
+  id: '/admin/integrations',
+  path: '/admin/integrations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminEmployeesRoute = AdminEmployeesRouteImport.update({
+  id: '/admin/employees',
+  path: '/admin/employees',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminBillingRoute = AdminBillingRouteImport.update({
+  id: '/admin/billing',
+  path: '/admin/billing',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
+  id: '/admin/audit-logs',
+  path: '/admin/audit-logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/orders': typeof OrdersRoute
-  '/pos': typeof PosRoute
+  '/ecommerce': typeof EcommerceRoute
+  '/expenses': typeof ExpensesRoute
+  '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/products': typeof ProductsRoute
   '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/billing': typeof AdminBillingRoute
+  '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/integrations': typeof AdminIntegrationsRoute
+  '/admin/locations': typeof AdminLocationsRoute
+  '/admin/loyalty-programs': typeof AdminLoyaltyProgramsRoute
+  '/admin/notification': typeof AdminNotificationRoute
+  '/admin/print-templates': typeof AdminPrintTemplatesRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/taxes': typeof AdminTaxesRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/analytics/inventory': typeof AnalyticsInventoryRoute
+  '/analytics/sales': typeof AnalyticsSalesRoute
+  '/pos/bill-history': typeof PosBillHistoryRoute
+  '/pos/online-payments': typeof PosOnlinePaymentsRoute
+  '/pos/quotations': typeof PosQuotationsRoute
+  '/pos/register': typeof PosRegisterRoute
+  '/pos/register-sessions': typeof PosRegisterSessionsRoute
+  '/pos/sell': typeof PosSellRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/orders': typeof OrdersRoute
-  '/pos': typeof PosRoute
+  '/ecommerce': typeof EcommerceRoute
+  '/expenses': typeof ExpensesRoute
+  '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/products': typeof ProductsRoute
   '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/billing': typeof AdminBillingRoute
+  '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/integrations': typeof AdminIntegrationsRoute
+  '/admin/locations': typeof AdminLocationsRoute
+  '/admin/loyalty-programs': typeof AdminLoyaltyProgramsRoute
+  '/admin/notification': typeof AdminNotificationRoute
+  '/admin/print-templates': typeof AdminPrintTemplatesRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/taxes': typeof AdminTaxesRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/analytics/inventory': typeof AnalyticsInventoryRoute
+  '/analytics/sales': typeof AnalyticsSalesRoute
+  '/pos/bill-history': typeof PosBillHistoryRoute
+  '/pos/online-payments': typeof PosOnlinePaymentsRoute
+  '/pos/quotations': typeof PosQuotationsRoute
+  '/pos/register': typeof PosRegisterRoute
+  '/pos/register-sessions': typeof PosRegisterSessionsRoute
+  '/pos/sell': typeof PosSellRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/orders': typeof OrdersRoute
-  '/pos': typeof PosRoute
+  '/ecommerce': typeof EcommerceRoute
+  '/expenses': typeof ExpensesRoute
+  '/inventory': typeof InventoryRoute
+  '/login': typeof LoginRoute
   '/products': typeof ProductsRoute
   '/reports': typeof ReportsRoute
-  '/settings': typeof SettingsRoute
+  '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/billing': typeof AdminBillingRoute
+  '/admin/employees': typeof AdminEmployeesRoute
+  '/admin/integrations': typeof AdminIntegrationsRoute
+  '/admin/locations': typeof AdminLocationsRoute
+  '/admin/loyalty-programs': typeof AdminLoyaltyProgramsRoute
+  '/admin/notification': typeof AdminNotificationRoute
+  '/admin/print-templates': typeof AdminPrintTemplatesRoute
+  '/admin/settings': typeof AdminSettingsRoute
+  '/admin/taxes': typeof AdminTaxesRoute
+  '/admin/users': typeof AdminUsersRoute
+  '/analytics/inventory': typeof AnalyticsInventoryRoute
+  '/analytics/sales': typeof AnalyticsSalesRoute
+  '/pos/bill-history': typeof PosBillHistoryRoute
+  '/pos/online-payments': typeof PosOnlinePaymentsRoute
+  '/pos/quotations': typeof PosQuotationsRoute
+  '/pos/register': typeof PosRegisterRoute
+  '/pos/register-sessions': typeof PosRegisterSessionsRoute
+  '/pos/sell': typeof PosSellRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/customers'
-    | '/orders'
-    | '/pos'
+    | '/ecommerce'
+    | '/expenses'
+    | '/inventory'
+    | '/login'
     | '/products'
     | '/reports'
-    | '/settings'
+    | '/admin/audit-logs'
+    | '/admin/billing'
+    | '/admin/employees'
+    | '/admin/integrations'
+    | '/admin/locations'
+    | '/admin/loyalty-programs'
+    | '/admin/notification'
+    | '/admin/print-templates'
+    | '/admin/settings'
+    | '/admin/taxes'
+    | '/admin/users'
+    | '/analytics/inventory'
+    | '/analytics/sales'
+    | '/pos/bill-history'
+    | '/pos/online-payments'
+    | '/pos/quotations'
+    | '/pos/register'
+    | '/pos/register-sessions'
+    | '/pos/sell'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/customers'
-    | '/orders'
-    | '/pos'
+    | '/ecommerce'
+    | '/expenses'
+    | '/inventory'
+    | '/login'
     | '/products'
     | '/reports'
-    | '/settings'
+    | '/admin/audit-logs'
+    | '/admin/billing'
+    | '/admin/employees'
+    | '/admin/integrations'
+    | '/admin/locations'
+    | '/admin/loyalty-programs'
+    | '/admin/notification'
+    | '/admin/print-templates'
+    | '/admin/settings'
+    | '/admin/taxes'
+    | '/admin/users'
+    | '/analytics/inventory'
+    | '/analytics/sales'
+    | '/pos/bill-history'
+    | '/pos/online-payments'
+    | '/pos/quotations'
+    | '/pos/register'
+    | '/pos/register-sessions'
+    | '/pos/sell'
   id:
     | '__root__'
     | '/'
     | '/customers'
-    | '/orders'
-    | '/pos'
+    | '/ecommerce'
+    | '/expenses'
+    | '/inventory'
+    | '/login'
     | '/products'
     | '/reports'
-    | '/settings'
+    | '/admin/audit-logs'
+    | '/admin/billing'
+    | '/admin/employees'
+    | '/admin/integrations'
+    | '/admin/locations'
+    | '/admin/loyalty-programs'
+    | '/admin/notification'
+    | '/admin/print-templates'
+    | '/admin/settings'
+    | '/admin/taxes'
+    | '/admin/users'
+    | '/analytics/inventory'
+    | '/analytics/sales'
+    | '/pos/bill-history'
+    | '/pos/online-payments'
+    | '/pos/quotations'
+    | '/pos/register'
+    | '/pos/register-sessions'
+    | '/pos/sell'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CustomersRoute: typeof CustomersRoute
-  OrdersRoute: typeof OrdersRoute
-  PosRoute: typeof PosRoute
+  EcommerceRoute: typeof EcommerceRoute
+  ExpensesRoute: typeof ExpensesRoute
+  InventoryRoute: typeof InventoryRoute
+  LoginRoute: typeof LoginRoute
   ProductsRoute: typeof ProductsRoute
   ReportsRoute: typeof ReportsRoute
-  SettingsRoute: typeof SettingsRoute
+  AdminAuditLogsRoute: typeof AdminAuditLogsRoute
+  AdminBillingRoute: typeof AdminBillingRoute
+  AdminEmployeesRoute: typeof AdminEmployeesRoute
+  AdminIntegrationsRoute: typeof AdminIntegrationsRoute
+  AdminLocationsRoute: typeof AdminLocationsRoute
+  AdminLoyaltyProgramsRoute: typeof AdminLoyaltyProgramsRoute
+  AdminNotificationRoute: typeof AdminNotificationRoute
+  AdminPrintTemplatesRoute: typeof AdminPrintTemplatesRoute
+  AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminTaxesRoute: typeof AdminTaxesRoute
+  AdminUsersRoute: typeof AdminUsersRoute
+  AnalyticsInventoryRoute: typeof AnalyticsInventoryRoute
+  AnalyticsSalesRoute: typeof AnalyticsSalesRoute
+  PosBillHistoryRoute: typeof PosBillHistoryRoute
+  PosOnlinePaymentsRoute: typeof PosOnlinePaymentsRoute
+  PosQuotationsRoute: typeof PosQuotationsRoute
+  PosRegisterRoute: typeof PosRegisterRoute
+  PosRegisterSessionsRoute: typeof PosRegisterSessionsRoute
+  PosSellRoute: typeof PosSellRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/settings': {
-      id: '/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof SettingsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/reports': {
       id: '/reports'
       path: '/reports'
@@ -144,18 +397,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ProductsRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/pos': {
-      id: '/pos'
-      path: '/pos'
-      fullPath: '/pos'
-      preLoaderRoute: typeof PosRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/orders': {
-      id: '/orders'
-      path: '/orders'
-      fullPath: '/orders'
-      preLoaderRoute: typeof OrdersRouteImport
+    '/inventory': {
+      id: '/inventory'
+      path: '/inventory'
+      fullPath: '/inventory'
+      preLoaderRoute: typeof InventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/expenses': {
+      id: '/expenses'
+      path: '/expenses'
+      fullPath: '/expenses'
+      preLoaderRoute: typeof ExpensesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ecommerce': {
+      id: '/ecommerce'
+      path: '/ecommerce'
+      fullPath: '/ecommerce'
+      preLoaderRoute: typeof EcommerceRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/customers': {
@@ -172,18 +439,181 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/pos/sell': {
+      id: '/pos/sell'
+      path: '/pos/sell'
+      fullPath: '/pos/sell'
+      preLoaderRoute: typeof PosSellRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos/register-sessions': {
+      id: '/pos/register-sessions'
+      path: '/pos/register-sessions'
+      fullPath: '/pos/register-sessions'
+      preLoaderRoute: typeof PosRegisterSessionsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos/register': {
+      id: '/pos/register'
+      path: '/pos/register'
+      fullPath: '/pos/register'
+      preLoaderRoute: typeof PosRegisterRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos/quotations': {
+      id: '/pos/quotations'
+      path: '/pos/quotations'
+      fullPath: '/pos/quotations'
+      preLoaderRoute: typeof PosQuotationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos/online-payments': {
+      id: '/pos/online-payments'
+      path: '/pos/online-payments'
+      fullPath: '/pos/online-payments'
+      preLoaderRoute: typeof PosOnlinePaymentsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/pos/bill-history': {
+      id: '/pos/bill-history'
+      path: '/pos/bill-history'
+      fullPath: '/pos/bill-history'
+      preLoaderRoute: typeof PosBillHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics/sales': {
+      id: '/analytics/sales'
+      path: '/analytics/sales'
+      fullPath: '/analytics/sales'
+      preLoaderRoute: typeof AnalyticsSalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/analytics/inventory': {
+      id: '/analytics/inventory'
+      path: '/analytics/inventory'
+      fullPath: '/analytics/inventory'
+      preLoaderRoute: typeof AnalyticsInventoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/users': {
+      id: '/admin/users'
+      path: '/admin/users'
+      fullPath: '/admin/users'
+      preLoaderRoute: typeof AdminUsersRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/taxes': {
+      id: '/admin/taxes'
+      path: '/admin/taxes'
+      fullPath: '/admin/taxes'
+      preLoaderRoute: typeof AdminTaxesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/settings': {
+      id: '/admin/settings'
+      path: '/admin/settings'
+      fullPath: '/admin/settings'
+      preLoaderRoute: typeof AdminSettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/print-templates': {
+      id: '/admin/print-templates'
+      path: '/admin/print-templates'
+      fullPath: '/admin/print-templates'
+      preLoaderRoute: typeof AdminPrintTemplatesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/notification': {
+      id: '/admin/notification'
+      path: '/admin/notification'
+      fullPath: '/admin/notification'
+      preLoaderRoute: typeof AdminNotificationRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/loyalty-programs': {
+      id: '/admin/loyalty-programs'
+      path: '/admin/loyalty-programs'
+      fullPath: '/admin/loyalty-programs'
+      preLoaderRoute: typeof AdminLoyaltyProgramsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/locations': {
+      id: '/admin/locations'
+      path: '/admin/locations'
+      fullPath: '/admin/locations'
+      preLoaderRoute: typeof AdminLocationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/integrations': {
+      id: '/admin/integrations'
+      path: '/admin/integrations'
+      fullPath: '/admin/integrations'
+      preLoaderRoute: typeof AdminIntegrationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/employees': {
+      id: '/admin/employees'
+      path: '/admin/employees'
+      fullPath: '/admin/employees'
+      preLoaderRoute: typeof AdminEmployeesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/billing': {
+      id: '/admin/billing'
+      path: '/admin/billing'
+      fullPath: '/admin/billing'
+      preLoaderRoute: typeof AdminBillingRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/admin/audit-logs': {
+      id: '/admin/audit-logs'
+      path: '/admin/audit-logs'
+      fullPath: '/admin/audit-logs'
+      preLoaderRoute: typeof AdminAuditLogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CustomersRoute: CustomersRoute,
-  OrdersRoute: OrdersRoute,
-  PosRoute: PosRoute,
+  EcommerceRoute: EcommerceRoute,
+  ExpensesRoute: ExpensesRoute,
+  InventoryRoute: InventoryRoute,
+  LoginRoute: LoginRoute,
   ProductsRoute: ProductsRoute,
   ReportsRoute: ReportsRoute,
-  SettingsRoute: SettingsRoute,
+  AdminAuditLogsRoute: AdminAuditLogsRoute,
+  AdminBillingRoute: AdminBillingRoute,
+  AdminEmployeesRoute: AdminEmployeesRoute,
+  AdminIntegrationsRoute: AdminIntegrationsRoute,
+  AdminLocationsRoute: AdminLocationsRoute,
+  AdminLoyaltyProgramsRoute: AdminLoyaltyProgramsRoute,
+  AdminNotificationRoute: AdminNotificationRoute,
+  AdminPrintTemplatesRoute: AdminPrintTemplatesRoute,
+  AdminSettingsRoute: AdminSettingsRoute,
+  AdminTaxesRoute: AdminTaxesRoute,
+  AdminUsersRoute: AdminUsersRoute,
+  AnalyticsInventoryRoute: AnalyticsInventoryRoute,
+  AnalyticsSalesRoute: AnalyticsSalesRoute,
+  PosBillHistoryRoute: PosBillHistoryRoute,
+  PosOnlinePaymentsRoute: PosOnlinePaymentsRoute,
+  PosQuotationsRoute: PosQuotationsRoute,
+  PosRegisterRoute: PosRegisterRoute,
+  PosRegisterSessionsRoute: PosRegisterSessionsRoute,
+  PosSellRoute: PosSellRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

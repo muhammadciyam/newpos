@@ -33,17 +33,130 @@ export const products: Product[] = [
   { id: "p8", name: "Double Burger", price: 12.5, category: "food", image: burger, stock: 10 },
 ];
 
-export const sampleOrders = [
-  { id: "ORD-1042", customer: "Walk-in", items: 3, total: 24.5, status: "Completed", time: "10:24" },
-  { id: "ORD-1041", customer: "Sara N.", items: 1, total: 4.75, status: "Completed", time: "10:12" },
-  { id: "ORD-1040", customer: "Ahmed R.", items: 5, total: 48.25, status: "Refunded", time: "09:58" },
-  { id: "ORD-1039", customer: "Walk-in", items: 2, total: 12.5, status: "Completed", time: "09:41" },
-  { id: "ORD-1038", customer: "Lena K.", items: 4, total: 31.0, status: "Pending", time: "09:22" },
+export type Customer = {
+  id: string;
+  name: string;
+  mobile: string;
+  outstanding: number;
+  limit: number;
+  spent: number;
+  loyalty: number;
+};
+
+// ---- Dashboard series ----
+export type SalesPoint = { date: string; label: string; value: number };
+export const netSalesSeries: SalesPoint[] = [];
+export const salesCountSeries: SalesPoint[] = [];
+
+export const dashboardStats = {
+  todayTotalSales: 0,
+  todayTotalSalesChange: 0,
+  todayNetSales: 0,
+  todayNetSalesChange: 0,
+  todayCreditSales: 0,
+  yesterdayNetSales: 0,
+  yesterdayNetSalesChange: 0,
+  monthNetSales: 0,
+  monthNetSalesChange: 0,
+  customersThisMonth: 0,
+  customersThisMonthChange: 0,
+  productsSoldThisMonth: 0,
+  productsSoldThisMonthChange: 0,
+  refundsThisMonth: 0,
+  refundsThisMonthChange: 0,
+  voidsThisMonth: 0,
+  voidsThisMonthChange: 0,
+};
+
+export type TopSellingProduct = { name: string; revenue: number; sold: number };
+export const topSellingProducts: TopSellingProduct[] = [];
+
+// ---- Register ----
+export type CashType = { key: string; label: string; currency: string };
+export const cashTypes: CashType[] = [
+  { key: "cash", label: "cash", currency: "" },
+  { key: "bank-transfer", label: "bank-transfer", currency: "" },
+  { key: "card", label: "card", currency: "" },
+  { key: "cash-usd", label: "cash/USD", currency: "USD" },
+  { key: "cash-usd-1", label: "cash/USD 1", currency: "USD 1" },
+  { key: "cash-usd-20", label: "cash/usd 20", currency: "usd 20" },
 ];
 
-export const sampleCustomers = [
-  { id: "C-001", name: "Sara Nasser", phone: "+971 50 111 2233", visits: 24, spent: 512.4 },
-  { id: "C-002", name: "Ahmed Rahman", phone: "+971 55 998 1122", visits: 12, spent: 231.75 },
-  { id: "C-003", name: "Lena Khoury", phone: "+971 52 445 6677", visits: 8, spent: 148.9 },
-  { id: "C-004", name: "Omar Ali", phone: "+971 56 302 4411", visits: 3, spent: 44.25 },
+export type RegisterSession = {
+  no: number;
+  register: string;
+  createdAt: string;
+  closedAt: string | null;
+  openDuration: string;
+  by: string;
+};
+
+// ---- Bills ----
+export type Bill = {
+  number: string;
+  customer: string;
+  location: string;
+  register: string;
+  status: "Sale" | "Refund" | "Void";
+  total: number;
+  created: string;
+  by: string;
+};
+
+// ---- Online Payments ----
+export type OnlinePayment = {
+  id: string;
+  billNumber: string;
+  amount: number;
+  status: "Success" | "Pending" | "Failed";
+  created: string;
+  by: string;
+  reference: string;
+};
+
+export const onlinePayments: OnlinePayment[] = [];
+
+// ---- Reports ----
+export const salesReports = [
+  { title: "Day Summary Reports", desc: "Sales, Payments, Register reports for a day" },
+  { title: "Product Sales Report", desc: "Sales summary by products" },
+  { title: "Period Sales Reports", desc: "Various sales reports for given period" },
+  { title: "Customer Sales Report", desc: "Sales by customers" },
+  { title: "Outstanding Bills Report", desc: "Unsettled sales bills (Credit Sales, Layaway Bills)" },
+  { title: "Sales Void Report", desc: "Reports of voided invoices" },
+  { title: "FOC Bills Report", desc: "Details of all FOC bills" },
+];
+
+export const productReports = [
+  { title: "Stock Report", desc: "Current stock levels by product" },
+  { title: "Stock Movement Report", desc: "Stock in/out movement history" },
+  { title: "Reorder Report", desc: "Products below reorder level" },
+];
+
+// ---- Payment methods / cash denominations ----
+export const paymentMethods = [
+  { name: "Cash", type: "manual", details: "" },
+  { name: "Card", type: "manual", details: "" },
+  { name: "Bank Transfer", type: "bank-transfer", details: "7730000639888" },
+  { name: "BML Gateway", type: "bml-gateway", details: "siyam" },
+];
+
+export const cashDenominations = [
+  { name: "25 Laari", value: 0.25, type: "Coin", currency: "MVR" },
+  { name: "50 Laari", value: 0.5, type: "Coin", currency: "MVR" },
+  { name: "Rf 1", value: 1.0, type: "Coin", currency: "MVR" },
+  { name: "Rf 2", value: 2.0, type: "Coin", currency: "MVR" },
+  { name: "Rf 5", value: 5.0, type: "Note", currency: "MVR" },
+  { name: "Rf 10", value: 10.0, type: "Note", currency: "MVR" },
+  { name: "Rf 20", value: 20.0, type: "Note", currency: "MVR" },
+  { name: "Rf 50", value: 50.0, type: "Note", currency: "MVR" },
+];
+
+export const numberFormats = [
+  { type: "Bill", format: "{registerNumber}/{sequence}" },
+  { type: "Payments", format: "P/{year:4}/{sequence}" },
+  { type: "Quotations", format: "QT/{sequence}" },
+  { type: "Purchase Orders", format: "PO/{sequence}" },
+  { type: "Purchase Receives", format: "PR/{sequence}" },
+  { type: "Transfer Requests", format: "TR/{sequence}" },
 ];

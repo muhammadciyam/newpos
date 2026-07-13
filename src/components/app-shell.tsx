@@ -1,35 +1,101 @@
-import type { ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
+import { Link, useNavigate } from "@tanstack/react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Bell, Search, User } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Inbox, Store, LogOut } from "lucide-react";
+import { toast } from "sonner";
+import { useRegister } from "@/lib/register-store";
+import { authStore, useCurrentUser } from "@/lib/auth-store";
+import { logAudit } from "@/lib/audit-log-store";
 
-export function AppShell({ title, children }: { title: string; children: ReactNode }) {
+export function AppShell({ title, children }: { title?: string; children: ReactNode }) {
+  const register = useRegister();
+  const user = useCurrentUser();
+  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    authStore.hydrate();
+    if (!authStore.getCurrentUser()) {
+      navigate({ to: "/login" });
+    } else {
+      setReady(true);
+    }
+  }, [navigate]);
+
+  useEffect(() => {
+    if (ready && !user) navigate({ to: "/login" });
+  }, [ready, user, navigate]);
+
+  function logout() {
+    if (user) logAudit(user.name, "logout", "Session");
+    authStore.logout();
+    navigate({ to: "/login" });
+  }
+
+  if (!ready || !user) {
+    return <div className="min-h-screen bg-muted/40" />;
+  }
+
   return (
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-muted/40">
         <AppSidebar />
         <div className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background/95 px-3 backdrop-blur">
+          <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-3">
             <SidebarTrigger />
-            <div className="hidden md:block">
-              <h1 className="text-sm font-semibold text-foreground">{title}</h1>
-            </div>
-            <div className="ml-auto flex items-center gap-2">
-              <div className="relative hidden md:block">
-                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input placeholder="Search products, orders…" className="h-9 w-64 pl-8" />
-              </div>
-              <Button variant="ghost" size="icon" aria-label="Notifications">
-                <Bell className="h-4 w-4" />
-              </Button>
-              <Button variant="ghost" size="icon" aria-label="Account">
-                <User className="h-4 w-4" />
-              </Button>
+            <div className="ml-auto flex items-center gap-3">
+              {register.register && (
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <Link to="/pos/register">
+                    <Store className="h-4 w-4" /> View Register
+                  </Link>
+                </Button>
+              )}
+              <button onClick={() => toast("No new messages")} className="relative">
+                <Inbox className="h-5 w-5 text-muted-foreground" />
+                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
+              </button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button className="flex items-center gap-2">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="bg-destructive text-xs font-semibold text-destructive-foreground">
+                        {user.name.trim()[0]?.toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="hidden leading-tight sm:block">
+                      <p className="text-sm font-semibold text-foreground">{user.name}</p>
+                      <p className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {register.storeName}
+                      </p>
+                    </div>
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>
+                    <p className="font-medium">{user.name}</p>
+                    <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout}>
+                    <LogOut className="mr-2 h-4 w-4" /> Log Out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1 p-4 md:p-6">{children}</main>
+          <main className="flex-1">{title && <span className="sr-only">{title}</span>}{children}</main>
         </div>
       </div>
     </SidebarProvider>

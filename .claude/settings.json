@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(npm run dev)",
+      "Skill(run)",
+      "Skill(run:*)",
+      "PowerShell(chromium-cli --session ewity)",
+      "PowerShell(npx --yes playwright --version 2>&1)",
+      "PowerShell(npx playwright install chromium --with-deps 2>&1)",
+      "PowerShell(npx playwright install chromium 2>&1)",
+      "PowerShell($env:CI=\"true\"; npx playwright install chromium; Write-Host \"EXIT:$LASTEXITCODE\")",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\Local\\\\ms-playwright\" -ErrorAction SilentlyContinue | Select-Object Name)",
+      "PowerShell(npm ls playwright-core 2>&1)",
+      "PowerShell(node \"C:\\\\Users\\\\Surface\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Surface-Desktop-exact-copy-tool\\\\8e12f7aa-77de-47ef-8b2c-addb7f21a7cb\\\\scratchpad\\\\shot.mjs\")",
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\Local\\\\ms-playwright\\\\chromium-1228\" -Recurse -Filter \"chrome.exe\" | Select-Object FullName)"
+    ]
+  }
+}
