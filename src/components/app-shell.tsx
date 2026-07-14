@@ -34,7 +34,11 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   }, [navigate]);
 
   useEffect(() => {
-    if (ready && !user) navigate({ to: "/login" });
+    if (!ready) return;
+    if (!user || user.status !== "Active") {
+      authStore.logout();
+      navigate({ to: "/login" });
+    }
   }, [ready, user, navigate]);
 
   function logout() {
@@ -86,6 +90,7 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                   <DropdownMenuLabel>
                     <p className="font-medium">{user.name}</p>
                     <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
+                    <p className="text-xs font-normal text-muted-foreground">{user.role}</p>
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>

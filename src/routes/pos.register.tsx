@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Dialog,
@@ -15,9 +16,23 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, Download, Calculator } from "lucide-react";
-import { cashTypes } from "@/lib/pos-data";
+import { RefreshCw, Download, Calculator, Plus } from "lucide-react";
+import { cashTypes, denominationsForKey } from "@/lib/pos-data";
 import { useRegister, registerStore, formatDuration, type RegisterName } from "@/lib/register-store";
+import { useCurrentUser } from "@/lib/auth-store";
+import { useHasPermission } from "@/lib/permissions";
+import { CountMoneyDialog } from "@/components/count-money-dialog";
+
+const countMoneyTitles: Record<string, string> = {
+  mvr: "MVR",
+  usd: "USD",
+  usd1: "USD $1",
+  usd20: "USD $20",
+  cash: "MVR",
+  "cash-usd": "USD",
+  "cash-usd-1": "USD $1",
+  "cash-usd-20": "USD $20",
+};
 
 export const Route = createFileRoute("/pos/register")({
   head: () => ({
@@ -28,9 +43,16 @@ export const Route = createFileRoute("/pos/register")({
 
 function RegisterPage() {
   const register = useRegister();
+  const currentUser = useCurrentUser();
+  const canManageSettings = useHasPermission("settings.manage");
+  const allowedRegisters =
+    currentUser?.role === "Cashier" && currentUser.authorizedRegister
+      ? [currentUser.authorizedRegister]
+      : (Object.keys(register.registers) as RegisterName[]);
   const [openingFor, setOpeningFor] = useState<RegisterName | null>(null);
   const [closing, setClosing] = useState(false);
   const [closingValues, setClosingValues] = useState<Record<string, string>>({});
+  const [countMoneyKey, setCountMoneyKey] = useState<string | null>(null);
   const [note, setNote] = useState("");
   const [opening, setOpening] = useState<Record<string, string>>({
     mvr: "0",
@@ -40,18 +62,40 @@ function RegisterPage() {
     card: "0",
     bank: "0",
   });
+  const [newRegisterOpen, setNewRegisterOpen] = useState(false);
+  const [newRegisterName, setNewRegisterName] = useState("");
+  const [newRegisterError, setNewRegisterError] = useState("");
+
+  function createRegister() {
+    const result = registerStore.createRegister(newRegisterName);
+    if ("error" in result) {
+      setNewRegisterError(result.error);
+      return;
+    }
+    toast.success(`Register "${newRegisterName.trim()}" created`);
+    setNewRegisterName("");
+    setNewRegisterError("");
+    setNewRegisterOpen(false);
+  }
 
   if (!register.register) {
     return (
       <AppShell>
         <div className="flex flex-col gap-4 p-4 md:p-6">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">Choose a Register to open</h1>
-            <p className="text-sm text-muted-foreground">Choose the register to open to start making sales</p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground">Choose a Register to open</h1>
+              <p className="text-sm text-muted-foreground">Choose the register to open to start making sales</p>
+            </div>
+            {canManageSettings && (
+              <Button onClick={() => setNewRegisterOpen(true)} className="gap-1.5">
+                <Plus className="h-4 w-4" /> New Register
+              </Button>
+            )}
           </div>
           <h2 className="text-lg font-semibold text-foreground">{register.storeName}</h2>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {(Object.keys(register.registers) as RegisterName[]).map((name) => {
+            {allowedRegisters.map((name) => {
               const r = register.registers[name];
               return (
                 <div key={name} className="rounded-lg border border-border bg-card p-4">
@@ -104,7 +148,13 @@ function RegisterPage() {
                       value={opening[key]}
                       onChange={(e) => setOpening((o) => ({ ...o, [key]: e.target.value }))}
                     />
-                    <Button size="icon" variant="default" className="shrink-0">
+                    <Button
+                      size="icon"
+                      variant="default"
+                      className="shrink-0"
+                      type="button"
+                      onClick={() => setCountMoneyKey(key)}
+                    >
                       <Calculator className="h-4 w-4" />
                     </Button>
                   </div>
@@ -143,6 +193,51 @@ function RegisterPage() {
                 }}
               >
                 Open Register
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <CountMoneyDialog
+          open={!!countMoneyKey}
+          onOpenChange={(v) => !v && setCountMoneyKey(null)}
+          title={countMoneyKey ? countMoneyTitles[countMoneyKey] : ""}
+          denominations={countMoneyKey ? denominationsForKey(countMoneyKey) : []}
+          onApply={(total) => {
+            if (!countMoneyKey) return;
+            setOpening((o) => ({ ...o, [countMoneyKey]: total.toFixed(2) }));
+          }}
+        />
+
+        <Dialog
+          open={newRegisterOpen}
+          onOpenChange={(v) => {
+            setNewRegisterOpen(v);
+            if (!v) {
+              setNewRegisterName("");
+              setNewRegisterError("");
+            }
+          }}
+        >
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>New Register</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-1.5">
+              <Label>Register Name</Label>
+              <Input
+                value={newRegisterName}
+                onChange={(e) => setNewRegisterName(e.target.value)}
+                placeholder="e.g. Register 3"
+              />
+              {newRegisterError && <p className="text-sm text-destructive">{newRegisterError}</p>}
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setNewRegisterOpen(false)}>
+                Cancel
+              </Button>
+              <Button disabled={!newRegisterName.trim()} onClick={createRegister}>
+                Create Register
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -197,7 +292,12 @@ function RegisterPage() {
                               onChange={(e) => setClosingValues((v) => ({ ...v, [c.key]: e.target.value }))}
                             />
                             {(c.key === "cash" || c.key.startsWith("cash-")) && (
-                              <Button size="icon" className="shrink-0">
+                              <Button
+                                size="icon"
+                                className="shrink-0"
+                                type="button"
+                                onClick={() => setCountMoneyKey(c.key)}
+                              >
                                 <Calculator className="h-4 w-4" />
                               </Button>
                             )}
@@ -241,6 +341,17 @@ function RegisterPage() {
             </div>
           </div>
         </div>
+
+        <CountMoneyDialog
+          open={!!countMoneyKey}
+          onOpenChange={(v) => !v && setCountMoneyKey(null)}
+          title={countMoneyKey ? countMoneyTitles[countMoneyKey] : ""}
+          denominations={countMoneyKey ? denominationsForKey(countMoneyKey) : []}
+          onApply={(total) => {
+            if (!countMoneyKey) return;
+            setClosingValues((v) => ({ ...v, [countMoneyKey]: total.toFixed(2) }));
+          }}
+        />
       </AppShell>
     );
   }

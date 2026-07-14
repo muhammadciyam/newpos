@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -13,11 +13,12 @@ import {
 } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Plus, Search, UserPlus, StickyNote, Globe, Smile, PackageX, Tag, Minus } from "lucide-react";
+import { Plus, Search, UserPlus, StickyNote, Globe, Smile, PackageX, Tag, Minus, Store } from "lucide-react";
 import { categories, type Product } from "@/lib/pos-data";
 import { useProducts, productsStore } from "@/lib/products-store";
 import { billsStore } from "@/lib/bills-store";
 import { useRegister } from "@/lib/register-store";
+import { useCurrentUser } from "@/lib/auth-store";
 
 type CartLine = { product: Product; qty: number };
 type SaleTab = { id: number; items: CartLine[]; cashReceived: string };
@@ -37,6 +38,7 @@ let tabId = 1;
 function SellPage() {
   const products = useProducts();
   const register = useRegister();
+  const currentUser = useCurrentUser();
   const [tabs, setTabs] = useState<SaleTab[]>([{ id: 0, items: [], cashReceived: "0.00" }]);
   const [activeTab, setActiveTab] = useState(0);
   const [category, setCategory] = useState("all");
@@ -51,7 +53,7 @@ function SellPage() {
       products.filter(
         (p) =>
           (category === "all" || p.category === category) &&
-          p.name.toLowerCase().includes(query.toLowerCase()),
+          (p.name.toLowerCase().includes(query.toLowerCase()) || (p.barcode ?? "").includes(query)),
       ),
     [products, category, query],
   );
@@ -100,6 +102,7 @@ function SellPage() {
   }
 
   function saveBill() {
+    if (!register.register) return toast.error("Open a register before selling");
     if (!tab.items.length) return toast.error("Cart is empty");
     if (outOfStock) return toast.error("Not enough stock");
     for (const i of tab.items) {
@@ -108,12 +111,31 @@ function SellPage() {
     const bill = billsStore.create({
       customer: "",
       location: register.storeName,
-      register: register.register ?? "Main",
+      register: register.register,
       total,
-      by: "Mohamed Siyam",
+      by: currentUser?.name ?? "Unknown",
     });
     toast.success(`Bill ${bill.number} saved for ${total.toFixed(2)} via ${payMethod}`);
     discardBill();
+  }
+
+  if (!register.register) {
+    return (
+      <AppShell>
+        <div className="flex flex-1 flex-col items-center justify-center gap-4 p-10 text-center">
+          <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
+            <Store className="h-8 w-8 text-muted-foreground" />
+          </div>
+          <div>
+            <p className="text-lg font-semibold text-foreground">No Open Register</p>
+            <p className="text-sm text-muted-foreground">Open a register before you can start selling.</p>
+          </div>
+          <Button asChild size="lg">
+            <Link to="/pos/register">Open Register</Link>
+          </Button>
+        </div>
+      </AppShell>
+    );
   }
 
   return (

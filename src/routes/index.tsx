@@ -148,11 +148,11 @@ function DashboardPage() {
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Today's Total Sales" value={s.todayTotalSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} change={s.todayTotalSalesChange} />
-          <StatCard label="Today's Net Sales" value={s.todayNetSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} change={s.todayNetSalesChange} />
-          <StatCard label="Today's Credit Sales" value={s.todayCreditSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} neutral />
-          <StatCard label="Yesterday's Net Sales" value={s.yesterdayNetSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} change={s.yesterdayNetSalesChange} />
-          <StatCard label="This month Net sales" value={s.monthNetSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} change={s.monthNetSalesChange} />
+          <StatCard label="Today's Total Sales" value={s.todayTotalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.todayTotalSalesChange} />
+          <StatCard label="Today's Net Sales" value={s.todayNetSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.todayNetSalesChange} />
+          <StatCard label="Today's Credit Sales" value={s.todayCreditSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} neutral />
+          <StatCard label="Yesterday's Net Sales" value={s.yesterdayNetSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.yesterdayNetSalesChange} />
+          <StatCard label="This month Net sales" value={s.monthNetSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.monthNetSalesChange} />
           <StatCard label="Customers this month" value={String(s.customersThisMonth)} change={s.customersThisMonthChange} />
           <StatCard label="Products sold this month" value={String(s.productsSoldThisMonth)} change={s.productsSoldThisMonthChange} />
           <StatCard label="Refunds this month" value={String(s.refundsThisMonth)} change={s.refundsThisMonthChange} />
@@ -183,10 +183,10 @@ function DashboardPage() {
                 {topSellingProducts.map((p) => (
                   <TableRow key={p.name}>
                     <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell>{p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })}</TableCell>
+                    <TableCell>{p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
                     <TableCell>{p.sold.toLocaleString()}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => toast(`${p.name}: ${p.sold.toLocaleString()} sold, ${p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2 })} revenue`)}>
+                      <Button variant="outline" size="sm" onClick={() => toast(`${p.name}: ${p.sold.toLocaleString()} sold, ${p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} revenue`)}>
                         Details
                       </Button>
                     </TableCell>

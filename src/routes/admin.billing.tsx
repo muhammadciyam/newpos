@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { toast } from "sonner";
+import { useHasPermission } from "@/lib/permissions";
+import { RestrictedPage } from "@/components/restricted-page";
 
 export const Route = createFileRoute("/admin/billing")({
   head: () => ({
@@ -23,6 +25,9 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
 }
 
 function BillingPage() {
+  const canManage = useHasPermission("settings.manage");
+  if (!canManage) return <RestrictedPage />;
+
   return (
     <AppShell>
       <div className="flex flex-col gap-4 p-4 md:p-6">

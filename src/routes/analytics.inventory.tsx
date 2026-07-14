@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useProducts } from "@/lib/products-store";
+import { useHasPermission } from "@/lib/permissions";
+import { RestrictedPage } from "@/components/restricted-page";
 
 export const Route = createFileRoute("/analytics/inventory")({
   head: () => ({
@@ -22,8 +24,11 @@ export const Route = createFileRoute("/analytics/inventory")({
 });
 
 function InventoryAnalyticsPage() {
+  const canView = useHasPermission("reports.view");
   const [outletSelected, setOutletSelected] = useState(true);
   const products = useProducts();
+
+  if (!canView) return <RestrictedPage />;
 
   const salesValue = products.reduce((s, p) => s + p.price * p.stock, 0);
   const count = products.reduce((s, p) => s + p.stock, 0);
@@ -70,7 +75,7 @@ function InventoryAnalyticsPage() {
           <TabsContent value="summary">
             <Card className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryStat label="Total Cost" value="0.00" />
-              <SummaryStat label="Sales Value (Ex. Tax)" value={salesValue.toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+              <SummaryStat label="Sales Value (Ex. Tax)" value={salesValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
               <SummaryStat label="Count" value={count.toLocaleString()} />
               <SummaryStat label="Low Stocks" value={lowStocks.toLocaleString()} />
             </Card>

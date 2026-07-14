@@ -7,6 +7,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { SlidersHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useBills } from "@/lib/bills-store";
+import { useCurrentUser } from "@/lib/auth-store";
+import { useHasPermission } from "@/lib/permissions";
 
 export const Route = createFileRoute("/pos/bill-history")({
   head: () => ({
@@ -16,7 +18,10 @@ export const Route = createFileRoute("/pos/bill-history")({
 });
 
 function BillHistoryPage() {
-  const bills = useBills();
+  const allBills = useBills();
+  const currentUser = useCurrentUser();
+  const canViewAll = useHasPermission("sales.viewAll");
+  const bills = canViewAll ? allBills : allBills.filter((b) => b.by === currentUser?.name);
 
   return (
     <AppShell>
@@ -24,7 +29,7 @@ function BillHistoryPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Bills</h1>
-            <p className="text-sm text-muted-foreground">Sales for Outlets</p>
+            <p className="text-sm text-muted-foreground">{canViewAll ? "Sales for Outlets" : "Your sales"}</p>
           </div>
           <div className="flex items-center gap-2">
             <Input placeholder="Bill Number" className="w-40" />

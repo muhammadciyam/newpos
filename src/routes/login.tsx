@@ -15,10 +15,16 @@ export const Route = createFileRoute("/login")({
   component: LoginPage,
 });
 
+const errorMessages: Record<string, string> = {
+  invalid: "Incorrect email/username or password",
+  suspended: "Your account has been suspended. Contact an admin.",
+  inactive: "Your account is inactive. Contact an admin.",
+};
+
 function LoginPage() {
   const navigate = useNavigate();
   const user = useCurrentUser();
-  const [email, setEmail] = useState("");
+  const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
 
@@ -35,12 +41,12 @@ function LoginPage() {
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    const matched = authStore.login(email, password);
-    if (!matched) {
-      setError("Incorrect email or password");
+    const result = authStore.login(identifier, password);
+    if (!result.ok) {
+      setError(errorMessages[result.reason]);
       return;
     }
-    logAudit(matched.name, "login", "Session");
+    logAudit(result.user.name, "login", "Session");
     navigate({ to: "/" });
   }
 
@@ -56,11 +62,10 @@ function LoginPage() {
         </div>
         <form onSubmit={submit} className="space-y-4">
           <div className="space-y-1.5">
-            <Label>Email</Label>
+            <Label>Email or Username</Label>
             <Input
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={identifier}
+              onChange={(e) => setIdentifier(e.target.value)}
               placeholder="you@example.com"
               autoComplete="username"
               required
@@ -81,6 +86,9 @@ function LoginPage() {
           <Button type="submit" className="w-full" size="lg">
             Log In
           </Button>
+          <p className="text-center text-sm text-muted-foreground">
+            Need an account? Ask an admin to add you on Admin &gt; Users.
+          </p>
         </form>
       </Card>
     </div>

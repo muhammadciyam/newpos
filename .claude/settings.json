@@ -12,7 +12,12 @@
       "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\Local\\\\ms-playwright\" -ErrorAction SilentlyContinue | Select-Object Name)",
       "PowerShell(npm ls playwright-core 2>&1)",
       "PowerShell(node \"C:\\\\Users\\\\Surface\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\c--Users-Surface-Desktop-exact-copy-tool\\\\8e12f7aa-77de-47ef-8b2c-addb7f21a7cb\\\\scratchpad\\\\shot.mjs\")",
-      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\Local\\\\ms-playwright\\\\chromium-1228\" -Recurse -Filter \"chrome.exe\" | Select-Object FullName)"
+      "PowerShell(Get-ChildItem \"$env:USERPROFILE\\\\AppData\\\\Local\\\\ms-playwright\\\\chromium-1228\" -Recurse -Filter \"chrome.exe\" | Select-Object FullName)",
+      "PowerShell(Remove-Item \"c:\\\\Users\\\\Surface\\\\Desktop\\\\exact-copy-tool\\\\src\\\\routes\\\\register.tsx\" -Force -Confirm:$false)",
+      "PowerShell(Get-NetTCPConnection -State Listen -LocalPort 8082,8083,8084,8085 -ErrorAction SilentlyContinue)"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\Surface\\AppData\\Local\\Temp\\claude\\c--Users-Surface-Desktop-exact-copy-tool\\8e12f7aa-77de-47ef-8b2c-addb7f21a7cb\\scratchpad"
     ]
   }
 }

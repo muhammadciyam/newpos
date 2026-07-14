@@ -15,6 +15,8 @@ import {
 import { CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { useBills } from "@/lib/bills-store";
+import { useHasPermission } from "@/lib/permissions";
+import { RestrictedPage } from "@/components/restricted-page";
 
 export const Route = createFileRoute("/analytics/sales")({
   head: () => ({
@@ -24,8 +26,11 @@ export const Route = createFileRoute("/analytics/sales")({
 });
 
 function SalesAnalyticsPage() {
+  const canView = useHasPermission("reports.view");
   const [outletSelected, setOutletSelected] = useState(true);
   const bills = useBills();
+
+  if (!canView) return <RestrictedPage />;
 
   const grossSales = bills.reduce((s, b) => s + b.total, 0);
   const netSales = grossSales;
@@ -94,9 +99,9 @@ function SalesAnalyticsPage() {
               </Card>
             ) : (
               <Card className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-                <SummaryStat label="Gross Sales" value={grossSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+                <SummaryStat label="Gross Sales" value={grossSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
                 <SummaryStat label="Discounts" value="0.00" />
-                <SummaryStat label="Net Sales" value={netSales.toLocaleString(undefined, { minimumFractionDigits: 2 })} />
+                <SummaryStat label="Net Sales" value={netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
                 <SummaryStat label="Bill Count" value={billCount.toLocaleString()} />
               </Card>
             )}

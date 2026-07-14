@@ -3,7 +3,7 @@ import type { RegisterSession } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 
-export type RegisterName = "Main" | "Main 2";
+export type RegisterName = string;
 
 export type RegisterState = {
   storeName: string;
@@ -42,6 +42,17 @@ export const registerStore = {
   subscribe: store.subscribe,
   get: store.get,
   hydrate: store.hydrate,
+  createRegister(name: string): { ok: true } | { error: string } {
+    const trimmed = name.trim();
+    if (!trimmed) return { error: "Register name is required" };
+    if (store.get().registers[trimmed]) return { error: "A register with that name already exists" };
+    store.set((s) => ({
+      ...s,
+      registers: { ...s.registers, [trimmed]: { isOpen: false, openedAt: null, lastClosedAt: null } },
+    }));
+    logAudit(authStore.getCurrentUser()?.name ?? "Unknown", "create", `Register / ${trimmed}`);
+    return { ok: true };
+  },
   open(name: RegisterName, by?: string) {
     const actor = by ?? authStore.getCurrentUser()?.name ?? "Unknown";
     const now = Date.now();

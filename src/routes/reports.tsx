@@ -1,9 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
+import { RestrictedPage } from "@/components/restricted-page";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { salesReports, productReports } from "@/lib/pos-data";
+import { useHasPermission } from "@/lib/permissions";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -42,6 +44,9 @@ function ReportSection({ title, items }: { title: string; items: { title: string
 }
 
 function ReportsPage() {
+  const canView = useHasPermission("reports.view");
+  if (!canView) return <RestrictedPage />;
+
   return (
     <AppShell>
       <div className="flex flex-col gap-4 p-4 md:p-6">

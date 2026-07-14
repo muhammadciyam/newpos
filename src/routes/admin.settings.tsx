@@ -17,6 +17,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { paymentMethods, cashDenominations, numberFormats } from "@/lib/pos-data";
+import { useHasPermission } from "@/lib/permissions";
+import { RestrictedPage } from "@/components/restricted-page";
 
 export const Route = createFileRoute("/admin/settings")({
   head: () => ({
@@ -58,10 +60,13 @@ function YesNoSelect({ defaultValue }: { defaultValue: string }) {
 }
 
 function SettingsPage() {
+  const canManage = useHasPermission("settings.manage");
   const [tab, setTab] = useState("Modules");
   const [stockAdjustmentTypes, setStockAdjustmentTypes] = useState([
     "Lost / Stolen", "Expired", "Stock Recount", "Damaged",
   ]);
+
+  if (!canManage) return <RestrictedPage />;
 
   return (
     <AppShell>

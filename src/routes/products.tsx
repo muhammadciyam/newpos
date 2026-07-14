@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -21,32 +21,43 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Search, Filter, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Filter, Pencil, Trash2, Upload, Loader2 } from "lucide-react";
 import { categories } from "@/lib/pos-data";
 import { useProducts, productsStore } from "@/lib/products-store";
+import { findProductImage } from "@/lib/image-search";
+import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
+import { useHasPermission } from "@/lib/permissions";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
   head: () => ({
     meta: [
       { title: "Products - Dhipos" },
-      { name: "description", content: "Manage your product catalog, pricing, and stock." },
+      { name: "description", content: "Manage your product catalog, pricing, and information." },
     ],
   }),
   component: ProductsPage,
 });
 
-const emptyForm = { name: "", price: "", category: "drinks", stock: "" };
+const emptyForm = { name: "", price: "", category: "drinks", barcode: "", sku: "", image: "" };
 
 function ProductsPage() {
+  const canManage = useHasPermission("products.manage");
   const products = useProducts();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const filtered = useMemo(
-    () => products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase())),
+    () =>
+      products.filter(
+        (p) =>
+          p.name.toLowerCase().includes(search.toLowerCase()) ||
+          (p.barcode ?? "").includes(search) ||
+          (p.sku ?? "").toLowerCase().includes(search.toLowerCase()),
+      ),
     [products, search],
   );
 
@@ -60,26 +71,51 @@ function ProductsPage() {
     const p = products.find((x) => x.id === id);
     if (!p) return;
     setEditingId(id);
-    setForm({ name: p.name, price: String(p.price), category: p.category, stock: String(p.stock) });
+    setForm({ name: p.name, price: String(p.price), category: p.category, barcode: p.barcode ?? "", sku: p.sku ?? "", image: p.image });
     setOpen(true);
   }
 
+  function handleImageUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setForm((f) => ({ ...f, image: reader.result as string }));
+    reader.readAsDataURL(file);
+  }
+
   function save() {
-    const payload = {
+    const basePayload = {
       name: form.name,
       price: parseFloat(form.price) || 0,
       category: form.category,
-      stock: parseInt(form.stock, 10) || 0,
-      image: products.find((p) => p.id === editingId)?.image ?? products[0]?.image ?? "",
+      barcode: form.barcode.trim() || undefined,
+      sku: form.sku.trim() || undefined,
     };
+
     if (editingId) {
-      productsStore.update(editingId, payload);
+      productsStore.update(editingId, { ...basePayload, image: form.image || PLACEHOLDER_PRODUCT_IMAGE });
       toast.success(`"${form.name}" updated`);
-    } else {
-      productsStore.create(payload);
-      toast.success(`"${form.name}" added`);
+      setOpen(false);
+      return;
     }
+
+    // Manual image (if the user uploaded one) always wins over the auto search.
+    const manualImage = form.image;
+    const created = productsStore.create({ ...basePayload, image: manualImage || PLACEHOLDER_PRODUCT_IMAGE });
+    toast.success(`"${form.name}" added`);
     setOpen(false);
+
+    if (!manualImage) {
+      toast("Searching for a product image...");
+      findProductImage(form.name, form.barcode.trim() || undefined).then((found) => {
+        if (found) {
+          productsStore.setImage(created.id, found);
+          toast.success(`Found an image for "${form.name}"`);
+        } else {
+          toast(`No image found for "${form.name}" — using placeholder`);
+        }
+      });
+    }
   }
 
   function remove(id: string, name: string) {
@@ -93,20 +129,22 @@ function ProductsPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Products</h1>
-            <p className="text-sm text-muted-foreground">{products.length} products in stock</p>
+            <p className="text-sm text-muted-foreground">{products.length} products in catalog</p>
           </div>
-          <div className="flex gap-2">
-            <Button onClick={openCreate}>
-              <Plus className="mr-1 h-4 w-4" /> Add Product
-            </Button>
-          </div>
+          {canManage && (
+            <div className="flex gap-2">
+              <Button onClick={openCreate}>
+                <Plus className="mr-1 h-4 w-4" /> Add Product
+              </Button>
+            </div>
+          )}
         </div>
 
         <Card className="p-3">
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[220px]">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search products..." className="pl-8" />
+              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, barcode, or SKU..." className="pl-8" />
             </div>
             <Button variant="outline" onClick={() => toast("Filter products")}>
               <Filter className="mr-1 h-4 w-4" /> Filter
@@ -120,9 +158,10 @@ function ProductsPage() {
               <TableRow>
                 <TableHead>Product</TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Cost</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Stock</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -131,27 +170,37 @@ function ProductsPage() {
                   <TableCell>
                     <div className="flex items-center gap-3">
                       <img src={p.image} alt="" loading="lazy" width={1024} height={1024} className="h-10 w-10 rounded-md object-cover" />
-                      <span className="font-medium">{p.name}</span>
+                      <div>
+                        <span className="font-medium">{p.name}</span>
+                        {(p.barcode || p.sku) && (
+                          <p className="text-xs text-muted-foreground">
+                            {[p.sku && `SKU ${p.sku}`, p.barcode].filter(Boolean).join(" · ")}
+                          </p>
+                        )}
+                      </div>
                     </div>
                   </TableCell>
                   <TableCell className="capitalize text-muted-foreground">{p.category}</TableCell>
+                  <TableCell className="text-muted-foreground">{p.cost != null ? `$${p.cost.toFixed(2)}` : "—"}</TableCell>
                   <TableCell className="font-semibold">${p.price.toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={p.stock < 15 ? "destructive" : "secondary"}>{p.stock}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="icon" onClick={() => openEdit(p.id)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => remove(p.id, p.name)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+                  {canManage && (
+                    <TableCell className="text-right">
+                      <Button variant="ghost" size="icon" onClick={() => openEdit(p.id)}>
+                        <Pencil className="h-4 w-4" />
+                      </Button>
+                      <Button variant="ghost" size="icon" onClick={() => remove(p.id, p.name)}>
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={canManage ? 6 : 5} className="py-10 text-center text-muted-foreground">
                     No products match your search.
                   </TableCell>
                 </TableRow>
@@ -159,6 +208,9 @@ function ProductsPage() {
             </TableBody>
           </Table>
         </Card>
+        <p className="text-xs text-muted-foreground">
+          Stock quantities are view-only here. Add inventory through a Purchase Invoice on the Inventory page.
+        </p>
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
@@ -167,9 +219,41 @@ function ProductsPage() {
             <DialogTitle>{editingId ? "Edit Product" : "Add Product"}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
+            <div className="flex items-center gap-3">
+              <img
+                src={form.image || PLACEHOLDER_PRODUCT_IMAGE}
+                alt=""
+                className="h-16 w-16 shrink-0 rounded-md border border-border object-cover"
+              />
+              <div className="space-y-1">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleImageUpload}
+                />
+                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="h-3.5 w-3.5" /> Upload Image
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {editingId ? "Optional — replaces the current image." : "Optional — skips the automatic image search."}
+                </p>
+              </div>
+            </div>
             <div className="space-y-1.5">
               <Label>Name</Label>
               <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Product name" />
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>Barcode</Label>
+                <Input value={form.barcode} onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))} placeholder="e.g. 8901030" />
+              </div>
+              <div className="space-y-1.5">
+                <Label>SKU</Label>
+                <Input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="e.g. SKU-001" />
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -177,25 +261,27 @@ function ProductsPage() {
                 <Input value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="0.00" />
               </div>
               <div className="space-y-1.5">
-                <Label>Stock</Label>
-                <Input value={form.stock} onChange={(e) => setForm((f) => ({ ...f, stock: e.target.value }))} placeholder="0" />
+                <Label>Category</Label>
+                <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.filter((c) => c.id !== "all").map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>Category</Label>
-              <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.filter((c) => c.id !== "all").map((c) => (
-                    <SelectItem key={c.id} value={c.id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {!editingId && (
+              <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3" /> New products start with 0 stock — receive them through a Purchase
+                Invoice once created.
+              </p>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>

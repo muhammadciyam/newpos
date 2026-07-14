@@ -13,6 +13,10 @@ export type Product = {
   category: string;
   image: string;
   stock: number;
+  barcode?: string;
+  sku?: string;
+  // Last known unit cost, set from the most recently approved Purchase Invoice line for this product.
+  cost?: number;
 };
 
 export const categories: Category[] = [
@@ -151,6 +155,37 @@ export const cashDenominations = [
   { name: "Rf 20", value: 20.0, type: "Note", currency: "MVR" },
   { name: "Rf 50", value: 50.0, type: "Note", currency: "MVR" },
 ];
+
+export const usdDenominations = [
+  { name: "$1", value: 1, type: "Note", currency: "USD" },
+  { name: "$5", value: 5, type: "Note", currency: "USD" },
+  { name: "$10", value: 10, type: "Note", currency: "USD" },
+  { name: "$20", value: 20, type: "Note", currency: "USD" },
+  { name: "$50", value: 50, type: "Note", currency: "USD" },
+  { name: "$100", value: 100, type: "Note", currency: "USD" },
+];
+
+// Maps an opening/closing cash-field key to the denominations to count for it.
+// "usd1"/"usd20" (and their closing-table equivalents "cash-usd-1"/"cash-usd-20")
+// are single-denomination fields since the $1 and $20 bills are tracked separately.
+export function denominationsForKey(key: string): { name: string; value: number }[] {
+  switch (key) {
+    case "mvr":
+    case "cash":
+      return cashDenominations;
+    case "usd":
+    case "cash-usd":
+      return usdDenominations.filter((d) => d.value !== 1 && d.value !== 20);
+    case "usd1":
+    case "cash-usd-1":
+      return usdDenominations.filter((d) => d.value === 1);
+    case "usd20":
+    case "cash-usd-20":
+      return usdDenominations.filter((d) => d.value === 20);
+    default:
+      return [];
+  }
+}
 
 export const numberFormats = [
   { type: "Bill", format: "{registerNumber}/{sequence}" },
