@@ -47,6 +47,7 @@ const demoBill: Bill = {
   created: "15-Jul-26, 10:32",
   by: "Owner",
   paymentMethod: "Cash",
+  paymentStatus: "Paid",
   cashGiven: 15,
   changeGiven: 4.47,
 };
