@@ -1,59 +1,142 @@
-import { useEffect } from "react";
+import { useEffect, useSyncExternalStore } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import type { RegisterSession } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
+import { getDeviceId } from "@/lib/device-id";
+import { safeServerCall } from "@/lib/server-fn-helpers";
+import {
+  fetchRegisters,
+  createRegisterOnServer,
+  openRegisterOnServer,
+  closeRegisterOnServer,
+  forceCloseRegisterOnServer,
+} from "@/lib/register-api";
 
 export type RegisterName = string;
 
+export type RegisterRecord = {
+  isOpen: boolean;
+  openedAt: number | null;
+  openedBy: string | null;
+  openedByDeviceId: string | null;
+  lastClosedAt: number | null;
+};
+
+// The public shape returned by useRegister() — `registers` is now server-authoritative
+// (shared across devices), everything else is local to this browser/session.
 export type RegisterState = {
   storeName: string;
   register: RegisterName | null;
   openedAt: number | null;
   openedBy: string;
-  registers: Record<RegisterName, { isOpen: boolean; openedAt: number | null; lastClosedAt: number | null }>;
+  registers: Record<RegisterName, RegisterRecord>;
 };
 
-const initialState: RegisterState = {
+// Only the per-device "which register am I currently looking at" fields are persisted
+// locally — the shared open/closed status lives on the server (see register-api.ts).
+type LocalRegisterState = {
+  storeName: string;
+  register: RegisterName | null;
+  openedAt: number | null;
+  openedBy: string;
+};
+
+const initialLocalState: LocalRegisterState = {
   storeName: "Seven Mart",
   register: null,
   openedAt: null,
   openedBy: "",
-  registers: {
-    "Counter 1": { isOpen: false, openedAt: null, lastClosedAt: null },
-  },
 };
 
-const store = createPersistedStore<RegisterState>("dhipos-register", initialState);
+const store = createPersistedStore<LocalRegisterState>("dhipos-register", initialLocalState);
+const sessionsStore = createPersistedStore<RegisterSession[]>("dhipos-register-sessions", []);
 
-// One-time fixup for browsers that already persisted the old default registers
-// ("Main" / "Main 2") before they were renamed/removed. Safe to call repeatedly —
-// it's a no-op once neither legacy name is present.
+// One-time fixup for browsers that already persisted the old default register name
+// ("Main" / "Main 2") as their active-register pointer before it was renamed/removed.
+// Safe to call repeatedly — a no-op once neither legacy name is the active pointer.
 function migrateLegacyRegisterNames() {
   const s = store.get();
-  if (!("Main" in s.registers) && !("Main 2" in s.registers)) return;
-  store.set((state) => {
-    const registers = { ...state.registers };
-    if (registers["Main"] && !registers["Counter 1"]) {
-      registers["Counter 1"] = registers["Main"];
-    }
-    delete registers["Main"];
-    delete registers["Main 2"];
-    const renamedActive = state.register === "Main" ? "Counter 1" : state.register;
-    const activeRemoved = renamedActive === "Main 2";
-    return {
-      ...state,
-      registers,
-      register: activeRemoved ? null : renamedActive,
-      openedAt: activeRemoved ? null : state.openedAt,
-    };
-  });
+  if (s.register !== "Main" && s.register !== "Main 2") return;
+  store.set((state) =>
+    state.register === "Main 2"
+      ? { ...state, register: null, openedAt: null }
+      : { ...state, register: "Counter 1" },
+  );
 }
-const sessionsStore = createPersistedStore<RegisterSession[]>("dhipos-register-sessions", []);
+
+// --- Shared (server-backed) registers snapshot ---
+
+let serverRegisters: Record<RegisterName, RegisterRecord> = {};
+const serverListeners = new Set<() => void>();
+
+function setServerRegisters(next: Record<RegisterName, RegisterRecord>) {
+  serverRegisters = next;
+  serverListeners.forEach((l) => l());
+}
+
+// Applies a known-good mutation to the in-memory snapshot immediately, so the local
+// `register` pointer and the shared snapshot never disagree even for one render — the
+// reconciliation effect in useRegister() would otherwise see a stale (pre-refetch)
+// snapshot right after a successful open/close and undo it before the real fetch lands.
+function patchServerRegister(name: RegisterName, patch: RegisterRecord) {
+  setServerRegisters({ ...serverRegisters, [name]: patch });
+}
+
+async function refreshRegistersFromServer() {
+  try {
+    const result = await fetchRegisters();
+    setServerRegisters(result.registers);
+  } catch {
+    // Network hiccup — keep the last known snapshot; individual actions surface their own errors.
+  }
+}
+
+let initialFetchTriggered = false;
+function ensureInitialFetch() {
+  if (initialFetchTriggered) return;
+  initialFetchTriggered = true;
+  void refreshRegistersFromServer();
+}
+
+function useServerRegisters() {
+  useEffect(() => ensureInitialFetch(), []);
+  return useSyncExternalStore(
+    (cb) => {
+      serverListeners.add(cb);
+      return () => serverListeners.delete(cb);
+    },
+    () => serverRegisters,
+    () => serverRegisters,
+  );
+}
+
+// Actively refetches on mount and every `intervalMs` — call this only from the one
+// screen that needs near-live cross-device visibility (the register-selection page).
+export function useRegisterPolling(intervalMs = 5000) {
+  useEffect(() => {
+    void refreshRegistersFromServer();
+    const id = setInterval(() => void refreshRegistersFromServer(), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+}
 
 function formatSessionTimestamp(ms: number) {
   const d = new Date(ms);
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const day = String(d.getDate()).padStart(2, "0");
   const month = months[d.getMonth()];
   const year = String(d.getFullYear()).slice(2);
@@ -62,78 +145,6 @@ function formatSessionTimestamp(ms: number) {
   return `${day}-${month}-${year}, ${hours}:${mins}`;
 }
 
-export const registerStore = {
-  subscribe: store.subscribe,
-  get: store.get,
-  hydrate: store.hydrate,
-  createRegister(name: string): { ok: true } | { error: string } {
-    const trimmed = name.trim();
-    if (!trimmed) return { error: "Register name is required" };
-    if (store.get().registers[trimmed]) return { error: "A register with that name already exists" };
-    store.set((s) => ({
-      ...s,
-      registers: { ...s.registers, [trimmed]: { isOpen: false, openedAt: null, lastClosedAt: null } },
-    }));
-    logAudit(authStore.getCurrentUser()?.name ?? "Unknown", "create", `Register / ${trimmed}`);
-    return { ok: true };
-  },
-  open(name: RegisterName, by?: string) {
-    const actor = by ?? authStore.getCurrentUser()?.name ?? "Unknown";
-    const now = Date.now();
-    store.set((s) => ({
-      ...s,
-      register: name,
-      openedAt: now,
-      openedBy: actor,
-      registers: {
-        ...s.registers,
-        [name]: { isOpen: true, openedAt: now, lastClosedAt: null },
-      },
-    }));
-    const nextNo = Math.max(0, ...sessionsStore.get().map((r) => r.no)) + 1;
-    sessionsStore.set((sessions) => [
-      { no: nextNo, register: name, createdAt: formatSessionTimestamp(now), closedAt: null, openDuration: "Open a few seconds", by: actor },
-      ...sessions,
-    ]);
-    logAudit(actor, "create", `Register Session / ${name}`);
-  },
-  // Switch the active session view to a register that is already open, without
-  // resetting its opened-at time (unlike `open`, which opens a fresh session).
-  view(name: RegisterName) {
-    const existing = store.get().registers[name];
-    if (!existing?.isOpen) return;
-    store.set((s) => ({ ...s, register: name, openedAt: existing.openedAt }));
-  },
-  close(name: RegisterName) {
-    const now = Date.now();
-    const wasActive = store.get().register === name;
-    store.set((s) => ({
-      ...s,
-      register: wasActive ? null : s.register,
-      openedAt: wasActive ? null : s.openedAt,
-      registers: {
-        ...s.registers,
-        [name]: { isOpen: false, openedAt: null, lastClosedAt: now },
-      },
-    }));
-    sessionsStore.set((sessions) => {
-      const idx = sessions.findIndex((r) => r.register === name && r.closedAt === null);
-      if (idx === -1) return sessions;
-      const updated = [...sessions];
-      const opened = updated[idx];
-      const openedMs = new Date(opened.createdAt.replace(/-(\w{3})-/, " $1 ")).getTime();
-      const durationMs = Number.isFinite(openedMs) ? now - openedMs : 0;
-      updated[idx] = {
-        ...opened,
-        closedAt: formatSessionTimestamp(now),
-        openDuration: formatShortDuration(durationMs),
-      };
-      return updated;
-    });
-    logAudit(authStore.getCurrentUser()?.name ?? "Unknown", "update", `Register Session / ${name}`);
-  },
-};
-
 function formatShortDuration(ms: number) {
   const mins = Math.floor(ms / 60000);
   if (mins < 60) return `${mins} minute${mins === 1 ? "" : "s"}`;
@@ -141,12 +152,145 @@ function formatShortDuration(ms: number) {
   return `${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
-export function useRegister() {
-  const state = usePersistedStore(store);
+// Closes out the matching still-open session row for `name` — shared by close() and forceClose().
+function closeOutSession(name: RegisterName, now: number) {
+  sessionsStore.set((sessions) => {
+    const idx = sessions.findIndex((r) => r.register === name && r.closedAt === null);
+    if (idx === -1) return sessions;
+    const updated = [...sessions];
+    const opened = updated[idx];
+    const openedMs = new Date(opened.createdAt.replace(/-(\w{3})-/, " $1 ")).getTime();
+    const durationMs = Number.isFinite(openedMs) ? now - openedMs : 0;
+    updated[idx] = {
+      ...opened,
+      closedAt: formatSessionTimestamp(now),
+      openDuration: formatShortDuration(durationMs),
+    };
+    return updated;
+  });
+}
+
+export const registerStore = {
+  async createRegister(name: string): Promise<{ ok: true } | { error: string }> {
+    const result = await safeServerCall(() => createRegisterOnServer({ data: { name } }));
+    if (!("error" in result)) await refreshRegistersFromServer();
+    return result;
+  },
+
+  async open(name: RegisterName, by?: string): Promise<{ ok: true } | { error: string }> {
+    const actor = by ?? authStore.getCurrentUser()?.name ?? "Unknown";
+    const result = await safeServerCall(() =>
+      openRegisterOnServer({ data: { name, by: actor, deviceId: getDeviceId() } }),
+    );
+    if ("error" in result) return result;
+    const now = result.openedAt;
+    patchServerRegister(name, {
+      isOpen: true,
+      openedAt: now,
+      openedBy: actor,
+      openedByDeviceId: getDeviceId(),
+      lastClosedAt: serverRegisters[name]?.lastClosedAt ?? null,
+    });
+    store.set((s) => ({ ...s, register: name, openedAt: now, openedBy: actor }));
+    const nextNo = Math.max(0, ...sessionsStore.get().map((r) => r.no)) + 1;
+    sessionsStore.set((sessions) => [
+      {
+        no: nextNo,
+        register: name,
+        createdAt: formatSessionTimestamp(now),
+        closedAt: null,
+        openDuration: "Open a few seconds",
+        by: actor,
+      },
+      ...sessions,
+    ]);
+    logAudit(actor, "create", `Register Session / ${name}`);
+    await refreshRegistersFromServer();
+    return { ok: true };
+  },
+
+  // Switch the active session view to a register that is already open, without
+  // resetting its opened-at time (unlike `open`, which opens a fresh session).
+  view(name: RegisterName) {
+    const existing = serverRegisters[name];
+    if (!existing?.isOpen) return;
+    store.set((s) => ({ ...s, register: name, openedAt: existing.openedAt }));
+  },
+
+  async close(name: RegisterName): Promise<{ ok: true } | { error: string }> {
+    const result = await safeServerCall(() => closeRegisterOnServer({ data: { name } }));
+    if ("error" in result) return result;
+    patchServerRegister(name, {
+      isOpen: false,
+      openedAt: null,
+      openedBy: null,
+      openedByDeviceId: null,
+      lastClosedAt: result.closedAt,
+    });
+    if (store.get().register === name) {
+      store.set((s) => ({ ...s, register: null, openedAt: null }));
+    }
+    closeOutSession(name, result.closedAt);
+    logAudit(authStore.getCurrentUser()?.name ?? "Unknown", "update", `Register Session / ${name}`);
+    await refreshRegistersFromServer();
+    return { ok: true };
+  },
+
+  // Admin-only escape hatch for a register left open on an unreachable device.
+  // `role` is a client-supplied claim checked server-side — see the caveat comment
+  // in register-api.ts: this app has no server-verified auth, so it's a UI-level
+  // guard consistent with the rest of the app's all-client-trust permission model.
+  async forceClose(name: RegisterName): Promise<{ ok: true } | { error: string }> {
+    const role = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() => forceCloseRegisterOnServer({ data: { name, role } }));
+    if ("error" in result) return result;
+    patchServerRegister(name, {
+      isOpen: false,
+      openedAt: null,
+      openedBy: null,
+      openedByDeviceId: null,
+      lastClosedAt: result.closedAt,
+    });
+    if (store.get().register === name) {
+      store.set((s) => ({ ...s, register: null, openedAt: null }));
+    }
+    closeOutSession(name, result.closedAt);
+    logAudit(
+      authStore.getCurrentUser()?.name ?? "Unknown",
+      "update",
+      `Register Session / ${name} force-closed`,
+    );
+    await refreshRegistersFromServer();
+    return { ok: true };
+  },
+};
+
+export function useRegister(): RegisterState {
+  const local = usePersistedStore(store);
+  const registers = useServerRegisters();
+
   useEffect(() => {
     migrateLegacyRegisterNames();
   }, []);
-  return state;
+
+  // If this device thinks it has a register open but the server says it's actually
+  // closed (closed or force-closed from elsewhere), drop the local pointer so this
+  // session falls back to the register-selection screen.
+  useEffect(() => {
+    if (local.register && registers[local.register] && !registers[local.register].isOpen) {
+      store.set((s) =>
+        s.register === local.register ? { ...s, register: null, openedAt: null } : s,
+      );
+    }
+  }, [local.register, registers]);
+
+  return {
+    storeName: local.storeName,
+    register: local.register,
+    openedAt: local.openedAt,
+    openedBy: local.openedBy,
+    registers,
+  };
 }
 
 export function useRegisterSessions() {

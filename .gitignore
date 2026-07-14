@@ -20,6 +20,9 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Local server-side data (register lock state, etc.)
+.data/
+
 # Editor directories and files
 .vscode/*
 !.vscode/extensions.json

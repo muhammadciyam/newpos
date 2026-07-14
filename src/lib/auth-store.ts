@@ -1,5 +1,15 @@
+import { useCallback, useEffect, useState } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { logAudit } from "@/lib/audit-log-store";
+import { getDeviceId } from "@/lib/device-id";
+import { safeServerCall } from "@/lib/server-fn-helpers";
+import {
+  claimSessionOnServer,
+  releaseSessionOnServer,
+  forceLogoutOnServer,
+  fetchSessionsOnServer,
+} from "@/lib/session-api";
+import type { ServerSessionRecord } from "@/lib/session-server-store";
 
 export type Role = "Super Admin" | "Admin" | "Manager" | "Supervisor" | "Cashier";
 export type UserStatus = "Active" | "Suspended" | "Inactive";
@@ -45,7 +55,8 @@ export type AppUser = {
 
 export type LoginResult =
   | { ok: true; user: AppUser }
-  | { ok: false; reason: "invalid" | "suspended" | "inactive" };
+  | { ok: false; reason: "invalid" | "suspended" | "inactive" }
+  | { ok: false; reason: "already-logged-in"; message: string };
 
 const emptyProfile: EmployeeProfile = {
   photo: null,
@@ -79,7 +90,9 @@ const seedAdmin: AppUser = {
 };
 
 const usersStoreInternal = createPersistedStore<AppUser[]>("dhipos-users", [seedAdmin]);
-const sessionStoreInternal = createPersistedStore<{ email: string | null }>("dhipos-session", { email: null });
+const sessionStoreInternal = createPersistedStore<{ email: string | null }>("dhipos-session", {
+  email: null,
+});
 
 function normalize(value: string) {
   return value.trim().toLowerCase();
@@ -88,6 +101,11 @@ function normalize(value: string) {
 function actor() {
   const email = sessionStoreInternal.get().email;
   return usersStoreInternal.get().find((u) => u.email === email)?.name ?? "System";
+}
+
+function currentRole(): string {
+  const email = sessionStoreInternal.get().email;
+  return usersStoreInternal.get().find((u) => u.email === email)?.role ?? "";
 }
 
 export const authStore = {
@@ -107,7 +125,9 @@ export const authStore = {
     return usersStoreInternal.get().find((u) => u.email === email) ?? null;
   },
 
-  login(identifier: string, password: string): LoginResult {
+  // Only one device may be logged in as a given user at a time — claimed server-side
+  // so it holds across devices, not just this browser's localStorage.
+  async login(identifier: string, password: string): Promise<LoginResult> {
     const id = normalize(identifier);
     const match = usersStoreInternal
       .get()
@@ -116,25 +136,58 @@ export const authStore = {
     if (match.status !== "Active") {
       return { ok: false, reason: match.status.toLowerCase() as "suspended" | "inactive" };
     }
+    const claim = await claimSessionOnServer({
+      data: { email: match.email, deviceId: getDeviceId() },
+    });
+    if ("error" in claim && claim.error) {
+      return { ok: false, reason: "already-logged-in", message: claim.error };
+    }
     sessionStoreInternal.set({ email: match.email });
     return { ok: true, user: match };
   },
 
-  logout() {
+  async logout() {
+    const email = sessionStoreInternal.get().email;
     sessionStoreInternal.set({ email: null });
+    if (email) {
+      try {
+        await releaseSessionOnServer({ data: { email } });
+      } catch {
+        // Best-effort — the local session is already cleared either way.
+      }
+    }
+  },
+
+  // Admin-only escape hatch for a session stuck claimed by an unreachable device
+  // (e.g. the browser crashed without logging out). `role` is a client-supplied claim —
+  // see the caveat in session-api.ts: this app has no server-verified auth, so it's a
+  // UI-level guard consistent with the rest of the app's all-client-trust permission model.
+  async forceLogout(email: string): Promise<{ ok: true } | { error: string }> {
+    const result = await forceLogoutOnServer({ data: { email, role: currentRole() } });
+    if ("error" in result) return result;
+    logAudit(actor(), "update", `User / ${email} force-logged-out`);
+    return { ok: true };
   },
 
   // Only an admin can add users — created directly and starts Active immediately.
   // Super Admin is a singleton seeded account and can never be created here.
   createUser(
-    input: { name: string; email: string; username: string; password: string; role: Role } & Partial<EmployeeProfile>,
+    input: {
+      name: string;
+      email: string;
+      username: string;
+      password: string;
+      role: Role;
+    } & Partial<EmployeeProfile>,
   ): AppUser | { error: string } {
     if (input.role === "Super Admin") return { error: "Super Admin cannot be created" };
     const email = normalize(input.email);
     const username = normalize(input.username);
     const users = usersStoreInternal.get();
-    if (users.some((u) => u.email === email)) return { error: "A user with that email already exists" };
-    if (users.some((u) => u.username.toLowerCase() === username)) return { error: "That username is taken" };
+    if (users.some((u) => u.email === email))
+      return { error: "A user with that email already exists" };
+    if (users.some((u) => u.username.toLowerCase() === username))
+      return { error: "That username is taken" };
 
     const user: AppUser = {
       id: `user-${Date.now()}`,
@@ -184,7 +237,10 @@ export const authStore = {
 
   // Updates name, role/register, and all employee-profile fields (job info, pay,
   // ID/emergency contact, photo). Does not touch email/username/password.
-  updateProfile(id: string, patch: Partial<EmployeeProfile> & { name?: string; authorizedRegister?: RegisterName | null }) {
+  updateProfile(
+    id: string,
+    patch: Partial<EmployeeProfile> & { name?: string; authorizedRegister?: RegisterName | null },
+  ) {
     const user = usersStoreInternal.get().find((u) => u.id === id);
     if (!user) return;
     usersStoreInternal.set((us) => us.map((u) => (u.id === id ? { ...u, ...patch } : u)));
@@ -208,4 +264,25 @@ export function useCurrentUser(): AppUser | null {
 
 export function useUsers() {
   return usePersistedStore(usersStoreInternal);
+}
+
+// Which user emails currently hold a claimed login session (for the Admin Users page's
+// "Logged In" indicator + Force Logout action). Fetches on mount; call `refresh()` again
+// after a force-logout so the list reflects it immediately.
+export function useActiveSessions() {
+  const [sessions, setSessions] = useState<Record<string, ServerSessionRecord>>({});
+
+  const refresh = useCallback(() => {
+    fetchSessionsOnServer()
+      .then(setSessions)
+      .catch(() => {
+        // Network hiccup — keep the last known snapshot.
+      });
+  }, []);
+
+  useEffect(() => {
+    refresh();
+  }, [refresh]);
+
+  return { sessions, refresh };
 }

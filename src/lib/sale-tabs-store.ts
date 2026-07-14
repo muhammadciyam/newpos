@@ -46,7 +46,11 @@ export const saleTabsStore = {
     let newId = 0;
     store.set((s) => {
       newId = s.nextTabId;
-      return { tabs: [...s.tabs, emptySaleTab(newId)], activeTab: newId, nextTabId: s.nextTabId + 1 };
+      return {
+        tabs: [...s.tabs, emptySaleTab(newId)],
+        activeTab: newId,
+        nextTabId: s.nextTabId + 1,
+      };
     });
     return newId;
   },

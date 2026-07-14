@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,11 +14,24 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "sonner";
-import { RefreshCw, Download, Calculator, Plus } from "lucide-react";
+import { RefreshCw, Download, Calculator, Plus, ShieldAlert } from "lucide-react";
 import { cashTypes, denominationsForKey } from "@/lib/pos-data";
-import { useRegister, registerStore, formatDuration, type RegisterName } from "@/lib/register-store";
+import {
+  useRegister,
+  useRegisterPolling,
+  registerStore,
+  formatDuration,
+  type RegisterName,
+} from "@/lib/register-store";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useHasPermission } from "@/lib/permissions";
 import { CountMoneyDialog } from "@/components/count-money-dialog";
@@ -45,11 +58,14 @@ function RegisterPage() {
   const register = useRegister();
   const currentUser = useCurrentUser();
   const canManageSettings = useHasPermission("settings.manage");
+  const isAdmin = currentUser?.role === "Admin" || currentUser?.role === "Super Admin";
+  useRegisterPolling();
   const allowedRegisters =
     currentUser?.role === "Cashier" && currentUser.authorizedRegister
       ? [currentUser.authorizedRegister]
       : (Object.keys(register.registers) as RegisterName[]);
   const [openingFor, setOpeningFor] = useState<RegisterName | null>(null);
+  const [forceClosingFor, setForceClosingFor] = useState<RegisterName | null>(null);
   const [closing, setClosing] = useState(false);
   const [closingValues, setClosingValues] = useState<Record<string, string>>({});
   const [countMoneyKey, setCountMoneyKey] = useState<string | null>(null);
@@ -65,9 +81,22 @@ function RegisterPage() {
   const [newRegisterOpen, setNewRegisterOpen] = useState(false);
   const [newRegisterName, setNewRegisterName] = useState("");
   const [newRegisterError, setNewRegisterError] = useState("");
+  const [pending, setPending] = useState(false);
 
-  function createRegister() {
-    const result = registerStore.createRegister(newRegisterName);
+  // Notice when this device's open register was closed from elsewhere (a remote
+  // Close or an Admin's Force Close) without any action taken here.
+  const prevRegisterRef = useRef(register.register);
+  useEffect(() => {
+    if (prevRegisterRef.current && !register.register) {
+      toast("Register was closed remotely.");
+    }
+    prevRegisterRef.current = register.register;
+  }, [register.register]);
+
+  async function createRegister() {
+    setPending(true);
+    const result = await registerStore.createRegister(newRegisterName);
+    setPending(false);
     if ("error" in result) {
       setNewRegisterError(result.error);
       return;
@@ -78,6 +107,18 @@ function RegisterPage() {
     setNewRegisterOpen(false);
   }
 
+  async function forceClose(name: RegisterName) {
+    setPending(true);
+    const result = await registerStore.forceClose(name);
+    setPending(false);
+    setForceClosingFor(null);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`${name} force-closed`);
+  }
+
   if (!register.register) {
     return (
       <AppShell>
@@ -85,7 +126,9 @@ function RegisterPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold text-foreground">Choose a Register to open</h1>
-              <p className="text-sm text-muted-foreground">Choose the register to open to start making sales</p>
+              <p className="text-sm text-muted-foreground">
+                Choose the register to open to start making sales
+              </p>
             </div>
             {canManageSettings && (
               <Button onClick={() => setNewRegisterOpen(true)} className="gap-1.5">
@@ -97,26 +140,45 @@ function RegisterPage() {
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {allowedRegisters.map((name) => {
               const r = register.registers[name];
+              if (!r) return null;
               return (
                 <div key={name} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-center justify-between">
                     <p className="text-lg font-semibold text-foreground">{name}</p>
-                    <Badge className={r.isOpen ? "bg-emerald-100 text-emerald-700" : "bg-destructive/10 text-destructive"} variant="outline">
+                    <Badge
+                      className={
+                        r.isOpen
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-destructive/10 text-destructive"
+                      }
+                      variant="outline"
+                    >
                       {r.isOpen ? "Open" : "Close"}
                     </Badge>
                   </div>
                   <p className="mt-2 text-sm text-muted-foreground">
                     {r.isOpen && r.openedAt
-                      ? `Opened ${formatDuration(Date.now() - r.openedAt)}`
+                      ? `Opened ${formatDuration(Date.now() - r.openedAt)}${r.openedBy ? ` by ${r.openedBy}` : ""}`
                       : r.lastClosedAt
                         ? `Last Closed ${formatDuration(Date.now() - r.lastClosedAt)}`
                         : "Never opened"}
                   </p>
-                  <div className="mt-4">
+                  <div className="mt-4 flex gap-2">
                     {r.isOpen ? (
-                      <Button variant="outline" onClick={() => registerStore.view(name)}>
-                        View Register
-                      </Button>
+                      <>
+                        <Button variant="outline" onClick={() => registerStore.view(name)}>
+                          View Register
+                        </Button>
+                        {isAdmin && (
+                          <Button
+                            variant="outline"
+                            className="gap-1.5 text-destructive"
+                            onClick={() => setForceClosingFor(name)}
+                          >
+                            <ShieldAlert className="h-4 w-4" /> Force Close
+                          </Button>
+                        )}
+                      </>
                     ) : (
                       <Button onClick={() => setOpeningFor(name)}>Open Register</Button>
                     )}
@@ -130,7 +192,9 @@ function RegisterPage() {
         <Dialog open={!!openingFor} onOpenChange={(v) => !v && setOpeningFor(null)}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Register {openingFor} at {register.storeName}</DialogTitle>
+              <DialogTitle>
+                Register {openingFor} at {register.storeName}
+              </DialogTitle>
             </DialogHeader>
             <div className="space-y-3">
               {[
@@ -186,13 +250,45 @@ function RegisterPage() {
                 Cancel
               </Button>
               <Button
-                onClick={() => {
-                  if (openingFor) registerStore.open(openingFor);
-                  setOpeningFor(null);
+                disabled={pending}
+                onClick={async () => {
+                  if (!openingFor) return;
+                  setPending(true);
+                  const result = await registerStore.open(openingFor);
+                  setPending(false);
+                  if ("error" in result) {
+                    toast.error(result.error);
+                    return;
+                  }
                   toast.success(`${openingFor} register opened`);
+                  setOpeningFor(null);
                 }}
               >
                 Open Register
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!forceClosingFor} onOpenChange={(v) => !v && setForceClosingFor(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Force Close {forceClosingFor}?</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-muted-foreground">
+              This closes the register regardless of who opened it — use this if it was left open on
+              a device that's no longer reachable. The current session there will be closed out.
+            </p>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setForceClosingFor(null)}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={pending}
+                onClick={() => forceClosingFor && forceClose(forceClosingFor)}
+              >
+                Force Close
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -253,7 +349,9 @@ function RegisterPage() {
       <AppShell>
         <div className="flex flex-col gap-4 p-4 md:p-6">
           <h1 className="text-2xl font-bold text-foreground">Session 2285</h1>
-          <p className="text-sm text-muted-foreground">{register.register} at {register.storeName}</p>
+          <p className="text-sm text-muted-foreground">
+            {register.register} at {register.storeName}
+          </p>
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-[1fr_320px]">
             <div className="rounded-lg border border-border bg-card p-4">
               <div className="mb-4 flex items-center justify-between">
@@ -283,13 +381,20 @@ function RegisterPage() {
                       <TableRow key={c.key}>
                         <TableCell className="text-primary">{c.label}</TableCell>
                         <TableCell>
-                          0.00 {c.currency && <span className="block text-xs text-muted-foreground">{c.currency}</span>}
+                          0.00{" "}
+                          {c.currency && (
+                            <span className="block text-xs text-muted-foreground">
+                              {c.currency}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           <div className="flex w-32 gap-1">
                             <Input
                               value={closingValues[c.key] ?? "0"}
-                              onChange={(e) => setClosingValues((v) => ({ ...v, [c.key]: e.target.value }))}
+                              onChange={(e) =>
+                                setClosingValues((v) => ({ ...v, [c.key]: e.target.value }))
+                              }
                             />
                             {(c.key === "cash" || c.key.startsWith("cash-")) && (
                               <Button
@@ -319,8 +424,16 @@ function RegisterPage() {
               <Button
                 className="mt-3 w-full"
                 size="lg"
-                onClick={() => {
-                  registerStore.close(register.register!);
+                disabled={pending}
+                onClick={async () => {
+                  if (!register.register) return;
+                  setPending(true);
+                  const result = await registerStore.close(register.register);
+                  setPending(false);
+                  if ("error" in result) {
+                    toast.error(result.error);
+                    return;
+                  }
                   setClosing(false);
                   toast.success("Register closed");
                 }}
@@ -331,10 +444,16 @@ function RegisterPage() {
             <div className="space-y-4">
               <div className="rounded-lg bg-primary/10 p-3 text-sm text-primary">
                 <p className="font-semibold">Register is open</p>
-                <p>Register was opened {formatDuration(openedAgo)} by {register.openedBy}</p>
+                <p>
+                  Register was opened {formatDuration(openedAgo)} by {register.openedBy}
+                </p>
               </div>
               <div className="space-y-2 text-sm">
-                <Row label="Opened" value={new Date(register.openedAt!).toLocaleString()} sub={`By ${register.openedBy}`} />
+                <Row
+                  label="Opened"
+                  value={new Date(register.openedAt!).toLocaleString()}
+                  sub={`By ${register.openedBy}`}
+                />
                 <Row label="Closed" value="" />
                 <Row label="Duration" value="-" />
               </div>
@@ -360,7 +479,9 @@ function RegisterPage() {
     <AppShell>
       <div className="flex flex-col gap-4 p-4 md:p-6">
         <h1 className="text-2xl font-bold text-foreground">Session 2285</h1>
-        <p className="text-sm text-muted-foreground">{register.register} at {register.storeName}</p>
+        <p className="text-sm text-muted-foreground">
+          {register.register} at {register.storeName}
+        </p>
         <Tabs defaultValue="info">
           <TabsList>
             <TabsTrigger value="info">Info</TabsTrigger>
@@ -394,15 +515,27 @@ function RegisterPage() {
                         <TableCell className="text-primary">{c.label}</TableCell>
                         <TableCell>
                           0.00
-                          {c.currency && <span className="block text-xs text-muted-foreground">{c.currency}</span>}
+                          {c.currency && (
+                            <span className="block text-xs text-muted-foreground">
+                              {c.currency}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           0.00
-                          {c.currency && <span className="block text-xs text-muted-foreground">{c.currency}</span>}
+                          {c.currency && (
+                            <span className="block text-xs text-muted-foreground">
+                              {c.currency}
+                            </span>
+                          )}
                         </TableCell>
                         <TableCell>
                           0.00
-                          {c.currency && <span className="block text-xs text-muted-foreground">{c.currency}</span>}
+                          {c.currency && (
+                            <span className="block text-xs text-muted-foreground">
+                              {c.currency}
+                            </span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}
@@ -412,10 +545,16 @@ function RegisterPage() {
               <div className="space-y-4">
                 <div className="rounded-lg bg-primary/10 p-3 text-sm text-primary">
                   <p className="font-semibold">Register is open</p>
-                  <p>Register was opened {formatDuration(openedAgo)} by {register.openedBy}</p>
+                  <p>
+                    Register was opened {formatDuration(openedAgo)} by {register.openedBy}
+                  </p>
                 </div>
                 <div className="space-y-2 text-sm">
-                  <Row label="Opened" value={new Date(register.openedAt!).toLocaleString()} sub={`By ${register.openedBy}`} />
+                  <Row
+                    label="Opened"
+                    value={new Date(register.openedAt!).toLocaleString()}
+                    sub={`By ${register.openedBy}`}
+                  />
                   <Row label="Closed" value="" />
                   <Row label="Duration" value="-" />
                 </div>
@@ -426,7 +565,9 @@ function RegisterPage() {
             <p className="p-6 text-sm text-muted-foreground">No cash-in-out entries yet.</p>
           </TabsContent>
           <TabsContent value="payments">
-            <p className="p-6 text-sm text-muted-foreground">No payments recorded for this session yet.</p>
+            <p className="p-6 text-sm text-muted-foreground">
+              No payments recorded for this session yet.
+            </p>
           </TabsContent>
         </Tabs>
       </div>

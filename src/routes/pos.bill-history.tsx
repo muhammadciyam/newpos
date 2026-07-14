@@ -43,6 +43,8 @@ import {
   Plus,
   Minus,
   Trash2,
+  CircleDollarSign,
+  AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBills, billsStore } from "@/lib/bills-store";
@@ -85,6 +87,18 @@ function BillHistoryPage() {
   const refundBill = bills.find((b) => b.number === refundNumber) ?? null;
   const voidBill = bills.find((b) => b.number === voidNumber) ?? null;
 
+  const pendingBills = bills.filter((b) => b.paymentStatus === "Pending" && b.status === "Sale");
+  const pendingTotal = pendingBills.reduce((s, b) => s + b.total, 0);
+
+  function settlePayment(bill: Bill) {
+    const result = billsStore.settleCredit(bill.number);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Bill ${bill.number} marked as paid`);
+  }
+
   return (
     <AppShell>
       <div className="flex flex-col gap-4 p-4 md:p-6">
@@ -102,6 +116,18 @@ function BillHistoryPage() {
             </Button>
           </div>
         </div>
+
+        {pendingBills.length > 0 && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            <AlertCircle className="h-4 w-4 shrink-0" />
+            <p>
+              <span className="font-semibold">
+                {pendingBills.length} bill{pendingBills.length === 1 ? "" : "s"}
+              </span>{" "}
+              awaiting payment — {pendingTotal.toFixed(2)} total on credit.
+            </p>
+          </div>
+        )}
 
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
           <Table>
@@ -134,6 +160,17 @@ function BillHistoryPage() {
                   </TableCell>
                   <TableCell>
                     <Badge className={statusColor[b.status]}>{b.status}</Badge>
+                    {b.paymentStatus === "Pending" && (
+                      <button
+                        type="button"
+                        onClick={() => setPrintNumber(b.number)}
+                        title="Open the printable invoice"
+                      >
+                        <Badge className="ml-1 bg-amber-100 text-amber-700 hover:bg-amber-200">
+                          Payment Pending
+                        </Badge>
+                      </button>
+                    )}
                   </TableCell>
                   <TableCell>{b.total.toFixed(2)}</TableCell>
                   <TableCell>
@@ -159,6 +196,11 @@ function BillHistoryPage() {
                           <DropdownMenuItem onClick={() => setPrintNumber(b.number)}>
                             <Printer className="mr-2 h-4 w-4" /> Print / Reprint
                           </DropdownMenuItem>
+                          {b.paymentStatus === "Pending" && (
+                            <DropdownMenuItem onClick={() => settlePayment(b)}>
+                              <CircleDollarSign className="mr-2 h-4 w-4" /> Mark as Paid
+                            </DropdownMenuItem>
+                          )}
                           {canManage && (
                             <>
                               <DropdownMenuItem
@@ -194,7 +236,15 @@ function BillHistoryPage() {
       </div>
 
       <Dialog open={!!detailsBill} onOpenChange={(v) => !v && setDetailsNumber(null)}>
-        {detailsBill && <BillDetails bill={detailsBill} />}
+        {detailsBill && (
+          <BillDetails
+            bill={detailsBill}
+            onPrint={() => {
+              setDetailsNumber(null);
+              setPrintNumber(detailsBill.number);
+            }}
+          />
+        )}
       </Dialog>
 
       <PrintBillDialog
@@ -218,7 +268,7 @@ function BillHistoryPage() {
   );
 }
 
-function BillDetails({ bill }: { bill: Bill }) {
+function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
   return (
     <DialogContent className="max-w-lg">
       <DialogHeader>
@@ -233,6 +283,22 @@ function BillDetails({ bill }: { bill: Bill }) {
           <div>
             <p className="text-xs uppercase text-muted-foreground">Cashier</p>
             <p className="font-medium text-foreground">{bill.by}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">Payment</p>
+            <p className="font-medium text-foreground">
+              {bill.paymentMethod}
+              {bill.paymentStatus === "Pending" && (
+                <span className="ml-1.5 rounded bg-amber-100 px-1.5 py-0.5 text-xs font-semibold text-amber-800">
+                  Pending
+                </span>
+              )}
+            </p>
+            {bill.settledAt && (
+              <p className="text-xs text-muted-foreground">
+                Settled by {bill.settledBy} on {bill.settledAt}
+              </p>
+            )}
           </div>
         </div>
         <div className="rounded-lg border border-border">
@@ -300,6 +366,11 @@ function BillDetails({ bill }: { bill: Bill }) {
           </div>
         )}
       </div>
+      <DialogFooter>
+        <Button onClick={onPrint} className="gap-1.5">
+          <Printer className="h-4 w-4" /> Print / Reprint
+        </Button>
+      </DialogFooter>
     </DialogContent>
   );
 }

@@ -5,13 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Sheet,
-  SheetContent,
-  SheetFooter,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetFooter, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import {
   Select,
   SelectContent,
@@ -19,11 +13,29 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Badge } from "@/components/ui/badge";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, SlidersHorizontal, MoreHorizontal } from "lucide-react";
+import { Plus, SlidersHorizontal, MoreHorizontal, Printer } from "lucide-react";
 import { toast } from "sonner";
 import { useCustomers, customersStore } from "@/lib/customers-store";
+import { useBills } from "@/lib/bills-store";
+import { type Bill, type Customer } from "@/lib/pos-data";
+import { PrintBillDialog } from "@/components/print-bill-dialog";
 
 export const Route = createFileRoute("/customers")({
   head: () => ({
@@ -36,17 +48,37 @@ export const Route = createFileRoute("/customers")({
 });
 
 const avatarColors = [
-  "bg-slate-700", "bg-orange-900", "bg-teal-700", "bg-red-500",
-  "bg-emerald-900", "bg-teal-500", "bg-blue-950", "bg-slate-800", "bg-slate-900",
+  "bg-slate-700",
+  "bg-orange-900",
+  "bg-teal-700",
+  "bg-red-500",
+  "bg-emerald-900",
+  "bg-teal-500",
+  "bg-blue-950",
+  "bg-slate-800",
+  "bg-slate-900",
 ];
 
-const emptyForm = { name: "", mobile: "", email: "", dob: "", address: "", taxNumber: "", creditLimit: "200", note: "" };
+const emptyForm = {
+  name: "",
+  mobile: "",
+  email: "",
+  dob: "",
+  address: "",
+  taxNumber: "",
+  creditLimit: "200",
+  note: "",
+};
 
 function CustomersPage() {
   const customers = useCustomers();
+  const bills = useBills();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
+  const [salesCustomerId, setSalesCustomerId] = useState<string | null>(null);
+  const [printNumber, setPrintNumber] = useState<string | null>(null);
+  const printBill = bills.find((b) => b.number === printNumber) ?? null;
 
   const filtered = customers.filter(
     (c) =>
@@ -54,6 +86,22 @@ function CustomersPage() {
       c.name.toLowerCase().includes(search.toLowerCase()) ||
       c.mobile.includes(search),
   );
+
+  function customerBills(customerId: string) {
+    return bills.filter((b) => b.customerId === customerId);
+  }
+  function liveOutstanding(customerId: string) {
+    return customerBills(customerId)
+      .filter((b) => b.status === "Sale" && b.paymentStatus === "Pending")
+      .reduce((s, b) => s + b.total, 0);
+  }
+  function liveSpent(customerId: string) {
+    return customerBills(customerId)
+      .filter((b) => b.status !== "Void")
+      .reduce((s, b) => s + b.total, 0);
+  }
+
+  const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
 
   function createCustomer() {
     const limit = parseFloat(form.creditLimit) || 0;
@@ -84,7 +132,11 @@ function CustomersPage() {
             <Button onClick={() => setOpen(true)} className="gap-1.5">
               <Plus className="h-4 w-4" /> New
             </Button>
-            <Button variant="outline" size="icon" onClick={() => toast("Export or import customers")}>
+            <Button
+              variant="outline"
+              size="icon"
+              onClick={() => toast("Export or import customers")}
+            >
               <MoreHorizontal className="h-4 w-4" />
             </Button>
           </div>
@@ -108,7 +160,9 @@ function CustomersPage() {
                 <TableRow key={c.id}>
                   <TableCell>
                     <Avatar className="h-8 w-8">
-                      <AvatarFallback className={`${avatarColors[i % avatarColors.length]} text-xs font-semibold text-white`}>
+                      <AvatarFallback
+                        className={`${avatarColors[i % avatarColors.length]} text-xs font-semibold text-white`}
+                      >
                         {c.name.trim()[0]?.toUpperCase()}
                       </AvatarFallback>
                     </Avatar>
@@ -116,17 +170,24 @@ function CustomersPage() {
                   <TableCell className="font-medium">{c.name}</TableCell>
                   <TableCell>{c.mobile}</TableCell>
                   <TableCell>
-                    {c.outstanding.toFixed(2)}
-                    <span className="block text-xs text-muted-foreground">Limit {c.limit.toFixed(2)}</span>
+                    {liveOutstanding(c.id).toFixed(2)}
+                    <span className="block text-xs text-muted-foreground">
+                      Limit {c.limit.toFixed(2)}
+                    </span>
                   </TableCell>
-                  <TableCell>{c.spent.toFixed(2)}</TableCell>
+                  <TableCell>{liveSpent(c.id).toFixed(2)}</TableCell>
                   <TableCell>{c.loyalty}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
-                      <Button variant="outline" size="sm" onClick={() => toast(`${c.name} — spent ${c.spent.toFixed(2)}, outstanding ${c.outstanding.toFixed(2)}`)}>
-                        Details
+                      <Button variant="outline" size="sm" onClick={() => setSalesCustomerId(c.id)}>
+                        View Sales
                       </Button>
-                      <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => toast(`More actions for ${c.name}`)}>
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8"
+                        onClick={() => toast(`More actions for ${c.name}`)}
+                      >
                         <MoreHorizontal className="h-3.5 w-3.5" />
                       </Button>
                     </div>
@@ -155,29 +216,54 @@ function CustomersPage() {
               <Label>
                 <span className="text-destructive">*</span> Name
               </Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Name" />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Name"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>
                 <span className="text-destructive">*</span> Mobile
               </Label>
-              <Input value={form.mobile} onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))} placeholder="Mobile" />
+              <Input
+                value={form.mobile}
+                onChange={(e) => setForm((f) => ({ ...f, mobile: e.target.value }))}
+                placeholder="Mobile"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Email</Label>
-              <Input value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="Email" />
+              <Input
+                value={form.email}
+                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                placeholder="Email"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Date of Birth</Label>
-              <Input type="date" value={form.dob} onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))} placeholder="Select date" />
+              <Input
+                type="date"
+                value={form.dob}
+                onChange={(e) => setForm((f) => ({ ...f, dob: e.target.value }))}
+                placeholder="Select date"
+              />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Address</Label>
-              <Textarea value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} placeholder="Address" />
+              <Textarea
+                value={form.address}
+                onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))}
+                placeholder="Address"
+              />
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Tax Number</Label>
-              <Input value={form.taxNumber} onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))} placeholder="Customer Tax Number" />
+              <Input
+                value={form.taxNumber}
+                onChange={(e) => setForm((f) => ({ ...f, taxNumber: e.target.value }))}
+                placeholder="Customer Tax Number"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Default Price Level</Label>
@@ -198,12 +284,19 @@ function CustomersPage() {
               <Label>
                 <span className="text-destructive">*</span> Credit Limit
               </Label>
-              <Input value={form.creditLimit} onChange={(e) => setForm((f) => ({ ...f, creditLimit: e.target.value }))} />
+              <Input
+                value={form.creditLimit}
+                onChange={(e) => setForm((f) => ({ ...f, creditLimit: e.target.value }))}
+              />
               <p className="text-xs text-muted-foreground">Customer Credit Limit</p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <Label>Note</Label>
-              <Textarea value={form.note} onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))} placeholder="Note" />
+              <Textarea
+                value={form.note}
+                onChange={(e) => setForm((f) => ({ ...f, note: e.target.value }))}
+                placeholder="Note"
+              />
             </div>
           </div>
           <SheetFooter>
@@ -216,6 +309,100 @@ function CustomersPage() {
           </SheetFooter>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={!!salesCustomer} onOpenChange={(v) => !v && setSalesCustomerId(null)}>
+        {salesCustomer && (
+          <CustomerSalesDialog
+            customer={salesCustomer}
+            bills={customerBills(salesCustomer.id)}
+            onPrint={setPrintNumber}
+          />
+        )}
+      </Dialog>
+
+      <PrintBillDialog
+        bill={printBill}
+        open={!!printBill}
+        onOpenChange={(v) => !v && setPrintNumber(null)}
+      />
     </AppShell>
+  );
+}
+
+function CustomerSalesDialog({
+  customer,
+  bills,
+  onPrint,
+}: {
+  customer: Customer;
+  bills: Bill[];
+  onPrint: (number: string) => void;
+}) {
+  return (
+    <DialogContent className="max-w-2xl">
+      <DialogHeader>
+        <DialogTitle>Sales — {customer.name}</DialogTitle>
+      </DialogHeader>
+      <div className="max-h-[60vh] overflow-y-auto rounded-lg border border-border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Bill Number</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Total</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {bills.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                  No sales for this customer yet.
+                </TableCell>
+              </TableRow>
+            )}
+            {bills.map((b) => (
+              <TableRow key={b.number}>
+                <TableCell className="font-medium">{b.number}</TableCell>
+                <TableCell>
+                  <Badge
+                    className={
+                      b.status === "Sale"
+                        ? "bg-emerald-100 text-emerald-700 hover:bg-emerald-100"
+                        : "bg-muted text-muted-foreground hover:bg-muted"
+                    }
+                  >
+                    {b.status}
+                  </Badge>
+                  {b.paymentStatus === "Pending" && (
+                    <Badge className="ml-1 bg-amber-100 text-amber-700 hover:bg-amber-100">
+                      Payment Pending
+                    </Badge>
+                  )}
+                </TableCell>
+                <TableCell>{b.total.toFixed(2)}</TableCell>
+                <TableCell>{b.created}</TableCell>
+                <TableCell>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5"
+                    onClick={() => onPrint(b.number)}
+                  >
+                    <Printer className="h-3.5 w-3.5" /> Print
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </div>
+      <DialogFooter>
+        <p className="mr-auto text-sm text-muted-foreground">
+          {bills.length} bill{bills.length === 1 ? "" : "s"} total
+        </p>
+      </DialogFooter>
+    </DialogContent>
   );
 }

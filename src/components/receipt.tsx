@@ -110,7 +110,12 @@ export function Receipt({
       </div>
 
       <div className="mt-2 border-t border-black/20 pt-2 text-xs">
-        <p>Payment: {bill.paymentMethod}</p>
+        <p>
+          Payment: {bill.paymentMethod}
+          {bill.paymentStatus === "Pending" && (
+            <span className="ml-1 font-semibold uppercase">(Pending)</span>
+          )}
+        </p>
         {bill.paymentMethod === "Cash" && (
           <>
             <p>Cash Given: {(bill.cashGiven ?? 0).toFixed(2)}</p>
@@ -122,6 +127,9 @@ export function Receipt({
         )}
         {bill.paymentMethod === "Card" && bill.cardSlipNumber && (
           <p>Slip #: {bill.cardSlipNumber}</p>
+        )}
+        {bill.paymentMethod === "Credit" && bill.paymentStatus === "Pending" && (
+          <p>Amount owed: {bill.total.toFixed(2)}</p>
         )}
       </div>
 

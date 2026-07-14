@@ -39,11 +39,17 @@ function LoginPage() {
     if (user) navigate({ to: "/" });
   }, [user, navigate]);
 
-  function submit(e: React.FormEvent) {
+  const [submitting, setSubmitting] = useState(false);
+
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
-    const result = authStore.login(identifier, password);
+    setSubmitting(true);
+    const result = await authStore.login(identifier, password);
+    setSubmitting(false);
     if (!result.ok) {
-      setError(errorMessages[result.reason]);
+      setError(
+        result.reason === "already-logged-in" ? result.message : errorMessages[result.reason],
+      );
       return;
     }
     logAudit(result.user.name, "login", "Session");
@@ -83,7 +89,7 @@ function LoginPage() {
             />
           </div>
           {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" size="lg">
+          <Button type="submit" className="w-full" size="lg" disabled={submitting}>
             Log In
           </Button>
           <p className="text-center text-sm text-muted-foreground">

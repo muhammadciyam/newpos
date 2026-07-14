@@ -52,7 +52,13 @@ import { useCurrentUser } from "@/lib/auth-store";
 import { useSettings, settingsStore } from "@/lib/settings-store";
 import { pendingSaleStore } from "@/lib/pending-sale-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
-import { type CartLine, type SaleTab, emptySaleTab, saleTabsStore, useSaleTabs } from "@/lib/sale-tabs-store";
+import {
+  type CartLine,
+  type SaleTab,
+  emptySaleTab,
+  saleTabsStore,
+  useSaleTabs,
+} from "@/lib/sale-tabs-store";
 
 export const Route = createFileRoute("/pos/sell")({
   head: () => ({

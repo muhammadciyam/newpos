@@ -37,18 +37,18 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   useEffect(() => {
     if (!ready) return;
     if (!user || user.status !== "Active") {
-      authStore.logout();
+      void authStore.logout();
       navigate({ to: "/login" });
     }
   }, [ready, user, navigate]);
 
-  function logout() {
+  async function logout() {
     if (pendingSaleStore.get()) {
       toast.error("Finish or discard the current sale before logging out.");
       return;
     }
     if (user) logAudit(user.name, "logout", "Session");
-    authStore.logout();
+    await authStore.logout();
     navigate({ to: "/login" });
   }
 

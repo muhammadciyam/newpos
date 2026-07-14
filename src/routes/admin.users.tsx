@@ -21,13 +21,21 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Plus, Trash2, Pencil } from "lucide-react";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { Plus, Trash2, Pencil, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import {
   authStore,
   useUsers,
   useCurrentUser,
+  useActiveSessions,
   type Role,
   type RegisterName,
   type AppUser,
@@ -74,6 +82,7 @@ function UsersPage() {
   const canManageUsers = useHasPermission("users.manage");
   const users = useUsers();
   const currentUser = useCurrentUser();
+  const { sessions, refresh: refreshSessions } = useActiveSessions();
   const registers = Object.keys(useRegister().registers) as RegisterName[];
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyCreateForm);
@@ -101,6 +110,16 @@ function UsersPage() {
     toast.success(`User "${name}" removed`);
   }
 
+  async function forceLogoutUser(email: string, name: string) {
+    const result = await authStore.forceLogout(email);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`${name} logged out`);
+    refreshSessions();
+  }
+
   function toggleSuspend(user: AppUser) {
     const next = user.status === "Suspended" ? "Active" : "Suspended";
     authStore.setStatus(user.id, next);
@@ -117,7 +136,10 @@ function UsersPage() {
     authStore.setRole(editingId, editForm.role);
     authStore.updateProfile(editingId, {
       name: editForm.name,
-      authorizedRegister: editForm.authorizedRegister === "none" ? null : (editForm.authorizedRegister as RegisterName),
+      authorizedRegister:
+        editForm.authorizedRegister === "none"
+          ? null
+          : (editForm.authorizedRegister as RegisterName),
     });
     toast.success(`${editForm.name} updated`);
     setEditingId(null);
@@ -130,7 +152,9 @@ function UsersPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Users</h1>
-            <p className="text-sm text-muted-foreground">Manage login access and roles for this company.</p>
+            <p className="text-sm text-muted-foreground">
+              Manage login access and roles for this company.
+            </p>
           </div>
           <Button onClick={() => setOpen(true)} className="gap-1.5">
             <Plus className="h-4 w-4" /> New User
@@ -155,7 +179,9 @@ function UsersPage() {
                     <div className="flex items-center gap-3">
                       <Avatar className="h-9 w-9">
                         {u.photo && <AvatarImage src={u.photo} alt="" />}
-                        <AvatarFallback className="text-xs font-semibold">{u.name.trim()[0]?.toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="text-xs font-semibold">
+                          {u.name.trim()[0]?.toUpperCase()}
+                        </AvatarFallback>
                       </Avatar>
                       <p className="font-medium text-foreground">{u.name}</p>
                     </div>
@@ -165,39 +191,65 @@ function UsersPage() {
                     <span className="block text-xs text-muted-foreground">@{u.username}</span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={u.role === "Admin" || u.role === "Super Admin" ? "default" : "secondary"}>{u.role}</Badge>
+                    <Badge
+                      variant={
+                        u.role === "Admin" || u.role === "Super Admin" ? "default" : "secondary"
+                      }
+                    >
+                      {u.role}
+                    </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge className={statusColor[u.status]} variant="outline">
                       {u.status}
                     </Badge>
+                    {sessions[u.email] && (
+                      <Badge className="ml-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                        Logged In
+                      </Badge>
+                    )}
                     {u.authorizedRegister && (
-                      <span className="block text-xs text-muted-foreground">Register: {u.authorizedRegister}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        Register: {u.authorizedRegister}
+                      </span>
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    {u.role === "Super Admin" ? (
-                      <span className="text-xs text-muted-foreground">Owner account</span>
-                    ) : (
-                      <div className="flex justify-end gap-2">
-                        <Button variant="outline" size="icon" onClick={() => openEdit(u)}>
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        {u.id !== currentUser?.id && (
-                          <Button variant="outline" size="sm" onClick={() => toggleSuspend(u)}>
-                            {u.status === "Suspended" ? "Reactivate" : "Suspend"}
-                          </Button>
-                        )}
+                    <div className="flex justify-end gap-2">
+                      {sessions[u.email] && u.id !== currentUser?.id && (
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          disabled={u.id === currentUser?.id}
-                          onClick={() => removeUser(u.id, u.name)}
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => forceLogoutUser(u.email, u.name)}
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <LogOut className="h-3.5 w-3.5" /> Force Logout
                         </Button>
-                      </div>
-                    )}
+                      )}
+                      {u.role !== "Super Admin" && (
+                        <>
+                          <Button variant="outline" size="icon" onClick={() => openEdit(u)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          {u.id !== currentUser?.id && (
+                            <Button variant="outline" size="sm" onClick={() => toggleSuspend(u)}>
+                              {u.status === "Suspended" ? "Reactivate" : "Suspend"}
+                            </Button>
+                          )}
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            disabled={u.id === currentUser?.id}
+                            onClick={() => removeUser(u.id, u.name)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                      {u.role === "Super Admin" && !sessions[u.email] && (
+                        <span className="text-xs text-muted-foreground">Owner account</span>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -215,26 +267,47 @@ function UsersPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Full name" />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Full name"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Email</Label>
-                <Input type="email" value={form.email} onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} placeholder="user@example.com" />
+                <Input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="user@example.com"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Username</Label>
-                <Input value={form.username} onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))} placeholder="username" />
+                <Input
+                  value={form.username}
+                  onChange={(e) => setForm((f) => ({ ...f, username: e.target.value }))}
+                  placeholder="username"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Password</Label>
-                <Input type="password" value={form.password} onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} placeholder="Set a password" />
+                <Input
+                  type="password"
+                  value={form.password}
+                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))}
+                  placeholder="Set a password"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Role</Label>
-                <Select value={form.role} onValueChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}>
+                <Select
+                  value={form.role}
+                  onValueChange={(v) => setForm((f) => ({ ...f, role: v as Role }))}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -257,7 +330,12 @@ function UsersPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={!form.name.trim() || !form.email.trim() || !form.username.trim() || !form.password} onClick={createUser}>
+            <Button
+              disabled={
+                !form.name.trim() || !form.email.trim() || !form.username.trim() || !form.password
+              }
+              onClick={createUser}
+            >
               Create User
             </Button>
           </DialogFooter>
@@ -274,12 +352,18 @@ function UsersPage() {
             <div className="space-y-4">
               <div className="space-y-1.5">
                 <Label>Name</Label>
-                <Input value={editForm.name} onChange={(e) => setEditForm((f) => f && { ...f, name: e.target.value })} />
+                <Input
+                  value={editForm.name}
+                  onChange={(e) => setEditForm((f) => f && { ...f, name: e.target.value })}
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
                   <Label>Role</Label>
-                  <Select value={editForm.role} onValueChange={(v) => setEditForm((f) => f && { ...f, role: v as Role })}>
+                  <Select
+                    value={editForm.role}
+                    onValueChange={(v) => setEditForm((f) => f && { ...f, role: v as Role })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
@@ -294,7 +378,10 @@ function UsersPage() {
                 </div>
                 <div className="space-y-1.5">
                   <Label>Authorized Register</Label>
-                  <Select value={editForm.authorizedRegister} onValueChange={(v) => setEditForm((f) => f && { ...f, authorizedRegister: v })}>
+                  <Select
+                    value={editForm.authorizedRegister}
+                    onValueChange={(v) => setEditForm((f) => f && { ...f, authorizedRegister: v })}
+                  >
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
