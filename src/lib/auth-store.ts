@@ -1,7 +1,7 @@
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { logAudit } from "@/lib/audit-log-store";
 
-export type Role = "Admin" | "Manager" | "Supervisor" | "Cashier";
+export type Role = "Super Admin" | "Admin" | "Manager" | "Supervisor" | "Cashier";
 export type UserStatus = "Active" | "Suspended" | "Inactive";
 export type RegisterName = string;
 export type PayType = "Hourly" | "Monthly";
@@ -66,16 +66,16 @@ const emptyProfile: EmployeeProfile = {
 
 const seedAdmin: AppUser = {
   id: "seed-admin",
-  name: "Mohamed Siyam",
-  email: "siyam69@gmail.com",
-  username: "siyam69",
+  name: "Owner",
+  email: "siyante003@gmail.com",
+  username: "siyante003",
   password: "229022#",
-  role: "Admin",
+  role: "Super Admin",
   status: "Active",
   authorizedRegister: null,
   createdAt: new Date("2026-07-13T07:00:00").toISOString(),
   ...emptyProfile,
-  jobTitle: "Owner / Administrator",
+  jobTitle: "Owner",
 };
 
 const usersStoreInternal = createPersistedStore<AppUser[]>("dhipos-users", [seedAdmin]);
@@ -125,9 +125,11 @@ export const authStore = {
   },
 
   // Only an admin can add users — created directly and starts Active immediately.
+  // Super Admin is a singleton seeded account and can never be created here.
   createUser(
     input: { name: string; email: string; username: string; password: string; role: Role } & Partial<EmployeeProfile>,
   ): AppUser | { error: string } {
+    if (input.role === "Super Admin") return { error: "Super Admin cannot be created" };
     const email = normalize(input.email);
     const username = normalize(input.username);
     const users = usersStoreInternal.get();
@@ -167,14 +169,15 @@ export const authStore = {
 
   setStatus(id: string, status: UserStatus) {
     const user = usersStoreInternal.get().find((u) => u.id === id);
-    if (!user) return;
+    if (!user || user.role === "Super Admin") return;
     usersStoreInternal.set((us) => us.map((u) => (u.id === id ? { ...u, status } : u)));
     logAudit(actor(), "update", `User / ${user.email} set to ${status}`);
   },
 
+  // Super Admin can't be assigned to anyone, and the Super Admin's own role can't be changed.
   setRole(id: string, role: Role) {
     const user = usersStoreInternal.get().find((u) => u.id === id);
-    if (!user) return;
+    if (!user || user.role === "Super Admin" || role === "Super Admin") return;
     usersStoreInternal.set((us) => us.map((u) => (u.id === id ? { ...u, role } : u)));
     logAudit(actor(), "update", `User / ${user.email} role changed to ${role}`);
   },
@@ -190,8 +193,9 @@ export const authStore = {
 
   removeUser(id: string) {
     const user = usersStoreInternal.get().find((u) => u.id === id);
+    if (!user || user.role === "Super Admin") return;
     usersStoreInternal.set((us) => us.filter((u) => u.id !== id));
-    logAudit(actor(), "delete", `User / ${user?.email ?? id}`);
+    logAudit(actor(), "delete", `User / ${user.email}`);
   },
 };
 

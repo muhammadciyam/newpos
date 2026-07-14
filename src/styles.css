@@ -146,3 +146,31 @@
     color: var(--color-foreground);
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .receipt-print-area,
+  .receipt-print-area * {
+    visibility: visible;
+  }
+  .receipt-print-area {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    padding: 12px;
+  }
+  .receipt-print-area[data-paper="80mm"] {
+    width: 80mm;
+  }
+  .receipt-print-area[data-paper="58mm"] {
+    width: 58mm;
+  }
+  .receipt-print-area[data-paper="a4"] {
+    width: 210mm;
+  }
+  @page {
+    margin: 8mm;
+  }
+}

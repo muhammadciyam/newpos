@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import type { RegisterSession } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
@@ -19,12 +20,35 @@ const initialState: RegisterState = {
   openedAt: null,
   openedBy: "",
   registers: {
-    Main: { isOpen: false, openedAt: null, lastClosedAt: null },
-    "Main 2": { isOpen: false, openedAt: null, lastClosedAt: null },
+    "Counter 1": { isOpen: false, openedAt: null, lastClosedAt: null },
   },
 };
 
 const store = createPersistedStore<RegisterState>("dhipos-register", initialState);
+
+// One-time fixup for browsers that already persisted the old default registers
+// ("Main" / "Main 2") before they were renamed/removed. Safe to call repeatedly —
+// it's a no-op once neither legacy name is present.
+function migrateLegacyRegisterNames() {
+  const s = store.get();
+  if (!("Main" in s.registers) && !("Main 2" in s.registers)) return;
+  store.set((state) => {
+    const registers = { ...state.registers };
+    if (registers["Main"] && !registers["Counter 1"]) {
+      registers["Counter 1"] = registers["Main"];
+    }
+    delete registers["Main"];
+    delete registers["Main 2"];
+    const renamedActive = state.register === "Main" ? "Counter 1" : state.register;
+    const activeRemoved = renamedActive === "Main 2";
+    return {
+      ...state,
+      registers,
+      register: activeRemoved ? null : renamedActive,
+      openedAt: activeRemoved ? null : state.openedAt,
+    };
+  });
+}
 const sessionsStore = createPersistedStore<RegisterSession[]>("dhipos-register-sessions", []);
 
 function formatSessionTimestamp(ms: number) {
@@ -118,7 +142,11 @@ function formatShortDuration(ms: number) {
 }
 
 export function useRegister() {
-  return usePersistedStore(store);
+  const state = usePersistedStore(store);
+  useEffect(() => {
+    migrateLegacyRegisterNames();
+  }, []);
+  return state;
 }
 
 export function useRegisterSessions() {

@@ -32,7 +32,6 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { toast } from "sonner";
 import { useRegister, formatOpenSince } from "@/lib/register-store";
 
 type NavLeaf = { title: string; url: string };
@@ -210,19 +209,21 @@ export function AppSidebar() {
         </SidebarGroup>
       </SidebarContent>
       <SidebarFooter className="border-t border-sidebar-border">
-        <button
-          onClick={() => toast("Opening help center")}
+        <a
+          href="https://wa.me/9607333555"
+          target="_blank"
+          rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-lg border border-sidebar-border p-2.5 text-left transition hover:bg-sidebar-accent"
         >
           <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
           {!collapsed && (
             <div className="flex-1">
               <p className="text-sm font-medium text-sidebar-foreground">Need Help?</p>
-              <p className="text-xs font-medium text-destructive">New! Help Videos</p>
+              <p className="text-xs font-medium text-emerald-600">Chat on WhatsApp</p>
             </div>
           )}
           {!collapsed && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
-        </button>
+        </a>
       </SidebarFooter>
     </Sidebar>
   );

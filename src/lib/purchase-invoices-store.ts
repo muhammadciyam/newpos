@@ -8,6 +8,7 @@ export type PurchaseInvoiceItem = {
   productName: string;
   qty: number;
   costPrice: number;
+  gstApplicable: boolean;
 };
 
 export type PurchaseInvoiceStatus = "Pending" | "Received" | "Approved" | "Rejected";
@@ -15,8 +16,11 @@ export type PurchaseInvoiceStatus = "Pending" | "Received" | "Approved" | "Rejec
 export type PurchaseInvoice = {
   id: string;
   number: string;
+  supplierName: string;
+  supplierGstNumber: string;
   items: PurchaseInvoiceItem[];
   gstPercent: number;
+  gstAmountOverride: number | null;
   status: PurchaseInvoiceStatus;
   createdBy: string;
   createdAt: string;
@@ -26,9 +30,10 @@ export type PurchaseInvoice = {
   reviewedAt: string | null;
 };
 
-export function invoiceTotals(invoice: Pick<PurchaseInvoice, "items" | "gstPercent">) {
+export function invoiceTotals(invoice: Pick<PurchaseInvoice, "items" | "gstPercent" | "gstAmountOverride">) {
   const subtotal = invoice.items.reduce((s, i) => s + i.qty * i.costPrice, 0);
-  const gstAmount = subtotal * (invoice.gstPercent / 100);
+  const gstableSubtotal = invoice.items.reduce((s, i) => s + (i.gstApplicable ? i.qty * i.costPrice : 0), 0);
+  const gstAmount = invoice.gstAmountOverride != null ? invoice.gstAmountOverride : gstableSubtotal * (invoice.gstPercent / 100);
   const total = subtotal + gstAmount;
   return { subtotal, gstAmount, total };
 }
@@ -54,13 +59,22 @@ export const purchaseInvoicesStore = {
   subscribe: store.subscribe,
   get: store.get,
   hydrate: store.hydrate,
-  create(items: PurchaseInvoiceItem[], gstPercent: number) {
+  create(input: {
+    supplierName: string;
+    supplierGstNumber: string;
+    items: PurchaseInvoiceItem[];
+    gstPercent: number;
+    gstAmountOverride: number | null;
+  }) {
     const seq = store.get().length + 1;
     const invoice: PurchaseInvoice = {
       id: `pi-${Date.now()}`,
       number: `PI/${seq}`,
-      items,
-      gstPercent,
+      supplierName: input.supplierName,
+      supplierGstNumber: input.supplierGstNumber,
+      items: input.items,
+      gstPercent: input.gstPercent,
+      gstAmountOverride: input.gstAmountOverride,
       status: "Pending",
       createdBy: actor(),
       createdAt: formatNow(),

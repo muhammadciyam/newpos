@@ -9,9 +9,21 @@ export type Permission =
   | "inventory.approve" // approve/reject Purchase Invoices
   | "reports.view" // Reports + Analytics pages
   | "customers.manage" // create customers
-  | "sales.viewAll"; // Bill History shows everyone's bills, not just their own
+  | "sales.viewAll" // Bill History shows everyone's bills, not just their own
+  | "sales.manage"; // edit / void / refund bills in Bill History
 
 const rolePermissions: Record<Role, Permission[]> = {
+  "Super Admin": [
+    "users.manage",
+    "settings.manage",
+    "products.manage",
+    "inventory.access",
+    "inventory.approve",
+    "reports.view",
+    "customers.manage",
+    "sales.viewAll",
+    "sales.manage",
+  ],
   Admin: [
     "users.manage",
     "settings.manage",
@@ -21,8 +33,16 @@ const rolePermissions: Record<Role, Permission[]> = {
     "reports.view",
     "customers.manage",
     "sales.viewAll",
+    "sales.manage",
   ],
-  Manager: ["products.manage", "inventory.access", "inventory.approve", "reports.view", "customers.manage", "sales.viewAll"],
+  Manager: [
+    "products.manage",
+    "inventory.access",
+    "inventory.approve",
+    "reports.view",
+    "customers.manage",
+    "sales.viewAll",
+  ],
   Supervisor: ["inventory.access", "reports.view", "customers.manage", "sales.viewAll"],
   Cashier: ["customers.manage"],
 };

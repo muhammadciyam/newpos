@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { useRegister } from "@/lib/register-store";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
+import { pendingSaleStore } from "@/lib/pending-sale-store";
 
 export function AppShell({ title, children }: { title?: string; children: ReactNode }) {
   const register = useRegister();
@@ -42,6 +43,10 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   }, [ready, user, navigate]);
 
   function logout() {
+    if (pendingSaleStore.get()) {
+      toast.error("Finish or discard the current sale before logging out.");
+      return;
+    }
     if (user) logAudit(user.name, "logout", "Session");
     authStore.logout();
     navigate({ to: "/login" });
@@ -100,7 +105,10 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
               </DropdownMenu>
             </div>
           </header>
-          <main className="flex-1">{title && <span className="sr-only">{title}</span>}{children}</main>
+          <main className="flex-1">
+            {title && <span className="sr-only">{title}</span>}
+            {children}
+          </main>
         </div>
       </div>
     </SidebarProvider>

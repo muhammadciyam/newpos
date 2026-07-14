@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -52,11 +53,16 @@ function InventoryPage() {
   const products = useProducts();
 
   const [open, setOpen] = useState(false);
+  const [supplierName, setSupplierName] = useState("");
+  const [supplierGstNumber, setSupplierGstNumber] = useState("");
   const [lines, setLines] = useState<PurchaseInvoiceItem[]>([]);
   const [productId, setProductId] = useState("");
   const [qty, setQty] = useState("1");
   const [costPrice, setCostPrice] = useState("");
-  const [gstPercent, setGstPercent] = useState("8");
+  const [lineGstApplicable, setLineGstApplicable] = useState(true);
+  const [gstMode, setGstMode] = useState<"percent" | "amount">("percent");
+  const [gstPercent, setGstPercent] = useState("");
+  const [gstAmount, setGstAmount] = useState("");
   const [detailsId, setDetailsId] = useState<string | null>(null);
 
   if (!canAccess) return <RestrictedPage />;
@@ -72,13 +78,19 @@ function InventoryPage() {
     setLines((ls) => {
       const existing = ls.find((l) => l.productId === product.id);
       if (existing) {
-        return ls.map((l) => (l.productId === product.id ? { ...l, qty: l.qty + quantity, costPrice: cost } : l));
+        return ls.map((l) =>
+          l.productId === product.id ? { ...l, qty: l.qty + quantity, costPrice: cost, gstApplicable: lineGstApplicable } : l,
+        );
       }
-      return [...ls, { productId: product.id, productName: product.name, qty: quantity, costPrice: cost }];
+      return [
+        ...ls,
+        { productId: product.id, productName: product.name, qty: quantity, costPrice: cost, gstApplicable: lineGstApplicable },
+      ];
     });
     setProductId("");
     setQty("1");
     setCostPrice("");
+    setLineGstApplicable(true);
   }
 
   function removeLine(id: string) {
@@ -91,14 +103,28 @@ function InventoryPage() {
     setCostPrice(product?.cost != null ? String(product.cost) : "");
   }
 
-  const draftTotals = invoiceTotals({ items: lines, gstPercent: parseFloat(gstPercent) || 0 });
+  const draftTotals = invoiceTotals({
+    items: lines,
+    gstPercent: parseFloat(gstPercent) || 0,
+    gstAmountOverride: gstMode === "amount" ? parseFloat(gstAmount) || 0 : null,
+  });
 
   function submit() {
-    if (!lines.length) return;
-    const invoice = purchaseInvoicesStore.create(lines, parseFloat(gstPercent) || 0);
+    if (!lines.length || !supplierName.trim()) return;
+    const invoice = purchaseInvoicesStore.create({
+      supplierName: supplierName.trim(),
+      supplierGstNumber: supplierGstNumber.trim(),
+      items: lines,
+      gstPercent: parseFloat(gstPercent) || 0,
+      gstAmountOverride: gstMode === "amount" ? parseFloat(gstAmount) || 0 : null,
+    });
     toast.success(`Purchase Invoice ${invoice.number} submitted for review`);
     setLines([]);
-    setGstPercent("8");
+    setSupplierName("");
+    setSupplierGstNumber("");
+    setGstMode("percent");
+    setGstPercent("");
+    setGstAmount("");
     setOpen(false);
   }
 
@@ -137,6 +163,7 @@ function InventoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Number</TableHead>
+                <TableHead>Supplier</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead>Total</TableHead>
                 <TableHead>Status</TableHead>
@@ -146,7 +173,7 @@ function InventoryPage() {
             <TableBody>
               {invoices.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5}>
+                  <TableCell colSpan={6}>
                     <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
                       <Database className="h-10 w-10" />
                       <p>No purchase invoices yet.</p>
@@ -161,6 +188,10 @@ function InventoryPage() {
                     <TableCell className="font-medium">
                       {inv.number}
                       <span className="block text-xs text-muted-foreground">By {inv.createdBy}</span>
+                    </TableCell>
+                    <TableCell>
+                      {inv.supplierName || <span className="text-muted-foreground">—</span>}
+                      {inv.supplierGstNumber && <span className="block text-xs text-muted-foreground">GST No. {inv.supplierGstNumber}</span>}
                     </TableCell>
                     <TableCell>
                       <p>{inv.items.reduce((s, i) => s + i.qty, 0)} units, {inv.items.length} product{inv.items.length === 1 ? "" : "s"}</p>
@@ -205,12 +236,25 @@ function InventoryPage() {
       </div>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-lg">
+        <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>New Purchase Invoice</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="grid grid-cols-[1fr_80px_100px_auto] items-end gap-2">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label>
+                  <span className="text-destructive">*</span> Supplier / Company Name
+                </Label>
+                <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Maldives Trading Co." />
+              </div>
+              <div className="space-y-1.5">
+                <Label>GST / TIN Number (if any)</Label>
+                <Input value={supplierGstNumber} onChange={(e) => setSupplierGstNumber(e.target.value)} placeholder="e.g. 1234567-GST" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-[1fr_70px_90px_auto_auto] items-end gap-2">
               <div className="space-y-1.5">
                 <label className="text-sm text-foreground">Product</label>
                 <Select value={productId} onValueChange={selectProduct}>
@@ -234,6 +278,9 @@ function InventoryPage() {
                 <label className="text-sm text-foreground">Cost/unit</label>
                 <Input value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="0.00" />
               </div>
+              <label className="flex items-center gap-1.5 whitespace-nowrap pb-2 text-sm text-foreground">
+                <Checkbox checked={lineGstApplicable} onCheckedChange={(v) => setLineGstApplicable(!!v)} /> GST
+              </label>
               <Button type="button" variant="outline" onClick={addLine} disabled={!productId || !costPrice}>
                 Add
               </Button>
@@ -247,6 +294,7 @@ function InventoryPage() {
                       <TableHead>Product</TableHead>
                       <TableHead>Qty</TableHead>
                       <TableHead>Cost/unit</TableHead>
+                      <TableHead>GST</TableHead>
                       <TableHead>Line Total</TableHead>
                       <TableHead />
                     </TableRow>
@@ -257,6 +305,11 @@ function InventoryPage() {
                         <TableCell>{l.productName}</TableCell>
                         <TableCell>{l.qty}</TableCell>
                         <TableCell>{l.costPrice.toFixed(2)}</TableCell>
+                        <TableCell>
+                          <Badge variant="outline" className={l.gstApplicable ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}>
+                            {l.gstApplicable ? "Yes" : "Exempt"}
+                          </Badge>
+                        </TableCell>
                         <TableCell>{(l.qty * l.costPrice).toFixed(2)}</TableCell>
                         <TableCell className="text-right">
                           <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeLine(l.productId)}>
@@ -272,8 +325,27 @@ function InventoryPage() {
 
             <div className="flex items-center justify-between gap-3 border-t border-border pt-3">
               <div className="flex items-center gap-2">
-                <Label className="whitespace-nowrap">GST %</Label>
-                <Input value={gstPercent} onChange={(e) => setGstPercent(e.target.value)} className="w-20" />
+                <div className="flex rounded-md border border-border p-0.5">
+                  <button
+                    type="button"
+                    onClick={() => setGstMode("percent")}
+                    className={`rounded px-2 py-1 text-xs font-medium ${gstMode === "percent" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    GST %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setGstMode("amount")}
+                    className={`rounded px-2 py-1 text-xs font-medium ${gstMode === "amount" ? "bg-primary text-primary-foreground" : "text-muted-foreground"}`}
+                  >
+                    GST Amount
+                  </button>
+                </div>
+                {gstMode === "percent" ? (
+                  <Input value={gstPercent} onChange={(e) => setGstPercent(e.target.value)} placeholder="e.g. 8" className="w-20" />
+                ) : (
+                  <Input value={gstAmount} onChange={(e) => setGstAmount(e.target.value)} placeholder="0.00" className="w-24" />
+                )}
               </div>
               <div className="space-y-0.5 text-right text-sm">
                 <p className="text-muted-foreground">Subtotal: <span className="font-medium text-foreground">{draftTotals.subtotal.toFixed(2)}</span></p>
@@ -286,7 +358,7 @@ function InventoryPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={!lines.length} onClick={submit}>
+            <Button disabled={!lines.length || !supplierName.trim()} onClick={submit}>
               Submit for Review
             </Button>
           </DialogFooter>
@@ -308,6 +380,16 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
         <DialogTitle>Purchase Invoice {invoice.number}</DialogTitle>
       </DialogHeader>
       <div className="space-y-4">
+        <div className="grid grid-cols-2 gap-2 rounded-lg border border-border p-3 text-sm">
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">Supplier / Company</p>
+            <p className="font-medium text-foreground">{invoice.supplierName || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">GST / TIN Number</p>
+            <p className="font-medium text-foreground">{invoice.supplierGstNumber || "—"}</p>
+          </div>
+        </div>
         <div className="rounded-lg border border-border">
           <Table>
             <TableHeader>
@@ -315,6 +397,7 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
                 <TableHead>Product</TableHead>
                 <TableHead>Qty</TableHead>
                 <TableHead>Cost/unit</TableHead>
+                <TableHead>GST</TableHead>
                 <TableHead>Line Total</TableHead>
               </TableRow>
             </TableHeader>
@@ -324,6 +407,11 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
                   <TableCell>{i.productName}</TableCell>
                   <TableCell>{i.qty}</TableCell>
                   <TableCell>{i.costPrice.toFixed(2)}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={i.gstApplicable ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}>
+                      {i.gstApplicable ? "Yes" : "Exempt"}
+                    </Badge>
+                  </TableCell>
                   <TableCell>{(i.qty * i.costPrice).toFixed(2)}</TableCell>
                 </TableRow>
               ))}
@@ -332,7 +420,10 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
         </div>
         <div className="space-y-0.5 text-right text-sm">
           <p className="text-muted-foreground">Subtotal: <span className="font-medium text-foreground">{totals.subtotal.toFixed(2)}</span></p>
-          <p className="text-muted-foreground">GST ({invoice.gstPercent}%): <span className="font-medium text-foreground">{totals.gstAmount.toFixed(2)}</span></p>
+          <p className="text-muted-foreground">
+            GST {invoice.gstAmountOverride != null ? "(fixed amount)" : `(${invoice.gstPercent}%)`}:{" "}
+            <span className="font-medium text-foreground">{totals.gstAmount.toFixed(2)}</span>
+          </p>
           <p className="text-base font-bold text-foreground">Total: {totals.total.toFixed(2)}</p>
         </div>
         <div className="grid grid-cols-1 gap-2 border-t border-border pt-3 text-sm sm:grid-cols-3">

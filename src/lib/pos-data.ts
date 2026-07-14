@@ -96,15 +96,54 @@ export type RegisterSession = {
 };
 
 // ---- Bills ----
+export type BillLineItem = {
+  productId: string;
+  name: string;
+  price: number;
+  qty: number;
+  refundedQty?: number;
+};
+
+export type BillRefund = {
+  id: string;
+  at: string;
+  by: string;
+  items: { productId: string; name: string; qty: number; price: number }[];
+  amount: number;
+  reason?: string;
+};
+
 export type Bill = {
   number: string;
   customer: string;
+  customerId?: string | null;
   location: string;
   register: string;
-  status: "Sale" | "Refund" | "Void";
+  status: "Sale" | "Void" | "Refunded" | "Partially Refunded";
+  items: BillLineItem[];
+  subtotal: number;
+  discount: number;
+  gst: number;
   total: number;
   created: string;
   by: string;
+  paymentMethod: "Cash" | "Card" | "Bank Transfer" | "Credit";
+  paymentStatus: "Paid" | "Pending";
+  settledBy?: string;
+  settledAt?: string;
+  cashGiven?: number;
+  changeGiven?: number;
+  transferSlip?: string;
+  recipientNumber?: string;
+  cardSlipNumber?: string;
+  printTemplateId?: string;
+  editedBy?: string;
+  editedAt?: string;
+  originalTotal?: number;
+  voidedBy?: string;
+  voidedAt?: string;
+  voidReason?: string;
+  refunds?: BillRefund[];
 };
 
 // ---- Online Payments ----
@@ -116,9 +155,8 @@ export type OnlinePayment = {
   created: string;
   by: string;
   reference: string;
+  receiptSlip: string;
 };
-
-export const onlinePayments: OnlinePayment[] = [];
 
 // ---- Reports ----
 export const salesReports = [
@@ -126,7 +164,10 @@ export const salesReports = [
   { title: "Product Sales Report", desc: "Sales summary by products" },
   { title: "Period Sales Reports", desc: "Various sales reports for given period" },
   { title: "Customer Sales Report", desc: "Sales by customers" },
-  { title: "Outstanding Bills Report", desc: "Unsettled sales bills (Credit Sales, Layaway Bills)" },
+  {
+    title: "Outstanding Bills Report",
+    desc: "Unsettled sales bills (Credit Sales, Layaway Bills)",
+  },
   { title: "Sales Void Report", desc: "Reports of voided invoices" },
   { title: "FOC Bills Report", desc: "Details of all FOC bills" },
 ];

@@ -165,7 +165,7 @@ function UsersPage() {
                     <span className="block text-xs text-muted-foreground">@{u.username}</span>
                   </TableCell>
                   <TableCell>
-                    <Badge variant={u.role === "Admin" ? "default" : "secondary"}>{u.role}</Badge>
+                    <Badge variant={u.role === "Admin" || u.role === "Super Admin" ? "default" : "secondary"}>{u.role}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge className={statusColor[u.status]} variant="outline">
@@ -176,24 +176,28 @@ function UsersPage() {
                     )}
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button variant="outline" size="icon" onClick={() => openEdit(u)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      {u.id !== currentUser?.id && (
-                        <Button variant="outline" size="sm" onClick={() => toggleSuspend(u)}>
-                          {u.status === "Suspended" ? "Reactivate" : "Suspend"}
+                    {u.role === "Super Admin" ? (
+                      <span className="text-xs text-muted-foreground">Owner account</span>
+                    ) : (
+                      <div className="flex justify-end gap-2">
+                        <Button variant="outline" size="icon" onClick={() => openEdit(u)}>
+                          <Pencil className="h-4 w-4" />
                         </Button>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        disabled={u.id === currentUser?.id}
-                        onClick={() => removeUser(u.id, u.name)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
+                        {u.id !== currentUser?.id && (
+                          <Button variant="outline" size="sm" onClick={() => toggleSuspend(u)}>
+                            {u.status === "Suspended" ? "Reactivate" : "Suspend"}
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          disabled={u.id === currentUser?.id}
+                          onClick={() => removeUser(u.id, u.name)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               ))}
