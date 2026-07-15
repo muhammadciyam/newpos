@@ -11,6 +11,16 @@ export type ServerRegisterRecord = {
   openedBy: string | null;
   openedByDeviceId: string | null;
   lastClosedAt: number | null;
+  // Opaque — the held/parked sale(s) for this register, if any. See register-store.ts.
+  // Typed `any` (not `unknown`) because createServerFn's serialization checker needs a
+  // provably-JSON-serializable type here; the actual shape is validated on the client
+  // (sale-tabs-store.ts's isSaleTabsState) before ever being trusted.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  heldBill: any;
+  // Cash/card/bank amounts declared when this session was opened (keyed by the opening
+  // dialog's fields: mvr/usd/usd1/usd20/card/bank) — used to compute the Expected column
+  // at close time. Cleared back to null once the register is closed.
+  opening: Record<string, string> | null;
 };
 
 export type ServerRegisterState = {
@@ -30,6 +40,8 @@ const initialState: ServerRegisterState = {
       openedBy: null,
       openedByDeviceId: null,
       lastClosedAt: null,
+      heldBill: null,
+      opening: null,
     },
   },
 };

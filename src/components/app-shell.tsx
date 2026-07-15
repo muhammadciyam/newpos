@@ -26,12 +26,19 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    authStore.hydrate();
-    if (!authStore.getCurrentUser()) {
-      navigate({ to: "/login" });
-    } else {
-      setReady(true);
-    }
+    let cancelled = false;
+    (async () => {
+      await authStore.hydrate();
+      if (cancelled) return;
+      if (!authStore.getCurrentUser()) {
+        navigate({ to: "/login" });
+      } else {
+        setReady(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [navigate]);
 
   useEffect(() => {
@@ -40,6 +47,27 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
       void authStore.logout();
       navigate({ to: "/login" });
     }
+  }, [ready, user, navigate]);
+
+  // Periodically check whether another device has logged in as this same user — if so,
+  // this device's session was taken over, so log out here too (locally only — the new
+  // device's claim must not be released) and explain why, rather than leaving this
+  // session silently acting as if it's still authenticated.
+  useEffect(() => {
+    if (!ready || !user) return;
+    let cancelled = false;
+    async function check() {
+      const stillMine = await authStore.isSessionStillMine();
+      if (cancelled || stillMine) return;
+      authStore.clearLocalSession();
+      toast.error("You were logged out because this account signed in on another device.");
+      navigate({ to: "/login" });
+    }
+    const id = setInterval(check, 7000);
+    return () => {
+      cancelled = true;
+      clearInterval(id);
+    };
   }, [ready, user, navigate]);
 
   async function logout() {

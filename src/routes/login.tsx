@@ -29,7 +29,7 @@ function LoginPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    authStore.hydrate();
+    void authStore.hydrate();
     if (authStore.getCurrentUser()) {
       navigate({ to: "/" });
     }
@@ -47,9 +47,7 @@ function LoginPage() {
     const result = await authStore.login(identifier, password);
     setSubmitting(false);
     if (!result.ok) {
-      setError(
-        result.reason === "already-logged-in" ? result.message : errorMessages[result.reason],
-      );
+      setError(result.reason === "network" ? result.message : errorMessages[result.reason]);
       return;
     }
     logAudit(result.user.name, "login", "Session");

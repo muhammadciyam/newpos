@@ -2,8 +2,15 @@ import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { RestrictedPage } from "@/components/restricted-page";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useAuditLogs } from "@/lib/audit-log-store";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { useAuditLogs, useAuditLogPolling } from "@/lib/audit-log-store";
 import { useHasPermission } from "@/lib/permissions";
 
 export const Route = createFileRoute("/admin/audit-logs")({
@@ -24,6 +31,7 @@ const actionColor: Record<string, string> = {
 function AuditLogsPage() {
   const canViewAuditLogs = useHasPermission("settings.manage");
   const auditLogs = useAuditLogs();
+  useAuditLogPolling();
 
   if (!canViewAuditLogs) return <RestrictedPage />;
 

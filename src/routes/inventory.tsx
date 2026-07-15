@@ -20,10 +20,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plus, Trash2, Database } from "lucide-react";
 import { toast } from "sonner";
-import { useProducts } from "@/lib/products-store";
+import { useProducts, useProductsPolling } from "@/lib/products-store";
 import {
   usePurchaseInvoices,
   purchaseInvoicesStore,
@@ -51,6 +58,7 @@ function InventoryPage() {
   const canApprove = useHasPermission("inventory.approve");
   const invoices = usePurchaseInvoices();
   const products = useProducts();
+  useProductsPolling();
 
   const [open, setOpen] = useState(false);
   const [supplierName, setSupplierName] = useState("");
@@ -79,12 +87,20 @@ function InventoryPage() {
       const existing = ls.find((l) => l.productId === product.id);
       if (existing) {
         return ls.map((l) =>
-          l.productId === product.id ? { ...l, qty: l.qty + quantity, costPrice: cost, gstApplicable: lineGstApplicable } : l,
+          l.productId === product.id
+            ? { ...l, qty: l.qty + quantity, costPrice: cost, gstApplicable: lineGstApplicable }
+            : l,
         );
       }
       return [
         ...ls,
-        { productId: product.id, productName: product.name, qty: quantity, costPrice: cost, gstApplicable: lineGstApplicable },
+        {
+          productId: product.id,
+          productName: product.name,
+          qty: quantity,
+          costPrice: cost,
+          gstApplicable: lineGstApplicable,
+        },
       ];
     });
     setProductId("");
@@ -133,8 +149,8 @@ function InventoryPage() {
     toast.success(`Purchase Invoice ${number} marked as received`);
   }
 
-  function approve(id: string, number: string) {
-    purchaseInvoicesStore.approve(id);
+  async function approve(id: string, number: string) {
+    await purchaseInvoicesStore.approve(id);
     toast.success(`Purchase Invoice ${number} approved — stock updated`);
   }
 
@@ -150,7 +166,8 @@ function InventoryPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Inventory</h1>
             <p className="text-sm text-muted-foreground">
-              Add stock through Purchase Invoices: submit → mark received → an admin approves before quantities update.
+              Add stock through Purchase Invoices: submit → mark received → an admin approves before
+              quantities update.
             </p>
           </div>
           <Button onClick={() => setOpen(true)} className="gap-1.5">
@@ -187,14 +204,23 @@ function InventoryPage() {
                   <TableRow key={inv.id}>
                     <TableCell className="font-medium">
                       {inv.number}
-                      <span className="block text-xs text-muted-foreground">By {inv.createdBy}</span>
+                      <span className="block text-xs text-muted-foreground">
+                        By {inv.createdBy}
+                      </span>
                     </TableCell>
                     <TableCell>
                       {inv.supplierName || <span className="text-muted-foreground">—</span>}
-                      {inv.supplierGstNumber && <span className="block text-xs text-muted-foreground">GST No. {inv.supplierGstNumber}</span>}
+                      {inv.supplierGstNumber && (
+                        <span className="block text-xs text-muted-foreground">
+                          GST No. {inv.supplierGstNumber}
+                        </span>
+                      )}
                     </TableCell>
                     <TableCell>
-                      <p>{inv.items.reduce((s, i) => s + i.qty, 0)} units, {inv.items.length} product{inv.items.length === 1 ? "" : "s"}</p>
+                      <p>
+                        {inv.items.reduce((s, i) => s + i.qty, 0)} units, {inv.items.length} product
+                        {inv.items.length === 1 ? "" : "s"}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {inv.items.map((i) => `${i.productName} x${i.qty}`).join(", ")}
                       </p>
@@ -221,7 +247,11 @@ function InventoryPage() {
                           </Button>
                         )}
                         {(inv.status === "Pending" || inv.status === "Received") && canApprove && (
-                          <Button size="sm" variant="destructive" onClick={() => reject(inv.id, inv.number)}>
+                          <Button
+                            size="sm"
+                            variant="destructive"
+                            onClick={() => reject(inv.id, inv.number)}
+                          >
                             Reject
                           </Button>
                         )}
@@ -246,11 +276,19 @@ function InventoryPage() {
                 <Label>
                   <span className="text-destructive">*</span> Supplier / Company Name
                 </Label>
-                <Input value={supplierName} onChange={(e) => setSupplierName(e.target.value)} placeholder="e.g. Maldives Trading Co." />
+                <Input
+                  value={supplierName}
+                  onChange={(e) => setSupplierName(e.target.value)}
+                  placeholder="e.g. Maldives Trading Co."
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>GST / TIN Number (if any)</Label>
-                <Input value={supplierGstNumber} onChange={(e) => setSupplierGstNumber(e.target.value)} placeholder="e.g. 1234567-GST" />
+                <Input
+                  value={supplierGstNumber}
+                  onChange={(e) => setSupplierGstNumber(e.target.value)}
+                  placeholder="e.g. 1234567-GST"
+                />
               </div>
             </div>
 
@@ -276,12 +314,25 @@ function InventoryPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-sm text-foreground">Cost/unit</label>
-                <Input value={costPrice} onChange={(e) => setCostPrice(e.target.value)} placeholder="0.00" />
+                <Input
+                  value={costPrice}
+                  onChange={(e) => setCostPrice(e.target.value)}
+                  placeholder="0.00"
+                />
               </div>
               <label className="flex items-center gap-1.5 whitespace-nowrap pb-2 text-sm text-foreground">
-                <Checkbox checked={lineGstApplicable} onCheckedChange={(v) => setLineGstApplicable(!!v)} /> GST
+                <Checkbox
+                  checked={lineGstApplicable}
+                  onCheckedChange={(v) => setLineGstApplicable(!!v)}
+                />{" "}
+                GST
               </label>
-              <Button type="button" variant="outline" onClick={addLine} disabled={!productId || !costPrice}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={addLine}
+                disabled={!productId || !costPrice}
+              >
                 Add
               </Button>
             </div>
@@ -306,13 +357,25 @@ function InventoryPage() {
                         <TableCell>{l.qty}</TableCell>
                         <TableCell>{l.costPrice.toFixed(2)}</TableCell>
                         <TableCell>
-                          <Badge variant="outline" className={l.gstApplicable ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}>
+                          <Badge
+                            variant="outline"
+                            className={
+                              l.gstApplicable
+                                ? "bg-emerald-100 text-emerald-700"
+                                : "bg-muted text-muted-foreground"
+                            }
+                          >
                             {l.gstApplicable ? "Yes" : "Exempt"}
                           </Badge>
                         </TableCell>
                         <TableCell>{(l.qty * l.costPrice).toFixed(2)}</TableCell>
                         <TableCell className="text-right">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => removeLine(l.productId)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            onClick={() => removeLine(l.productId)}
+                          >
                             <Trash2 className="h-3.5 w-3.5" />
                           </Button>
                         </TableCell>
@@ -342,15 +405,37 @@ function InventoryPage() {
                   </button>
                 </div>
                 {gstMode === "percent" ? (
-                  <Input value={gstPercent} onChange={(e) => setGstPercent(e.target.value)} placeholder="e.g. 8" className="w-20" />
+                  <Input
+                    value={gstPercent}
+                    onChange={(e) => setGstPercent(e.target.value)}
+                    placeholder="e.g. 8"
+                    className="w-20"
+                  />
                 ) : (
-                  <Input value={gstAmount} onChange={(e) => setGstAmount(e.target.value)} placeholder="0.00" className="w-24" />
+                  <Input
+                    value={gstAmount}
+                    onChange={(e) => setGstAmount(e.target.value)}
+                    placeholder="0.00"
+                    className="w-24"
+                  />
                 )}
               </div>
               <div className="space-y-0.5 text-right text-sm">
-                <p className="text-muted-foreground">Subtotal: <span className="font-medium text-foreground">{draftTotals.subtotal.toFixed(2)}</span></p>
-                <p className="text-muted-foreground">GST Amount: <span className="font-medium text-foreground">{draftTotals.gstAmount.toFixed(2)}</span></p>
-                <p className="font-semibold text-foreground">Total: {draftTotals.total.toFixed(2)}</p>
+                <p className="text-muted-foreground">
+                  Subtotal:{" "}
+                  <span className="font-medium text-foreground">
+                    {draftTotals.subtotal.toFixed(2)}
+                  </span>
+                </p>
+                <p className="text-muted-foreground">
+                  GST Amount:{" "}
+                  <span className="font-medium text-foreground">
+                    {draftTotals.gstAmount.toFixed(2)}
+                  </span>
+                </p>
+                <p className="font-semibold text-foreground">
+                  Total: {draftTotals.total.toFixed(2)}
+                </p>
               </div>
             </div>
           </div>
@@ -408,7 +493,14 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
                   <TableCell>{i.qty}</TableCell>
                   <TableCell>{i.costPrice.toFixed(2)}</TableCell>
                   <TableCell>
-                    <Badge variant="outline" className={i.gstApplicable ? "bg-emerald-100 text-emerald-700" : "bg-muted text-muted-foreground"}>
+                    <Badge
+                      variant="outline"
+                      className={
+                        i.gstApplicable
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-muted text-muted-foreground"
+                      }
+                    >
                       {i.gstApplicable ? "Yes" : "Exempt"}
                     </Badge>
                   </TableCell>
@@ -419,7 +511,10 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
           </Table>
         </div>
         <div className="space-y-0.5 text-right text-sm">
-          <p className="text-muted-foreground">Subtotal: <span className="font-medium text-foreground">{totals.subtotal.toFixed(2)}</span></p>
+          <p className="text-muted-foreground">
+            Subtotal:{" "}
+            <span className="font-medium text-foreground">{totals.subtotal.toFixed(2)}</span>
+          </p>
           <p className="text-muted-foreground">
             GST {invoice.gstAmountOverride != null ? "(fixed amount)" : `(${invoice.gstPercent}%)`}:{" "}
             <span className="font-medium text-foreground">{totals.gstAmount.toFixed(2)}</span>

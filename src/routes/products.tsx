@@ -20,10 +20,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plus, Search, Filter, Pencil, Trash2, Upload, Loader2 } from "lucide-react";
 import { categories } from "@/lib/pos-data";
-import { useProducts, productsStore } from "@/lib/products-store";
+import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
 import { findProductImage } from "@/lib/image-search";
 import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import { useHasPermission } from "@/lib/permissions";
@@ -44,6 +51,7 @@ const emptyForm = { name: "", price: "", category: "drinks", barcode: "", sku: "
 function ProductsPage() {
   const canManage = useHasPermission("products.manage");
   const products = useProducts();
+  useProductsPolling();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -71,7 +79,14 @@ function ProductsPage() {
     const p = products.find((x) => x.id === id);
     if (!p) return;
     setEditingId(id);
-    setForm({ name: p.name, price: String(p.price), category: p.category, barcode: p.barcode ?? "", sku: p.sku ?? "", image: p.image });
+    setForm({
+      name: p.name,
+      price: String(p.price),
+      category: p.category,
+      barcode: p.barcode ?? "",
+      sku: p.sku ?? "",
+      image: p.image,
+    });
     setOpen(true);
   }
 
@@ -83,7 +98,7 @@ function ProductsPage() {
     reader.readAsDataURL(file);
   }
 
-  function save() {
+  async function save() {
     const basePayload = {
       name: form.name,
       price: parseFloat(form.price) || 0,
@@ -93,7 +108,14 @@ function ProductsPage() {
     };
 
     if (editingId) {
-      productsStore.update(editingId, { ...basePayload, image: form.image || PLACEHOLDER_PRODUCT_IMAGE });
+      const result = await productsStore.update(editingId, {
+        ...basePayload,
+        image: form.image || PLACEHOLDER_PRODUCT_IMAGE,
+      });
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(`"${form.name}" updated`);
       setOpen(false);
       return;
@@ -101,7 +123,14 @@ function ProductsPage() {
 
     // Manual image (if the user uploaded one) always wins over the auto search.
     const manualImage = form.image;
-    const created = productsStore.create({ ...basePayload, image: manualImage || PLACEHOLDER_PRODUCT_IMAGE });
+    const created = await productsStore.create({
+      ...basePayload,
+      image: manualImage || PLACEHOLDER_PRODUCT_IMAGE,
+    });
+    if ("error" in created) {
+      toast.error(created.error);
+      return;
+    }
     toast.success(`"${form.name}" added`);
     setOpen(false);
 
@@ -109,7 +138,7 @@ function ProductsPage() {
       toast("Searching for a product image...");
       findProductImage(form.name, form.barcode.trim() || undefined).then((found) => {
         if (found) {
-          productsStore.setImage(created.id, found);
+          void productsStore.setImage(created.id, found);
           toast.success(`Found an image for "${form.name}"`);
         } else {
           toast(`No image found for "${form.name}" — using placeholder`);
@@ -118,8 +147,12 @@ function ProductsPage() {
     }
   }
 
-  function remove(id: string, name: string) {
-    productsStore.remove(id);
+  async function remove(id: string, name: string) {
+    const result = await productsStore.remove(id);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast.success(`"${name}" deleted`);
   }
 
@@ -144,7 +177,12 @@ function ProductsPage() {
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 min-w-[220px]">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, barcode, or SKU..." className="pl-8" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search name, barcode, or SKU..."
+                className="pl-8"
+              />
             </div>
             <Button variant="outline" onClick={() => toast("Filter products")}>
               <Filter className="mr-1 h-4 w-4" /> Filter
@@ -169,7 +207,14 @@ function ProductsPage() {
                 <TableRow key={p.id}>
                   <TableCell>
                     <div className="flex items-center gap-3">
-                      <img src={p.image} alt="" loading="lazy" width={1024} height={1024} className="h-10 w-10 rounded-md object-cover" />
+                      <img
+                        src={p.image}
+                        alt=""
+                        loading="lazy"
+                        width={1024}
+                        height={1024}
+                        className="h-10 w-10 rounded-md object-cover"
+                      />
                       <div>
                         <span className="font-medium">{p.name}</span>
                         {(p.barcode || p.sku) && (
@@ -181,7 +226,9 @@ function ProductsPage() {
                     </div>
                   </TableCell>
                   <TableCell className="capitalize text-muted-foreground">{p.category}</TableCell>
-                  <TableCell className="text-muted-foreground">{p.cost != null ? `$${p.cost.toFixed(2)}` : "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {p.cost != null ? `$${p.cost.toFixed(2)}` : "—"}
+                  </TableCell>
                   <TableCell className="font-semibold">${p.price.toFixed(2)}</TableCell>
                   <TableCell>
                     <Badge variant={p.stock < 15 ? "destructive" : "secondary"}>{p.stock}</Badge>
@@ -200,7 +247,10 @@ function ProductsPage() {
               ))}
               {filtered.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={canManage ? 6 : 5} className="py-10 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={canManage ? 6 : 5}
+                    className="py-10 text-center text-muted-foreground"
+                  >
                     No products match your search.
                   </TableCell>
                 </TableRow>
@@ -209,7 +259,8 @@ function ProductsPage() {
           </Table>
         </Card>
         <p className="text-xs text-muted-foreground">
-          Stock quantities are view-only here. Add inventory through a Purchase Invoice on the Inventory page.
+          Stock quantities are view-only here. Add inventory through a Purchase Invoice on the
+          Inventory page.
         </p>
       </div>
 
@@ -233,53 +284,82 @@ function ProductsPage() {
                   className="hidden"
                   onChange={handleImageUpload}
                 />
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => fileInputRef.current?.click()}>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => fileInputRef.current?.click()}
+                >
                   <Upload className="h-3.5 w-3.5" /> Upload Image
                 </Button>
                 <p className="text-xs text-muted-foreground">
-                  {editingId ? "Optional — replaces the current image." : "Optional — skips the automatic image search."}
+                  {editingId
+                    ? "Optional — replaces the current image."
+                    : "Optional — skips the automatic image search."}
                 </p>
               </div>
             </div>
             <div className="space-y-1.5">
               <Label>Name</Label>
-              <Input value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="Product name" />
+              <Input
+                value={form.name}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                placeholder="Product name"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Barcode</Label>
-                <Input value={form.barcode} onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))} placeholder="e.g. 8901030" />
+                <Input
+                  value={form.barcode}
+                  onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))}
+                  placeholder="e.g. 8901030"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>SKU</Label>
-                <Input value={form.sku} onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))} placeholder="e.g. SKU-001" />
+                <Input
+                  value={form.sku}
+                  onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
+                  placeholder="e.g. SKU-001"
+                />
               </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Price</Label>
-                <Input value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="0.00" />
+                <Input
+                  value={form.price}
+                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  placeholder="0.00"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select value={form.category} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                <Select
+                  value={form.category}
+                  onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {categories.filter((c) => c.id !== "all").map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
-                      </SelectItem>
-                    ))}
+                    {categories
+                      .filter((c) => c.id !== "all")
+                      .map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
             </div>
             {!editingId && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3" /> New products start with 0 stock — receive them through a Purchase
-                Invoice once created.
+                <Loader2 className="h-3 w-3" /> New products start with 0 stock — receive them
+                through a Purchase Invoice once created.
               </p>
             )}
           </div>

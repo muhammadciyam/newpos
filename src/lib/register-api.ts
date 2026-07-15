@@ -23,6 +23,8 @@ export const createRegisterOnServer = createServerFn({ method: "POST" })
           openedBy: null,
           openedByDeviceId: null,
           lastClosedAt: null,
+          heldBill: null,
+          opening: null,
         },
       },
     }));
@@ -30,7 +32,9 @@ export const createRegisterOnServer = createServerFn({ method: "POST" })
   });
 
 export const openRegisterOnServer = createServerFn({ method: "POST" })
-  .validator((data: { name: string; by: string; deviceId: string }) => data)
+  .validator(
+    (data: { name: string; by: string; deviceId: string; opening: Record<string, string> }) => data,
+  )
   .handler(async ({ data }) => {
     const state = getServerRegisterState();
     const existing = state.registers[data.name];
@@ -63,6 +67,8 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
           openedBy: data.by,
           openedByDeviceId: data.deviceId,
           lastClosedAt: existing?.lastClosedAt ?? null,
+          heldBill: existing?.heldBill ?? null,
+          opening: data.opening,
         },
       },
     }));
@@ -72,7 +78,8 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
 export const closeRegisterOnServer = createServerFn({ method: "POST" })
   .validator((data: { name: string }) => data)
   .handler(async ({ data }) => {
-    if (!getServerRegisterState().registers[data.name]) return { error: "Register not found" };
+    const existing = getServerRegisterState().registers[data.name];
+    if (!existing) return { error: "Register not found" };
     const now = Date.now();
     mutateServerRegisterState((s) => ({
       ...s,
@@ -84,6 +91,8 @@ export const closeRegisterOnServer = createServerFn({ method: "POST" })
           openedBy: null,
           openedByDeviceId: null,
           lastClosedAt: now,
+          heldBill: existing.heldBill,
+          opening: null,
         },
       },
     }));
@@ -100,7 +109,8 @@ export const forceCloseRegisterOnServer = createServerFn({ method: "POST" })
     if (data.role !== "Admin" && data.role !== "Super Admin") {
       return { error: "Only an Admin can force-close a register" };
     }
-    if (!getServerRegisterState().registers[data.name]) return { error: "Register not found" };
+    const existing = getServerRegisterState().registers[data.name];
+    if (!existing) return { error: "Register not found" };
     const now = Date.now();
     mutateServerRegisterState((s) => ({
       ...s,
@@ -112,8 +122,28 @@ export const forceCloseRegisterOnServer = createServerFn({ method: "POST" })
           openedBy: null,
           openedByDeviceId: null,
           lastClosedAt: now,
+          heldBill: existing.heldBill,
+          opening: null,
         },
       },
     }));
     return { ok: true as const, closedAt: now };
+  });
+
+// Saves the held/parked sale(s) for a register — called (debounced) by sale-tabs-store.ts
+// whenever the cart changes while this register is open, so it's recoverable even if the
+// register later changes to a different device (force-close + reopen elsewhere).
+export const saveHeldBillOnServer = createServerFn({ method: "POST" })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  .validator((data: { name: string; heldBill: any }) => data)
+  .handler(async ({ data }) => {
+    if (!getServerRegisterState().registers[data.name]) return { error: "Register not found" };
+    mutateServerRegisterState((s) => ({
+      ...s,
+      registers: {
+        ...s.registers,
+        [data.name]: { ...s.registers[data.name], heldBill: data.heldBill },
+      },
+    }));
+    return { ok: true as const };
   });

@@ -5,22 +5,27 @@ export const fetchSessionsOnServer = createServerFn({ method: "GET" }).handler(a
   return getServerSessionState();
 });
 
-// Claims the login session for `email` on `deviceId`. Refuses if a DIFFERENT device
-// already holds it; re-claiming from the same device (e.g. a page refresh) is a no-op.
+// Claims the login session for `email` on `deviceId`. If a DIFFERENT device already
+// holds it, this takes it over (that device finds out via checkSessionOnServer and is
+// logged out locally) rather than refusing — logging in somewhere new always wins.
 export const claimSessionOnServer = createServerFn({ method: "POST" })
   .validator((data: { email: string; deviceId: string }) => data)
   .handler(async ({ data }) => {
-    const state = getServerSessionState();
-    const existing = state[data.email];
-    if (existing && existing.deviceId !== data.deviceId) {
-      const since = new Date(existing.loginAt).toLocaleString();
-      return {
-        error: `This account is already logged in on another device since ${since}. Log out there first, or ask an Admin to force logout.`,
-      };
-    }
+    const existing = getServerSessionState()[data.email];
     const loginAt = existing?.deviceId === data.deviceId ? existing.loginAt : Date.now();
     mutateServerSessionState((s) => ({ ...s, [data.email]: { deviceId: data.deviceId, loginAt } }));
     return { ok: true as const };
+  });
+
+// Lets a logged-in device check whether it still holds the session, or whether a
+// newer login elsewhere has taken it over. No record at all also counts as invalid
+// (e.g. the server restarted and lost session state) — the safe default is to require
+// signing back in rather than silently trusting a claim nothing can confirm.
+export const checkSessionOnServer = createServerFn({ method: "POST" })
+  .validator((data: { email: string; deviceId: string }) => data)
+  .handler(async ({ data }) => {
+    const existing = getServerSessionState()[data.email];
+    return { valid: existing?.deviceId === data.deviceId };
   });
 
 export const releaseSessionOnServer = createServerFn({ method: "POST" })

@@ -49,7 +49,7 @@ export function PrintBillDialog({
 
   function doPrint() {
     if (!bill) return;
-    billsStore.recordPrint(bill.number, templateId);
+    void billsStore.recordPrint(bill.number, templateId);
     printTemplatesStore.setDefault(templateId);
     window.print();
   }

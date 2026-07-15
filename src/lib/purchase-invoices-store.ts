@@ -30,10 +30,18 @@ export type PurchaseInvoice = {
   reviewedAt: string | null;
 };
 
-export function invoiceTotals(invoice: Pick<PurchaseInvoice, "items" | "gstPercent" | "gstAmountOverride">) {
+export function invoiceTotals(
+  invoice: Pick<PurchaseInvoice, "items" | "gstPercent" | "gstAmountOverride">,
+) {
   const subtotal = invoice.items.reduce((s, i) => s + i.qty * i.costPrice, 0);
-  const gstableSubtotal = invoice.items.reduce((s, i) => s + (i.gstApplicable ? i.qty * i.costPrice : 0), 0);
-  const gstAmount = invoice.gstAmountOverride != null ? invoice.gstAmountOverride : gstableSubtotal * (invoice.gstPercent / 100);
+  const gstableSubtotal = invoice.items.reduce(
+    (s, i) => s + (i.gstApplicable ? i.qty * i.costPrice : 0),
+    0,
+  );
+  const gstAmount =
+    invoice.gstAmountOverride != null
+      ? invoice.gstAmountOverride
+      : gstableSubtotal * (invoice.gstPercent / 100);
   const total = subtotal + gstAmount;
   return { subtotal, gstAmount, total };
 }
@@ -42,7 +50,20 @@ const store = createPersistedStore<PurchaseInvoice[]>("dhipos-purchase-invoices"
 
 function formatNow() {
   const d = new Date();
-  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const months = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+  ];
   const day = String(d.getDate()).padStart(2, "0");
   const month = months[d.getMonth()];
   const year = String(d.getFullYear()).slice(2);
@@ -94,21 +115,29 @@ export const purchaseInvoicesStore = {
     const invoice = store.get().find((i) => i.id === id);
     if (!invoice || invoice.status !== "Pending") return;
     store.set((invs) =>
-      invs.map((i) => (i.id === id ? { ...i, status: "Received", receivedBy: actor(), receivedAt: formatNow() } : i)),
+      invs.map((i) =>
+        i.id === id
+          ? { ...i, status: "Received", receivedBy: actor(), receivedAt: formatNow() }
+          : i,
+      ),
     );
     logAudit(actor(), "update", `Purchase Invoice / ${invoice.number} marked received`);
   },
   // Only invoices that have been marked Received can be approved — an admin
   // shouldn't be approving stock nobody has confirmed showed up yet.
-  approve(id: string) {
+  async approve(id: string) {
     const invoice = store.get().find((i) => i.id === id);
     if (!invoice || invoice.status !== "Received") return;
     for (const item of invoice.items) {
-      productsStore.increaseStock(item.productId, item.qty);
-      productsStore.setCost(item.productId, item.costPrice);
+      await productsStore.increaseStock(item.productId, item.qty);
+      await productsStore.setCost(item.productId, item.costPrice);
     }
     store.set((invs) =>
-      invs.map((i) => (i.id === id ? { ...i, status: "Approved", reviewedBy: actor(), reviewedAt: formatNow() } : i)),
+      invs.map((i) =>
+        i.id === id
+          ? { ...i, status: "Approved", reviewedBy: actor(), reviewedAt: formatNow() }
+          : i,
+      ),
     );
     logAudit(actor(), "update", `Purchase Invoice / ${invoice.number} approved`);
   },
@@ -116,7 +145,11 @@ export const purchaseInvoicesStore = {
     const invoice = store.get().find((i) => i.id === id);
     if (!invoice || (invoice.status !== "Pending" && invoice.status !== "Received")) return;
     store.set((invs) =>
-      invs.map((i) => (i.id === id ? { ...i, status: "Rejected", reviewedBy: actor(), reviewedAt: formatNow() } : i)),
+      invs.map((i) =>
+        i.id === id
+          ? { ...i, status: "Rejected", reviewedBy: actor(), reviewedAt: formatNow() }
+          : i,
+      ),
     );
     logAudit(actor(), "update", `Purchase Invoice / ${invoice.number} rejected`);
   },

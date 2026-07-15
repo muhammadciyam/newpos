@@ -1,6 +1,6 @@
 import { useEffect, useSyncExternalStore } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
-import type { RegisterSession } from "@/lib/pos-data";
+import type { RegisterSession, RegisterSessionClosing } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { getDeviceId } from "@/lib/device-id";
@@ -21,6 +21,15 @@ export type RegisterRecord = {
   openedBy: string | null;
   openedByDeviceId: string | null;
   lastClosedAt: number | null;
+  // Opaque to this store — the held/parked sale(s) for this register, if any. Typed and
+  // validated by sale-tabs-store.ts, which owns the actual shape. Kept server-side (not
+  // just this device's localStorage) so a held bill survives the register moving to a
+  // different device (e.g. a force-close + reopen elsewhere).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  heldBill: any;
+  // Cash/card/bank amounts declared when this session was opened — used to compute the
+  // Expected column at close time. Null once the register is closed.
+  opening: Record<string, string> | null;
 };
 
 // The public shape returned by useRegister() — `registers` is now server-authoritative
@@ -153,7 +162,7 @@ function formatShortDuration(ms: number) {
 }
 
 // Closes out the matching still-open session row for `name` — shared by close() and forceClose().
-function closeOutSession(name: RegisterName, now: number) {
+function closeOutSession(name: RegisterName, now: number, closing?: RegisterSessionClosing) {
   sessionsStore.set((sessions) => {
     const idx = sessions.findIndex((r) => r.register === name && r.closedAt === null);
     if (idx === -1) return sessions;
@@ -165,6 +174,7 @@ function closeOutSession(name: RegisterName, now: number) {
       ...opened,
       closedAt: formatSessionTimestamp(now),
       openDuration: formatShortDuration(durationMs),
+      closing,
     };
     return updated;
   });
@@ -177,10 +187,16 @@ export const registerStore = {
     return result;
   },
 
-  async open(name: RegisterName, by?: string): Promise<{ ok: true } | { error: string }> {
+  async open(
+    name: RegisterName,
+    by?: string,
+    opening?: Record<string, string>,
+  ): Promise<{ ok: true } | { error: string }> {
     const actor = by ?? authStore.getCurrentUser()?.name ?? "Unknown";
     const result = await safeServerCall(() =>
-      openRegisterOnServer({ data: { name, by: actor, deviceId: getDeviceId() } }),
+      openRegisterOnServer({
+        data: { name, by: actor, deviceId: getDeviceId(), opening: opening ?? {} },
+      }),
     );
     if ("error" in result) return result;
     const now = result.openedAt;
@@ -190,6 +206,8 @@ export const registerStore = {
       openedBy: actor,
       openedByDeviceId: getDeviceId(),
       lastClosedAt: serverRegisters[name]?.lastClosedAt ?? null,
+      heldBill: serverRegisters[name]?.heldBill ?? null,
+      opening: opening ?? {},
     });
     store.set((s) => ({ ...s, register: name, openedAt: now, openedBy: actor }));
     const nextNo = Math.max(0, ...sessionsStore.get().map((r) => r.no)) + 1;
@@ -211,13 +229,25 @@ export const registerStore = {
 
   // Switch the active session view to a register that is already open, without
   // resetting its opened-at time (unlike `open`, which opens a fresh session).
-  view(name: RegisterName) {
+  // Only the device that opened it may view/use it — another device seeing it's open
+  // gets "View Register" hidden entirely in the UI (see pos.register.tsx), and this is
+  // a defense-in-depth guard against reaching it any other way.
+  view(name: RegisterName): { ok: true } | { error: string } {
     const existing = serverRegisters[name];
-    if (!existing?.isOpen) return;
+    if (!existing?.isOpen) return { error: "Register is not open" };
+    if (existing.openedByDeviceId !== getDeviceId()) {
+      return {
+        error: `In use on ${existing.openedBy ?? "another device"}'s device — ask them to close it first, or ask an Admin to force-close it.`,
+      };
+    }
     store.set((s) => ({ ...s, register: name, openedAt: existing.openedAt }));
+    return { ok: true };
   },
 
-  async close(name: RegisterName): Promise<{ ok: true } | { error: string }> {
+  async close(
+    name: RegisterName,
+    closing?: RegisterSessionClosing,
+  ): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() => closeRegisterOnServer({ data: { name } }));
     if ("error" in result) return result;
     patchServerRegister(name, {
@@ -226,11 +256,13 @@ export const registerStore = {
       openedBy: null,
       openedByDeviceId: null,
       lastClosedAt: result.closedAt,
+      heldBill: serverRegisters[name]?.heldBill ?? null,
+      opening: null,
     });
     if (store.get().register === name) {
       store.set((s) => ({ ...s, register: null, openedAt: null }));
     }
-    closeOutSession(name, result.closedAt);
+    closeOutSession(name, result.closedAt, closing);
     logAudit(authStore.getCurrentUser()?.name ?? "Unknown", "update", `Register Session / ${name}`);
     await refreshRegistersFromServer();
     return { ok: true };
@@ -250,6 +282,8 @@ export const registerStore = {
       openedBy: null,
       openedByDeviceId: null,
       lastClosedAt: result.closedAt,
+      heldBill: serverRegisters[name]?.heldBill ?? null,
+      opening: null,
     });
     if (store.get().register === name) {
       store.set((s) => ({ ...s, register: null, openedAt: null }));

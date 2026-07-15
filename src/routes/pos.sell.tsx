@@ -43,7 +43,7 @@ import {
   X,
 } from "lucide-react";
 import { categories, type Product, type Bill } from "@/lib/pos-data";
-import { useProducts, productsStore } from "@/lib/products-store";
+import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { billsStore } from "@/lib/bills-store";
 import { onlinePaymentsStore } from "@/lib/online-payments-store";
 import { useCustomers, customersStore } from "@/lib/customers-store";
@@ -76,6 +76,7 @@ function linePrice(i: CartLine) {
 
 function SellPage() {
   const products = useProducts();
+  useProductsPolling();
   const customers = useCustomers();
   const register = useRegister();
   const currentUser = useCurrentUser();
@@ -219,7 +220,7 @@ function SellPage() {
     toast.success(`Customer "${customer.name}" added`);
   }
 
-  function saveBill() {
+  async function saveBill() {
     const payMethod = tab.payMethod;
     if (!register.register) return toast.error("Open a register before selling");
     if (!tab.items.length) return toast.error("Cart is empty");
@@ -234,10 +235,9 @@ function SellPage() {
       return toast.error("Enter the slip number or transfer ID");
     if (payMethod === "Credit" && !tab.customerId)
       return toast.error("Select a customer for a credit sale");
-    for (const i of tab.items) {
-      productsStore.decrementStock(i.product.id, i.qty);
-    }
-    const bill = billsStore.create({
+    // Stock is decremented atomically on the server as part of creating the bill (see
+    // createBillOnServer in bills-api.ts) — no separate client-side stock call needed.
+    const bill = await billsStore.create({
       customer: selectedCustomer?.name ?? "",
       customerId: tab.customerId,
       location: register.storeName,
@@ -261,6 +261,10 @@ function SellPage() {
       recipientNumber: payMethod === "Bank Transfer" ? tab.recipientNumber : undefined,
       cardSlipNumber: payMethod === "Card" ? tab.cardSlipNumber : undefined,
     });
+    if ("error" in bill) {
+      toast.error(bill.error);
+      return;
+    }
     if (payMethod === "Bank Transfer") {
       onlinePaymentsStore.create({
         billNumber: bill.number,
@@ -386,6 +390,7 @@ function SellPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Product</TableHead>
+                    <TableHead>Stock</TableHead>
                     <TableHead>Qty</TableHead>
                     <TableHead>Unit Price</TableHead>
                     <TableHead>Total</TableHead>
@@ -404,6 +409,13 @@ function SellPage() {
                               Not enough stock
                             </p>
                           )}
+                        </TableCell>
+                        <TableCell
+                          className={
+                            liveStock < i.qty ? "text-destructive" : "text-muted-foreground"
+                          }
+                        >
+                          {liveStock}
                         </TableCell>
                         <TableCell>
                           <div className="flex items-center gap-1">

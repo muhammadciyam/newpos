@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import {
   authStore,
   useUsers,
+  useUsersPolling,
   useCurrentUser,
   useActiveSessions,
   type Role,
@@ -80,6 +81,7 @@ function toEditForm(u: AppUser): EditForm {
 
 function UsersPage() {
   const canManageUsers = useHasPermission("users.manage");
+  useUsersPolling();
   const users = useUsers();
   const currentUser = useCurrentUser();
   const { sessions, refresh: refreshSessions } = useActiveSessions();
@@ -93,9 +95,9 @@ function UsersPage() {
 
   if (!canManageUsers) return <RestrictedPage />;
 
-  function createUser() {
+  async function createUser() {
     setError("");
-    const result = authStore.createUser({ ...form });
+    const result = await authStore.createUser({ ...form });
     if ("error" in result) {
       setError(result.error);
       return;
@@ -105,8 +107,12 @@ function UsersPage() {
     setOpen(false);
   }
 
-  function removeUser(id: string, name: string) {
-    authStore.removeUser(id);
+  async function removeUser(id: string, name: string) {
+    const result = await authStore.removeUser(id);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast.success(`User "${name}" removed`);
   }
 
@@ -120,9 +126,13 @@ function UsersPage() {
     refreshSessions();
   }
 
-  function toggleSuspend(user: AppUser) {
+  async function toggleSuspend(user: AppUser) {
     const next = user.status === "Suspended" ? "Active" : "Suspended";
-    authStore.setStatus(user.id, next);
+    const result = await authStore.setStatus(user.id, next);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast.success(`${user.name} is now ${next}`);
   }
 
@@ -131,16 +141,24 @@ function UsersPage() {
     setEditForm(toEditForm(user));
   }
 
-  function saveEdit() {
+  async function saveEdit() {
     if (!editingId || !editForm) return;
-    authStore.setRole(editingId, editForm.role);
-    authStore.updateProfile(editingId, {
+    const roleResult = await authStore.setRole(editingId, editForm.role);
+    if ("error" in roleResult) {
+      toast.error(roleResult.error);
+      return;
+    }
+    const profileResult = await authStore.updateProfile(editingId, {
       name: editForm.name,
       authorizedRegister:
         editForm.authorizedRegister === "none"
           ? null
           : (editForm.authorizedRegister as RegisterName),
     });
+    if ("error" in profileResult) {
+      toast.error(profileResult.error);
+      return;
+    }
     toast.success(`${editForm.name} updated`);
     setEditingId(null);
     setEditForm(null);

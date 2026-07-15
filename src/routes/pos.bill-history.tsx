@@ -47,12 +47,14 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useBills, billsStore } from "@/lib/bills-store";
+import { useBills, useBillsPolling, billsStore } from "@/lib/bills-store";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useHasPermission } from "@/lib/permissions";
 import { useProducts } from "@/lib/products-store";
+import { useCustomers } from "@/lib/customers-store";
 import { type Bill, type BillLineItem } from "@/lib/pos-data";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
+import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
 
 export const Route = createFileRoute("/pos/bill-history")({
   head: () => ({
@@ -70,6 +72,8 @@ const statusColor: Record<Bill["status"], string> = {
 
 function BillHistoryPage() {
   const allBills = useBills();
+  useBillsPolling();
+  const customers = useCustomers();
   const currentUser = useCurrentUser();
   const canViewAll = useHasPermission("sales.viewAll");
   const canManage = useHasPermission("sales.manage");
@@ -80,18 +84,20 @@ function BillHistoryPage() {
   const [editNumber, setEditNumber] = useState<string | null>(null);
   const [refundNumber, setRefundNumber] = useState<string | null>(null);
   const [voidNumber, setVoidNumber] = useState<string | null>(null);
+  const [salesCustomerId, setSalesCustomerId] = useState<string | null>(null);
 
   const detailsBill = bills.find((b) => b.number === detailsNumber) ?? null;
   const printBill = bills.find((b) => b.number === printNumber) ?? null;
   const editBill = bills.find((b) => b.number === editNumber) ?? null;
   const refundBill = bills.find((b) => b.number === refundNumber) ?? null;
   const voidBill = bills.find((b) => b.number === voidNumber) ?? null;
+  const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
 
   const pendingBills = bills.filter((b) => b.paymentStatus === "Pending" && b.status === "Sale");
   const pendingTotal = pendingBills.reduce((s, b) => s + b.total, 0);
 
-  function settlePayment(bill: Bill) {
-    const result = billsStore.settleCredit(bill.number);
+  async function settlePayment(bill: Bill) {
+    const result = await billsStore.settleCredit(bill.number);
     if ("error" in result) {
       toast.error(result.error);
       return;
@@ -153,7 +159,20 @@ function BillHistoryPage() {
               {bills.map((b) => (
                 <TableRow key={b.number}>
                   <TableCell className="font-medium">{b.number}</TableCell>
-                  <TableCell>{b.customer || "—"}</TableCell>
+                  <TableCell>
+                    {b.customerId ? (
+                      <button
+                        type="button"
+                        className="text-primary underline-offset-2 hover:underline"
+                        onClick={() => setSalesCustomerId(b.customerId ?? null)}
+                        title={`View all bills for ${b.customer}`}
+                      >
+                        {b.customer || "—"}
+                      </button>
+                    ) : (
+                      b.customer || "—"
+                    )}
+                  </TableCell>
                   <TableCell>
                     {b.location}
                     <span className="block text-xs text-muted-foreground">{b.register}</span>
@@ -263,6 +282,16 @@ function BillHistoryPage() {
 
       <Dialog open={!!voidBill} onOpenChange={(v) => !v && setVoidNumber(null)}>
         {voidBill && <VoidBillDialog bill={voidBill} onDone={() => setVoidNumber(null)} />}
+      </Dialog>
+
+      <Dialog open={!!salesCustomer} onOpenChange={(v) => !v && setSalesCustomerId(null)}>
+        {salesCustomer && (
+          <CustomerSalesDialog
+            customer={salesCustomer}
+            bills={bills.filter((b) => b.customerId === salesCustomer.id)}
+            onPrint={setPrintNumber}
+          />
+        )}
       </Dialog>
     </AppShell>
   );
@@ -401,12 +430,12 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
     setAddProductId("");
   }
 
-  function save() {
+  async function save() {
     if (items.length === 0) {
       toast.error("A bill must have at least one item");
       return;
     }
-    const result = billsStore.update(bill.number, items);
+    const result = await billsStore.update(bill.number, items);
     if ("error" in result) {
       toast.error(result.error);
       return;
@@ -516,7 +545,7 @@ function RefundBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) 
     setQtys(Object.fromEntries(remaining.map((i) => [i.productId, i.remaining])));
   }
 
-  function submit() {
+  async function submit() {
     const lines = remaining
       .map((i) => ({ productId: i.productId, qty: qtys[i.productId] ?? 0 }))
       .filter((l) => l.qty > 0);
@@ -524,7 +553,7 @@ function RefundBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) 
       toast.error("Select a quantity to refund");
       return;
     }
-    const result = billsStore.refund(bill.number, lines, reason.trim() || undefined);
+    const result = await billsStore.refund(bill.number, lines, reason.trim() || undefined);
     if ("error" in result) {
       toast.error(result.error);
       return;
@@ -604,8 +633,8 @@ function RefundBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) 
 function VoidBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
   const [reason, setReason] = useState("");
 
-  function submit() {
-    const result = billsStore.void(bill.number, reason.trim() || undefined);
+  async function submit() {
+    const result = await billsStore.void(bill.number, reason.trim() || undefined);
     if ("error" in result) {
       toast.error(result.error);
       return;

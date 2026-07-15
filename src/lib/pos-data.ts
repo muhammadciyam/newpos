@@ -86,6 +86,33 @@ export const cashTypes: CashType[] = [
   { key: "cash-usd-20", label: "cash/usd 20", currency: "usd 20" },
 ];
 
+// The cash-counting/sales detail captured at the moment a register was closed — what
+// was expected per cash type, what was actually counted, the difference (short/over),
+// and the sales/credit totals rung up during that session.
+export type RegisterSessionClosing = {
+  expected: Record<string, number>;
+  counted: Record<string, number>;
+  difference: Record<string, number>;
+  totalExpected: number;
+  totalCounted: number;
+  shortAmount: number;
+  salesAmount: number;
+  cashSales: number;
+  cardSales: number;
+  bankSales: number;
+  creditAmount: number;
+  billCount: number;
+  cashBillCount: number;
+  cardBillCount: number;
+  bankBillCount: number;
+  creditBillCount: number;
+  itemsSold: number;
+  refundAmount: number;
+  voidCount: number;
+  openingTotal: number;
+  note: string;
+};
+
 export type RegisterSession = {
   no: number;
   register: string;
@@ -93,6 +120,7 @@ export type RegisterSession = {
   closedAt: string | null;
   openDuration: string;
   by: string;
+  closing?: RegisterSessionClosing;
 };
 
 // ---- Bills ----

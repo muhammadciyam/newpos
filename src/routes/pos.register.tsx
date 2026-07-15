@@ -34,7 +34,22 @@ import {
 } from "@/lib/register-store";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useHasPermission } from "@/lib/permissions";
+import { getDeviceId } from "@/lib/device-id";
 import { CountMoneyDialog } from "@/components/count-money-dialog";
+import { useBills } from "@/lib/bills-store";
+import { computeSessionSales } from "@/lib/register-session-stats";
+import type { RegisterSessionClosing } from "@/lib/pos-data";
+import { flushHeldBill, useHeldTabsPreview } from "@/lib/sale-tabs-store";
+
+// Maps the Open Register dialog's fields to the cashTypes rows shown in the Info/Close tables.
+const openingKeyForCashType: Record<string, string> = {
+  cash: "mvr",
+  "bank-transfer": "bank",
+  card: "card",
+  "cash-usd": "usd",
+  "cash-usd-1": "usd1",
+  "cash-usd-20": "usd20",
+};
 
 const countMoneyTitles: Record<string, string> = {
   mvr: "MVR",
@@ -82,6 +97,51 @@ function RegisterPage() {
   const [newRegisterName, setNewRegisterName] = useState("");
   const [newRegisterError, setNewRegisterError] = useState("");
   const [pending, setPending] = useState(false);
+
+  const bills = useBills();
+  const saleTabsState = useHeldTabsPreview();
+  const heldTabs = saleTabsState.tabs.filter((t) => t.items.length > 0);
+  const heldItemsCount = heldTabs.reduce(
+    (n, t) => n + t.items.reduce((sum, i) => sum + i.qty, 0),
+    0,
+  );
+  const currentRecord = register.register ? register.registers[register.register] : undefined;
+  const sessionOpeningAmounts: Record<string, string> = currentRecord?.opening ?? {};
+  const sessionStats = register.register
+    ? computeSessionSales(bills, register.register, register.openedAt)
+    : computeSessionSales([], "", null);
+
+  function salesForCashType(key: string): number {
+    if (key === "cash") return sessionStats.cashSales;
+    if (key === "card") return sessionStats.cardSales;
+    if (key === "bank-transfer") return sessionStats.bankSales;
+    return 0;
+  }
+
+  function openingForCashType(key: string): number {
+    const openingKey = openingKeyForCashType[key];
+    return parseFloat(sessionOpeningAmounts[openingKey] ?? "0") || 0;
+  }
+
+  function expectedForCashType(key: string): number {
+    return openingForCashType(key) + salesForCashType(key);
+  }
+
+  function countedForCashType(key: string): number {
+    return parseFloat(closingValues[key] ?? "0") || 0;
+  }
+
+  const totalOpening = cashTypes.reduce((sum, c) => sum + openingForCashType(c.key), 0);
+  const totalExpected = cashTypes.reduce((sum, c) => sum + expectedForCashType(c.key), 0);
+  const totalCounted = cashTypes.reduce((sum, c) => sum + countedForCashType(c.key), 0);
+  const totalShort = cashTypes.reduce((sum, c) => {
+    const diff = countedForCashType(c.key) - expectedForCashType(c.key);
+    return diff < 0 ? sum + -diff : sum;
+  }, 0);
+  const totalOver = cashTypes.reduce((sum, c) => {
+    const diff = countedForCashType(c.key) - expectedForCashType(c.key);
+    return diff > 0 ? sum + diff : sum;
+  }, 0);
 
   // Notice when this device's open register was closed from elsewhere (a remote
   // Close or an Admin's Force Close) without any action taken here.
@@ -141,6 +201,7 @@ function RegisterPage() {
             {allowedRegisters.map((name) => {
               const r = register.registers[name];
               if (!r) return null;
+              const mine = r.openedByDeviceId === getDeviceId();
               return (
                 <div key={name} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-center justify-between">
@@ -163,12 +224,20 @@ function RegisterPage() {
                         ? `Last Closed ${formatDuration(Date.now() - r.lastClosedAt)}`
                         : "Never opened"}
                   </p>
+                  {r.isOpen && !mine && (
+                    <p className="mt-1 text-xs text-destructive">
+                      In use on another device — ask them to close it, or an Admin can force-close
+                      it.
+                    </p>
+                  )}
                   <div className="mt-4 flex gap-2">
                     {r.isOpen ? (
                       <>
-                        <Button variant="outline" onClick={() => registerStore.view(name)}>
-                          View Register
-                        </Button>
+                        {mine && (
+                          <Button variant="outline" onClick={() => registerStore.view(name)}>
+                            View Register
+                          </Button>
+                        )}
                         {isAdmin && (
                           <Button
                             variant="outline"
@@ -254,7 +323,7 @@ function RegisterPage() {
                 onClick={async () => {
                   if (!openingFor) return;
                   setPending(true);
-                  const result = await registerStore.open(openingFor);
+                  const result = await registerStore.open(openingFor, undefined, opening);
                   setPending(false);
                   if ("error" in result) {
                     toast.error(result.error);
@@ -377,11 +446,13 @@ function RegisterPage() {
                 <TableBody>
                   {cashTypes.map((c) => {
                     const closingVal = parseFloat(closingValues[c.key] ?? "0") || 0;
+                    const expectedVal = expectedForCashType(c.key);
+                    const diff = closingVal - expectedVal;
                     return (
                       <TableRow key={c.key}>
                         <TableCell className="text-primary">{c.label}</TableCell>
                         <TableCell>
-                          0.00{" "}
+                          {expectedVal.toFixed(2)}{" "}
                           {c.currency && (
                             <span className="block text-xs text-muted-foreground">
                               {c.currency}
@@ -408,7 +479,15 @@ function RegisterPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-emerald-600">{closingVal.toFixed(2)}</TableCell>
+                        <TableCell className={diff < 0 ? "text-destructive" : "text-emerald-600"}>
+                          {diff.toFixed(2)}
+                          {diff < 0 && (
+                            <span className="block text-xs text-destructive">Short</span>
+                          )}
+                          {diff > 0 && (
+                            <span className="block text-xs text-muted-foreground">Over</span>
+                          )}
+                        </TableCell>
                       </TableRow>
                     );
                   })}
@@ -420,21 +499,70 @@ function RegisterPage() {
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
               />
-              <p className="mt-2 text-right text-sm text-muted-foreground">1 open bills</p>
+              <p className="mt-2 text-right text-sm text-muted-foreground">
+                {sessionStats.creditBillCount} credit bill
+                {sessionStats.creditBillCount === 1 ? "" : "s"} pending payment
+              </p>
+              {heldTabs.length > 0 && (
+                <p className="mt-1 text-right text-sm text-muted-foreground">
+                  {heldTabs.length} held sale{heldTabs.length === 1 ? "" : "s"} ({heldItemsCount}{" "}
+                  item{heldItemsCount === 1 ? "" : "s"}) will be saved and restored the next time
+                  this register is opened.
+                </p>
+              )}
               <Button
                 className="mt-3 w-full"
                 size="lg"
                 disabled={pending}
                 onClick={async () => {
                   if (!register.register) return;
+                  await flushHeldBill(register.register);
+                  const expected: Record<string, number> = {};
+                  const counted: Record<string, number> = {};
+                  const difference: Record<string, number> = {};
+                  let shortAmount = 0;
+                  for (const c of cashTypes) {
+                    const expectedVal = expectedForCashType(c.key);
+                    const closingVal = parseFloat(closingValues[c.key] ?? "0") || 0;
+                    const diff = closingVal - expectedVal;
+                    expected[c.key] = expectedVal;
+                    counted[c.key] = closingVal;
+                    difference[c.key] = diff;
+                    if (diff < 0) shortAmount += -diff;
+                  }
+                  const closingSummary: RegisterSessionClosing = {
+                    expected,
+                    counted,
+                    difference,
+                    totalExpected,
+                    totalCounted,
+                    shortAmount,
+                    salesAmount: sessionStats.salesAmount,
+                    cashSales: sessionStats.cashSales,
+                    cardSales: sessionStats.cardSales,
+                    bankSales: sessionStats.bankSales,
+                    creditAmount: sessionStats.creditAmount,
+                    billCount: sessionStats.billCount,
+                    cashBillCount: sessionStats.cashBillCount,
+                    cardBillCount: sessionStats.cardBillCount,
+                    bankBillCount: sessionStats.bankBillCount,
+                    creditBillCount: sessionStats.creditBillCount,
+                    itemsSold: sessionStats.itemsSold,
+                    refundAmount: sessionStats.refundAmount,
+                    voidCount: sessionStats.voidCount,
+                    openingTotal: totalOpening,
+                    note,
+                  };
                   setPending(true);
-                  const result = await registerStore.close(register.register);
+                  const result = await registerStore.close(register.register, closingSummary);
                   setPending(false);
                   if ("error" in result) {
                     toast.error(result.error);
                     return;
                   }
                   setClosing(false);
+                  setNote("");
+                  setClosingValues({});
                   toast.success("Register closed");
                 }}
               >
@@ -448,14 +576,82 @@ function RegisterPage() {
                   Register was opened {formatDuration(openedAgo)} by {register.openedBy}
                 </p>
               </div>
-              <div className="space-y-2 text-sm">
-                <Row
-                  label="Opened"
-                  value={new Date(register.openedAt!).toLocaleString()}
-                  sub={`By ${register.openedBy}`}
-                />
-                <Row label="Closed" value="" />
-                <Row label="Duration" value="-" />
+
+              <div className="rounded-lg border border-border p-3">
+                <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                  Sales Summary
+                </p>
+                <div className="space-y-2 text-sm">
+                  <Row
+                    label="Sales Amount"
+                    value={sessionStats.salesAmount.toFixed(2)}
+                    sub={`${sessionStats.billCount} bill${sessionStats.billCount === 1 ? "" : "s"} · ${sessionStats.itemsSold} item${sessionStats.itemsSold === 1 ? "" : "s"} sold`}
+                  />
+                  <Row
+                    label="Cash Sales"
+                    value={sessionStats.cashSales.toFixed(2)}
+                    sub={`${sessionStats.cashBillCount} bill${sessionStats.cashBillCount === 1 ? "" : "s"}`}
+                  />
+                  <Row
+                    label="Card Sales"
+                    value={sessionStats.cardSales.toFixed(2)}
+                    sub={`${sessionStats.cardBillCount} bill${sessionStats.cardBillCount === 1 ? "" : "s"}`}
+                  />
+                  <Row
+                    label="Bank Transfer Sales"
+                    value={sessionStats.bankSales.toFixed(2)}
+                    sub={`${sessionStats.bankBillCount} bill${sessionStats.bankBillCount === 1 ? "" : "s"}`}
+                  />
+                  <Row
+                    label="Credit Amount"
+                    value={sessionStats.creditAmount.toFixed(2)}
+                    sub={`${sessionStats.creditBillCount} credit bill${sessionStats.creditBillCount === 1 ? "" : "s"} pending`}
+                  />
+                  {sessionStats.refundAmount > 0 && (
+                    <Row label="Refunded" value={sessionStats.refundAmount.toFixed(2)} />
+                  )}
+                  {sessionStats.voidCount > 0 && (
+                    <Row label="Voided Bills" value={String(sessionStats.voidCount)} />
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                  Cash Count
+                </p>
+                <div className="space-y-2 text-sm">
+                  <Row label="Opening Float" value={totalOpening.toFixed(2)} />
+                  <Row label="Total Expected" value={totalExpected.toFixed(2)} />
+                  <Row label="Total Counted" value={totalCounted.toFixed(2)} />
+                  <Row
+                    label="Short Amount"
+                    value={totalShort.toFixed(2)}
+                    valueClassName={totalShort > 0 ? "text-destructive" : undefined}
+                  />
+                  {totalOver > 0 && (
+                    <Row
+                      label="Over Amount"
+                      value={totalOver.toFixed(2)}
+                      valueClassName="text-emerald-600"
+                    />
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-lg border border-border p-3">
+                <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                  Session
+                </p>
+                <div className="space-y-2 text-sm">
+                  <Row
+                    label="Opened"
+                    value={new Date(register.openedAt!).toLocaleString()}
+                    sub={`By ${register.openedBy}`}
+                  />
+                  <Row label="Closed" value="Not yet closed" />
+                  <Row label="Duration" value={formatDuration(openedAgo)} />
+                </div>
               </div>
             </div>
           </div>
@@ -514,7 +710,7 @@ function RegisterPage() {
                       <TableRow key={c.key}>
                         <TableCell className="text-primary">{c.label}</TableCell>
                         <TableCell>
-                          0.00
+                          {openingForCashType(c.key).toFixed(2)}
                           {c.currency && (
                             <span className="block text-xs text-muted-foreground">
                               {c.currency}
@@ -522,7 +718,7 @@ function RegisterPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          0.00
+                          {salesForCashType(c.key).toFixed(2)}
                           {c.currency && (
                             <span className="block text-xs text-muted-foreground">
                               {c.currency}
@@ -530,7 +726,7 @@ function RegisterPage() {
                           )}
                         </TableCell>
                         <TableCell>
-                          0.00
+                          {expectedForCashType(c.key).toFixed(2)}
                           {c.currency && (
                             <span className="block text-xs text-muted-foreground">
                               {c.currency}
@@ -549,14 +745,53 @@ function RegisterPage() {
                     Register was opened {formatDuration(openedAgo)} by {register.openedBy}
                   </p>
                 </div>
-                <div className="space-y-2 text-sm">
-                  <Row
-                    label="Opened"
-                    value={new Date(register.openedAt!).toLocaleString()}
-                    sub={`By ${register.openedBy}`}
-                  />
-                  <Row label="Closed" value="" />
-                  <Row label="Duration" value="-" />
+
+                <div className="rounded-lg border border-border p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                    Sales Summary
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <Row
+                      label="Sales Amount"
+                      value={sessionStats.salesAmount.toFixed(2)}
+                      sub={`${sessionStats.billCount} bill${sessionStats.billCount === 1 ? "" : "s"} · ${sessionStats.itemsSold} item${sessionStats.itemsSold === 1 ? "" : "s"} sold`}
+                    />
+                    <Row
+                      label="Cash Sales"
+                      value={sessionStats.cashSales.toFixed(2)}
+                      sub={`${sessionStats.cashBillCount} bill${sessionStats.cashBillCount === 1 ? "" : "s"}`}
+                    />
+                    <Row
+                      label="Card Sales"
+                      value={sessionStats.cardSales.toFixed(2)}
+                      sub={`${sessionStats.cardBillCount} bill${sessionStats.cardBillCount === 1 ? "" : "s"}`}
+                    />
+                    <Row
+                      label="Bank Transfer Sales"
+                      value={sessionStats.bankSales.toFixed(2)}
+                      sub={`${sessionStats.bankBillCount} bill${sessionStats.bankBillCount === 1 ? "" : "s"}`}
+                    />
+                    <Row
+                      label="Credit Amount"
+                      value={sessionStats.creditAmount.toFixed(2)}
+                      sub={`${sessionStats.creditBillCount} credit bill${sessionStats.creditBillCount === 1 ? "" : "s"} pending`}
+                    />
+                  </div>
+                </div>
+
+                <div className="rounded-lg border border-border p-3">
+                  <p className="mb-2 text-xs font-semibold uppercase text-muted-foreground">
+                    Session
+                  </p>
+                  <div className="space-y-2 text-sm">
+                    <Row
+                      label="Opened"
+                      value={new Date(register.openedAt!).toLocaleString()}
+                      sub={`By ${register.openedBy}`}
+                    />
+                    <Row label="Closed" value="Still open" />
+                    <Row label="Duration" value={formatDuration(openedAgo)} />
+                  </div>
                 </div>
               </div>
             </div>
@@ -565,9 +800,22 @@ function RegisterPage() {
             <p className="p-6 text-sm text-muted-foreground">No cash-in-out entries yet.</p>
           </TabsContent>
           <TabsContent value="payments">
-            <p className="p-6 text-sm text-muted-foreground">
-              No payments recorded for this session yet.
-            </p>
+            {sessionStats.billCount === 0 ? (
+              <p className="p-6 text-sm text-muted-foreground">
+                No payments recorded for this session yet.
+              </p>
+            ) : (
+              <div className="space-y-2 p-4 text-sm">
+                <Row label="Cash" value={sessionStats.cashSales.toFixed(2)} />
+                <Row label="Card" value={sessionStats.cardSales.toFixed(2)} />
+                <Row label="Bank Transfer" value={sessionStats.bankSales.toFixed(2)} />
+                <Row
+                  label="Credit"
+                  value={sessionStats.creditAmount.toFixed(2)}
+                  sub={`${sessionStats.creditBillCount} pending`}
+                />
+              </div>
+            )}
           </TabsContent>
         </Tabs>
       </div>
@@ -575,12 +823,22 @@ function RegisterPage() {
   );
 }
 
-function Row({ label, value, sub }: { label: string; value: string; sub?: string }) {
+function Row({
+  label,
+  value,
+  sub,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  sub?: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="flex items-start justify-between border-b border-border pb-2">
       <span className="text-muted-foreground">{label}:</span>
       <div className="text-right">
-        <p className="text-foreground">{value}</p>
+        <p className={valueClassName ?? "text-foreground"}>{value}</p>
         {sub && <p className="text-xs text-muted-foreground">{sub}</p>}
       </div>
     </div>
