@@ -18,6 +18,8 @@ export type PurchaseInvoice = {
   number: string;
   supplierName: string;
   supplierGstNumber: string;
+  supplierPhone: string;
+  supplierAddress: string;
   items: PurchaseInvoiceItem[];
   gstPercent: number;
   gstAmountOverride: number | null;
@@ -83,6 +85,8 @@ export const purchaseInvoicesStore = {
   create(input: {
     supplierName: string;
     supplierGstNumber: string;
+    supplierPhone: string;
+    supplierAddress: string;
     items: PurchaseInvoiceItem[];
     gstPercent: number;
     gstAmountOverride: number | null;
@@ -93,6 +97,8 @@ export const purchaseInvoicesStore = {
       number: `PI/${seq}`,
       supplierName: input.supplierName,
       supplierGstNumber: input.supplierGstNumber,
+      supplierPhone: input.supplierPhone,
+      supplierAddress: input.supplierAddress,
       items: input.items,
       gstPercent: input.gstPercent,
       gstAmountOverride: input.gstAmountOverride,

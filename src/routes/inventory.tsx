@@ -63,6 +63,9 @@ function InventoryPage() {
   const [open, setOpen] = useState(false);
   const [supplierName, setSupplierName] = useState("");
   const [supplierGstNumber, setSupplierGstNumber] = useState("");
+  const [supplierPhone, setSupplierPhone] = useState("");
+  const [supplierAddress, setSupplierAddress] = useState("");
+  const [search, setSearch] = useState("");
   const [lines, setLines] = useState<PurchaseInvoiceItem[]>([]);
   const [productId, setProductId] = useState("");
   const [qty, setQty] = useState("1");
@@ -76,6 +79,16 @@ function InventoryPage() {
   if (!canAccess) return <RestrictedPage />;
 
   const detailsInvoice = invoices.find((i) => i.id === detailsId) ?? null;
+  const filteredInvoices = invoices.filter((inv) => {
+    const q = search.trim().toLowerCase();
+    if (!q) return true;
+    return (
+      inv.supplierName.toLowerCase().includes(q) ||
+      inv.number.toLowerCase().includes(q) ||
+      inv.supplierPhone.toLowerCase().includes(q) ||
+      inv.supplierAddress.toLowerCase().includes(q)
+    );
+  });
 
   function addLine() {
     const product = products.find((p) => p.id === productId);
@@ -130,6 +143,8 @@ function InventoryPage() {
     const invoice = purchaseInvoicesStore.create({
       supplierName: supplierName.trim(),
       supplierGstNumber: supplierGstNumber.trim(),
+      supplierPhone: supplierPhone.trim(),
+      supplierAddress: supplierAddress.trim(),
       items: lines,
       gstPercent: parseFloat(gstPercent) || 0,
       gstAmountOverride: gstMode === "amount" ? parseFloat(gstAmount) || 0 : null,
@@ -138,6 +153,8 @@ function InventoryPage() {
     setLines([]);
     setSupplierName("");
     setSupplierGstNumber("");
+    setSupplierPhone("");
+    setSupplierAddress("");
     setGstMode("percent");
     setGstPercent("");
     setGstAmount("");
@@ -170,9 +187,17 @@ function InventoryPage() {
               quantities update.
             </p>
           </div>
-          <Button onClick={() => setOpen(true)} className="gap-1.5">
-            <Plus className="h-4 w-4" /> New Purchase Invoice
-          </Button>
+          <div className="flex items-center gap-2">
+            <Input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Search name, bill number, phone, or address..."
+              className="w-72"
+            />
+            <Button onClick={() => setOpen(true)} className="gap-1.5">
+              <Plus className="h-4 w-4" /> New Purchase Invoice
+            </Button>
+          </div>
         </div>
 
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
@@ -198,7 +223,14 @@ function InventoryPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {invoices.map((inv) => {
+              {invoices.length > 0 && filteredInvoices.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                    No purchase invoices match your search.
+                  </TableCell>
+                </TableRow>
+              )}
+              {filteredInvoices.map((inv) => {
                 const totals = invoiceTotals(inv);
                 return (
                   <TableRow key={inv.id}>
@@ -210,6 +242,11 @@ function InventoryPage() {
                     </TableCell>
                     <TableCell>
                       {inv.supplierName || <span className="text-muted-foreground">—</span>}
+                      {inv.supplierPhone && (
+                        <span className="block text-xs text-muted-foreground">
+                          {inv.supplierPhone}
+                        </span>
+                      )}
                       {inv.supplierGstNumber && (
                         <span className="block text-xs text-muted-foreground">
                           GST No. {inv.supplierGstNumber}
@@ -288,6 +325,22 @@ function InventoryPage() {
                   value={supplierGstNumber}
                   onChange={(e) => setSupplierGstNumber(e.target.value)}
                   placeholder="e.g. 1234567-GST"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Phone Number</Label>
+                <Input
+                  value={supplierPhone}
+                  onChange={(e) => setSupplierPhone(e.target.value)}
+                  placeholder="e.g. 7712345"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Address</Label>
+                <Input
+                  value={supplierAddress}
+                  onChange={(e) => setSupplierAddress(e.target.value)}
+                  placeholder="e.g. Male', Maldives"
                 />
               </div>
             </div>
@@ -473,6 +526,14 @@ function InvoiceDetails({ invoice }: { invoice: PurchaseInvoice }) {
           <div>
             <p className="text-xs uppercase text-muted-foreground">GST / TIN Number</p>
             <p className="font-medium text-foreground">{invoice.supplierGstNumber || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">Phone Number</p>
+            <p className="font-medium text-foreground">{invoice.supplierPhone || "—"}</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase text-muted-foreground">Address</p>
+            <p className="font-medium text-foreground">{invoice.supplierAddress || "—"}</p>
           </div>
         </div>
         <div className="rounded-lg border border-border">
