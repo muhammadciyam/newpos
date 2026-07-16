@@ -68,6 +68,7 @@ function ProductsPage() {
   const settings = useSettings();
   const currency = settings.general.currency;
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -80,11 +81,12 @@ function ProductsPage() {
     () =>
       products.filter(
         (p) =>
-          p.name.toLowerCase().includes(search.toLowerCase()) ||
-          (p.barcode ?? "").includes(search) ||
-          (p.sku ?? "").toLowerCase().includes(search.toLowerCase()),
+          (categoryFilter === "all" || p.category === categoryFilter) &&
+          (p.name.toLowerCase().includes(search.toLowerCase()) ||
+            (p.barcode ?? "").includes(search) ||
+            (p.sku ?? "").toLowerCase().includes(search.toLowerCase())),
       ),
-    [products, search],
+    [products, search, categoryFilter],
   );
 
   function openCreate() {
@@ -234,9 +236,19 @@ function ProductsPage() {
                 className="pl-8"
               />
             </div>
-            <Button variant="outline" onClick={() => toast("Filter products")}>
-              <Filter className="mr-1 h-4 w-4" /> Filter
-            </Button>
+            <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+              <SelectTrigger className="w-44 gap-1.5">
+                <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {categories.map((c) => (
+                  <SelectItem key={c.id} value={c.id}>
+                    {c.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </Card>
 

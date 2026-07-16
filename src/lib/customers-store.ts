@@ -21,8 +21,14 @@ export const customersStore = {
     logAudit(authStore.getCurrentUser()?.name ?? "System", "create", `Customer / ${customer.name}`);
     return customer;
   },
+  update(id: string, patch: Partial<Omit<Customer, "id" | "outstanding" | "spent" | "loyalty">>) {
+    store.set((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    logAudit(authStore.getCurrentUser()?.name ?? "System", "update", `Customer / ${patch.name ?? id}`);
+  },
   remove(id: string) {
+    const existing = store.get().find((c) => c.id === id);
     store.set((cs) => cs.filter((c) => c.id !== id));
+    logAudit(authStore.getCurrentUser()?.name ?? "System", "delete", `Customer / ${existing?.name ?? id}`);
   },
   addSpend(id: string, amount: number) {
     store.set((cs) => cs.map((c) => (c.id === id ? { ...c, spent: c.spent + amount } : c)));

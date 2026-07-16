@@ -79,7 +79,12 @@ function BillHistoryPage() {
   const currency = useSettings().general.currency;
   const canViewAll = useHasPermission("sales.viewAll");
   const canManage = useHasPermission("sales.manage");
-  const bills = canViewAll ? allBills : allBills.filter((b) => b.by === currentUser?.name);
+  const scopedBills = canViewAll ? allBills : allBills.filter((b) => b.by === currentUser?.name);
+
+  const [numberFilter, setNumberFilter] = useState("");
+  const bills = scopedBills.filter((b) =>
+    b.number.toLowerCase().includes(numberFilter.trim().toLowerCase()),
+  );
 
   const [detailsNumber, setDetailsNumber] = useState<string | null>(null);
   const [printNumber, setPrintNumber] = useState<string | null>(null);
@@ -88,14 +93,14 @@ function BillHistoryPage() {
   const [voidNumber, setVoidNumber] = useState<string | null>(null);
   const [salesCustomerId, setSalesCustomerId] = useState<string | null>(null);
 
-  const detailsBill = bills.find((b) => b.number === detailsNumber) ?? null;
-  const printBill = bills.find((b) => b.number === printNumber) ?? null;
-  const editBill = bills.find((b) => b.number === editNumber) ?? null;
-  const refundBill = bills.find((b) => b.number === refundNumber) ?? null;
-  const voidBill = bills.find((b) => b.number === voidNumber) ?? null;
+  const detailsBill = scopedBills.find((b) => b.number === detailsNumber) ?? null;
+  const printBill = scopedBills.find((b) => b.number === printNumber) ?? null;
+  const editBill = scopedBills.find((b) => b.number === editNumber) ?? null;
+  const refundBill = scopedBills.find((b) => b.number === refundNumber) ?? null;
+  const voidBill = scopedBills.find((b) => b.number === voidNumber) ?? null;
   const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
 
-  const pendingBills = bills.filter((b) => b.paymentStatus === "Pending" && b.status === "Sale");
+  const pendingBills = scopedBills.filter((b) => b.paymentStatus === "Pending" && b.status === "Sale");
   const pendingTotal = pendingBills.reduce((s, b) => s + b.total, 0);
 
   async function settlePayment(bill: Bill) {
@@ -118,10 +123,12 @@ function BillHistoryPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Input placeholder="Bill Number" className="w-40" />
-            <Button variant="outline" size="icon" onClick={() => toast("Filter bills")}>
-              <SlidersHorizontal className="h-4 w-4" />
-            </Button>
+            <Input
+              value={numberFilter}
+              onChange={(e) => setNumberFilter(e.target.value)}
+              placeholder="Bill Number"
+              className="w-40"
+            />
           </div>
         </div>
 
@@ -292,7 +299,7 @@ function BillHistoryPage() {
         {salesCustomer && (
           <CustomerSalesDialog
             customer={salesCustomer}
-            bills={bills.filter((b) => b.customerId === salesCustomer.id)}
+            bills={scopedBills.filter((b) => b.customerId === salesCustomer.id)}
             onPrint={setPrintNumber}
           />
         )}

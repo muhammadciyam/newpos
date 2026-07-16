@@ -16,9 +16,6 @@ export type Product = {
   // Whether GST applies to this product when sold. Undefined counts as true (existing
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
-  // Optional per-unit price for Wholesale Orders (src/routes/ecommerce.wholesaler.tsx) —
-  // undefined means the wholesale cart falls back to the regular `price`.
-  wholesalePrice?: number;
 };
 
 export const categories: Category[] = [
@@ -40,6 +37,12 @@ export type Customer = {
   limit: number;
   spent: number;
   loyalty: number;
+  email?: string;
+  dob?: string;
+  address?: string;
+  taxNumber?: string;
+  note?: string;
+  priceLevel?: "default" | "wholesale";
 };
 
 // ---- Dashboard series ----

@@ -15,6 +15,23 @@ import {
 } from "@/components/ui/select";
 import { Dialog } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Table,
   TableBody,
   TableCell,
@@ -23,13 +40,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, SlidersHorizontal, MoreHorizontal } from "lucide-react";
+import { Plus, MoreHorizontal, FileDown, Pencil, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCustomers, customersStore } from "@/lib/customers-store";
+import type { Customer } from "@/lib/pos-data";
 import { useBills } from "@/lib/bills-store";
 import { useSettings } from "@/lib/settings-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
 import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
+import { downloadCsv } from "@/lib/csv-utils";
 
 export const Route = createFileRoute("/customers")({
   head: () => ({
@@ -62,6 +81,7 @@ const emptyForm = {
   taxNumber: "",
   creditLimit: "200",
   note: "",
+  priceLevel: "default" as "default" | "wholesale",
 };
 
 function CustomersPage() {
@@ -69,18 +89,13 @@ function CustomersPage() {
   const bills = useBills();
   const settings = useSettings();
   const [open, setOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
+  const [balanceFilter, setBalanceFilter] = useState<"all" | "outstanding" | "clear">("all");
   const [form, setForm] = useState(emptyForm);
   const [salesCustomerId, setSalesCustomerId] = useState<string | null>(null);
   const [printNumber, setPrintNumber] = useState<string | null>(null);
   const printBill = bills.find((b) => b.number === printNumber) ?? null;
-
-  const filtered = customers.filter(
-    (c) =>
-      !search.trim() ||
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.mobile.includes(search),
-  );
 
   function customerBills(customerId: string) {
     return bills.filter((b) => b.customerId === customerId);
@@ -96,18 +111,77 @@ function CustomersPage() {
       .reduce((s, b) => s + b.total, 0);
   }
 
+  const filtered = customers.filter((c) => {
+    if (balanceFilter === "outstanding" && liveOutstanding(c.id) <= 0) return false;
+    if (balanceFilter === "clear" && liveOutstanding(c.id) > 0) return false;
+    if (!search.trim()) return true;
+    return c.name.toLowerCase().includes(search.toLowerCase()) || c.mobile.includes(search);
+  });
+
   const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
 
-  function createCustomer() {
+  function openCreate() {
+    setEditingId(null);
+    setForm({ ...emptyForm, creditLimit: String(settings.customer.defaultCreditLimit) });
+    setOpen(true);
+  }
+
+  function openEdit(c: Customer) {
+    setEditingId(c.id);
+    setForm({
+      name: c.name,
+      mobile: c.mobile,
+      email: c.email ?? "",
+      dob: c.dob ?? "",
+      address: c.address ?? "",
+      taxNumber: c.taxNumber ?? "",
+      creditLimit: String(c.limit),
+      note: c.note ?? "",
+      priceLevel: c.priceLevel ?? "default",
+    });
+    setOpen(true);
+  }
+
+  function saveCustomer() {
     if (settings.customer.requireMobileOnCreate && !form.mobile.trim()) {
       toast.error("Mobile number is required (Settings > Customer).");
       return;
     }
     const limit = parseFloat(form.creditLimit) || 0;
-    customersStore.create({ name: form.name, mobile: form.mobile, limit });
-    toast.success(`Customer "${form.name}" created`);
-    setForm({ ...emptyForm, creditLimit: String(settings.customer.defaultCreditLimit) });
+    const payload = {
+      name: form.name,
+      mobile: form.mobile,
+      email: form.email,
+      dob: form.dob,
+      address: form.address,
+      taxNumber: form.taxNumber,
+      note: form.note,
+      priceLevel: form.priceLevel,
+      limit,
+    };
+    if (editingId) {
+      customersStore.update(editingId, payload);
+      toast.success(`Customer "${form.name}" updated`);
+    } else {
+      customersStore.create(payload);
+      toast.success(`Customer "${form.name}" created`);
+    }
     setOpen(false);
+  }
+
+  function exportCsv() {
+    downloadCsv("customers.csv", [
+      ["Name", "Mobile", "Email", "Outstanding", "Credit Limit", "Total Spent", "Loyalty"],
+      ...filtered.map((c) => [
+        c.name,
+        c.mobile,
+        c.email ?? "",
+        liveOutstanding(c.id).toFixed(2),
+        c.limit.toFixed(2),
+        liveSpent(c.id).toFixed(2),
+        String(c.loyalty),
+      ]),
+    ]);
   }
 
   return (
@@ -125,25 +199,31 @@ function CustomersPage() {
               placeholder="Enter Name, Mobile numb..."
               className="w-56"
             />
-            <Button variant="outline" size="icon" onClick={() => toast("Filter customers")}>
-              <SlidersHorizontal className="h-4 w-4" />
-            </Button>
-            <Button
-              onClick={() => {
-                setForm({ ...emptyForm, creditLimit: String(settings.customer.defaultCreditLimit) });
-                setOpen(true);
-              }}
-              className="gap-1.5"
-            >
+            <Select value={balanceFilter} onValueChange={(v) => setBalanceFilter(v as typeof balanceFilter)}>
+              <SelectTrigger className="w-40">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Customers</SelectItem>
+                <SelectItem value="outstanding">With Balance Due</SelectItem>
+                <SelectItem value="clear">No Balance Due</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button onClick={openCreate} className="gap-1.5">
               <Plus className="h-4 w-4" /> New
             </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              onClick={() => toast("Export or import customers")}
-            >
-              <MoreHorizontal className="h-4 w-4" />
-            </Button>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="icon">
+                  <MoreHorizontal className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem onClick={exportCsv} className="gap-1.5">
+                  <FileDown className="h-3.5 w-3.5" /> Export CSV
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
 
@@ -187,14 +267,47 @@ function CustomersPage() {
                       <Button variant="outline" size="sm" onClick={() => setSalesCustomerId(c.id)}>
                         View Sales
                       </Button>
-                      <Button
-                        variant="outline"
-                        size="icon"
-                        className="h-8 w-8"
-                        onClick={() => toast(`More actions for ${c.name}`)}
-                      >
-                        <MoreHorizontal className="h-3.5 w-3.5" />
-                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="outline" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-3.5 w-3.5" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEdit(c)} className="gap-1.5">
+                            <Pencil className="h-3.5 w-3.5" /> Edit
+                          </DropdownMenuItem>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <DropdownMenuItem
+                                onSelect={(e) => e.preventDefault()}
+                                className="gap-1.5 text-destructive focus:text-destructive"
+                              >
+                                <Trash2 className="h-3.5 w-3.5" /> Delete
+                              </DropdownMenuItem>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete "{c.name}"?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This removes the customer record. This can't be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() => {
+                                    customersStore.remove(c.id);
+                                    toast.success(`"${c.name}" deleted`);
+                                  }}
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -214,7 +327,7 @@ function CustomersPage() {
       <Sheet open={open} onOpenChange={setOpen}>
         <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
           <SheetHeader>
-            <SheetTitle>Create Customer</SheetTitle>
+            <SheetTitle>{editingId ? "Edit Customer" : "Create Customer"}</SheetTitle>
           </SheetHeader>
           <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
             <div className="space-y-1.5">
@@ -275,7 +388,10 @@ function CustomersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Default Price Level</Label>
-              <Select>
+              <Select
+                value={form.priceLevel}
+                onValueChange={(v) => setForm((f) => ({ ...f, priceLevel: v as "default" | "wholesale" }))}
+              >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a level" />
                 </SelectTrigger>
@@ -316,9 +432,9 @@ function CustomersPage() {
                 !form.name.trim() ||
                 (settings.customer.requireMobileOnCreate && !form.mobile.trim())
               }
-              onClick={createCustomer}
+              onClick={saveCustomer}
             >
-              Create
+              {editingId ? "Save Changes" : "Create"}
             </Button>
           </SheetFooter>
         </SheetContent>

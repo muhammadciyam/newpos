@@ -15,6 +15,13 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Plus, Search, Filter, Tag } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
 import { useExpenses, expensesStore } from "@/lib/expenses-store";
 
@@ -35,15 +42,18 @@ const emptyForm = { description: "", category: "", amount: "", date: new Date().
 function ExpensesPage() {
   const expenses = useExpenses();
   const [search, setSearch] = useState("");
+  const [categoryFilter, setCategoryFilter] = useState("all");
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
+  const categories = Array.from(new Set(expenses.map((e) => e.category))).sort();
   const total = expenses.reduce((s, e) => s + e.amount, 0);
   const filtered = expenses.filter(
     (e) =>
-      !search.trim() ||
-      e.description.toLowerCase().includes(search.toLowerCase()) ||
-      e.category.toLowerCase().includes(search.toLowerCase()),
+      (categoryFilter === "all" || e.category === categoryFilter) &&
+      (!search.trim() ||
+        e.description.toLowerCase().includes(search.toLowerCase()) ||
+        e.category.toLowerCase().includes(search.toLowerCase())),
   );
 
   function addExpense() {
@@ -149,9 +159,20 @@ function ExpensesPage() {
                       className="w-64 pl-8"
                     />
                   </div>
-                  <Button variant="outline" className="gap-1.5" onClick={() => toast("Filter expenses")}>
-                    <Filter className="h-4 w-4" /> Filter
-                  </Button>
+                  <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                    <SelectTrigger className="w-44 gap-1.5">
+                      <Filter className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {categories.map((c) => (
+                        <SelectItem key={c} value={c}>
+                          {c}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
               <div className="mt-4 overflow-x-auto">
