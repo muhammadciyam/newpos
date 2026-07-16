@@ -26,16 +26,15 @@ import { Route as ProductsRouteImport } from './routes/products'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ExpensesRouteImport } from './routes/expenses'
-import { Route as EcommerceRouteImport } from './routes/ecommerce'
 import { Route as CustomersRouteImport } from './routes/customers'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SupplyHomeRouteImport } from './routes/supply.home'
 import { Route as PosSellRouteImport } from './routes/pos.sell'
 import { Route as PosRegisterSessionsRouteImport } from './routes/pos.register-sessions'
 import { Route as PosRegisterRouteImport } from './routes/pos.register'
 import { Route as PosQuotationsRouteImport } from './routes/pos.quotations'
 import { Route as PosOnlinePaymentsRouteImport } from './routes/pos.online-payments'
 import { Route as PosBillHistoryRouteImport } from './routes/pos.bill-history'
-import { Route as EcommerceWholesalerRouteImport } from './routes/ecommerce.wholesaler'
 import { Route as EBillNumberRouteImport } from './routes/e-bill.$number'
 import { Route as AnalyticsSalesRouteImport } from './routes/analytics.sales'
 import { Route as AnalyticsInventoryRouteImport } from './routes/analytics.inventory'
@@ -136,11 +135,6 @@ const ExpensesRoute = ExpensesRouteImport.update({
   path: '/expenses',
   getParentRoute: () => rootRouteImport,
 } as any)
-const EcommerceRoute = EcommerceRouteImport.update({
-  id: '/ecommerce',
-  path: '/ecommerce',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const CustomersRoute = CustomersRouteImport.update({
   id: '/customers',
   path: '/customers',
@@ -149,6 +143,11 @@ const CustomersRoute = CustomersRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SupplyHomeRoute = SupplyHomeRouteImport.update({
+  id: '/supply/home',
+  path: '/supply/home',
   getParentRoute: () => rootRouteImport,
 } as any)
 const PosSellRoute = PosSellRouteImport.update({
@@ -180,11 +179,6 @@ const PosBillHistoryRoute = PosBillHistoryRouteImport.update({
   id: '/pos/bill-history',
   path: '/pos/bill-history',
   getParentRoute: () => rootRouteImport,
-} as any)
-const EcommerceWholesalerRoute = EcommerceWholesalerRouteImport.update({
-  id: '/wholesaler',
-  path: '/wholesaler',
-  getParentRoute: () => EcommerceRoute,
 } as any)
 const EBillNumberRoute = EBillNumberRouteImport.update({
   id: '/e-bill/$number',
@@ -260,7 +254,6 @@ const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/ecommerce': typeof EcommerceRouteWithChildren
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
@@ -292,18 +285,17 @@ export interface FileRoutesByFullPath {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
-  '/ecommerce/wholesaler': typeof EcommerceWholesalerRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
   '/pos/register': typeof PosRegisterRoute
   '/pos/register-sessions': typeof PosRegisterSessionsRoute
   '/pos/sell': typeof PosSellRoute
+  '/supply/home': typeof SupplyHomeRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/ecommerce': typeof EcommerceRouteWithChildren
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
@@ -335,19 +327,18 @@ export interface FileRoutesByTo {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
-  '/ecommerce/wholesaler': typeof EcommerceWholesalerRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
   '/pos/register': typeof PosRegisterRoute
   '/pos/register-sessions': typeof PosRegisterSessionsRoute
   '/pos/sell': typeof PosSellRoute
+  '/supply/home': typeof SupplyHomeRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/ecommerce': typeof EcommerceRouteWithChildren
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
@@ -379,20 +370,19 @@ export interface FileRoutesById {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
-  '/ecommerce/wholesaler': typeof EcommerceWholesalerRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
   '/pos/register': typeof PosRegisterRoute
   '/pos/register-sessions': typeof PosRegisterSessionsRoute
   '/pos/sell': typeof PosSellRoute
+  '/supply/home': typeof SupplyHomeRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
     | '/customers'
-    | '/ecommerce'
     | '/expenses'
     | '/inventory'
     | '/login'
@@ -424,18 +414,17 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
-    | '/ecommerce/wholesaler'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
     | '/pos/register'
     | '/pos/register-sessions'
     | '/pos/sell'
+    | '/supply/home'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/customers'
-    | '/ecommerce'
     | '/expenses'
     | '/inventory'
     | '/login'
@@ -467,18 +456,17 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
-    | '/ecommerce/wholesaler'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
     | '/pos/register'
     | '/pos/register-sessions'
     | '/pos/sell'
+    | '/supply/home'
   id:
     | '__root__'
     | '/'
     | '/customers'
-    | '/ecommerce'
     | '/expenses'
     | '/inventory'
     | '/login'
@@ -510,19 +498,18 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
-    | '/ecommerce/wholesaler'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
     | '/pos/register'
     | '/pos/register-sessions'
     | '/pos/sell'
+    | '/supply/home'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CustomersRoute: typeof CustomersRoute
-  EcommerceRoute: typeof EcommerceRouteWithChildren
   ExpensesRoute: typeof ExpensesRoute
   InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
@@ -560,6 +547,7 @@ export interface RootRouteChildren {
   PosRegisterRoute: typeof PosRegisterRoute
   PosRegisterSessionsRoute: typeof PosRegisterSessionsRoute
   PosSellRoute: typeof PosSellRoute
+  SupplyHomeRoute: typeof SupplyHomeRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -683,13 +671,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ExpensesRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ecommerce': {
-      id: '/ecommerce'
-      path: '/ecommerce'
-      fullPath: '/ecommerce'
-      preLoaderRoute: typeof EcommerceRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/customers': {
       id: '/customers'
       path: '/customers'
@@ -702,6 +683,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/supply/home': {
+      id: '/supply/home'
+      path: '/supply/home'
+      fullPath: '/supply/home'
+      preLoaderRoute: typeof SupplyHomeRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/pos/sell': {
@@ -745,13 +733,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/pos/bill-history'
       preLoaderRoute: typeof PosBillHistoryRouteImport
       parentRoute: typeof rootRouteImport
-    }
-    '/ecommerce/wholesaler': {
-      id: '/ecommerce/wholesaler'
-      path: '/wholesaler'
-      fullPath: '/ecommerce/wholesaler'
-      preLoaderRoute: typeof EcommerceWholesalerRouteImport
-      parentRoute: typeof EcommerceRoute
     }
     '/e-bill/$number': {
       id: '/e-bill/$number'
@@ -854,22 +835,9 @@ declare module '@tanstack/react-router' {
   }
 }
 
-interface EcommerceRouteChildren {
-  EcommerceWholesalerRoute: typeof EcommerceWholesalerRoute
-}
-
-const EcommerceRouteChildren: EcommerceRouteChildren = {
-  EcommerceWholesalerRoute: EcommerceWholesalerRoute,
-}
-
-const EcommerceRouteWithChildren = EcommerceRoute._addFileChildren(
-  EcommerceRouteChildren,
-)
-
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CustomersRoute: CustomersRoute,
-  EcommerceRoute: EcommerceRouteWithChildren,
   ExpensesRoute: ExpensesRoute,
   InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
@@ -907,6 +875,7 @@ const rootRouteChildren: RootRouteChildren = {
   PosRegisterRoute: PosRegisterRoute,
   PosRegisterSessionsRoute: PosRegisterSessionsRoute,
   PosSellRoute: PosSellRoute,
+  SupplyHomeRoute: SupplyHomeRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
