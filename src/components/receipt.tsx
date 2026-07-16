@@ -104,19 +104,13 @@ export function Receipt({
           </div>
         )}
         <div className="flex justify-between">
-          <span>GST ({gstPercent}%)</span>
+          <span>
+            {settings.tax.gstLabel} ({gstPercent}%)
+          </span>
           <span>
             {currency} {bill.gst.toFixed(2)}
           </span>
         </div>
-        {!!bill.unitTaxTotal && (
-          <div className="flex justify-between">
-            <span>Per-Unit Tax</span>
-            <span>
-              {currency} {bill.unitTaxTotal.toFixed(2)}
-            </span>
-          </div>
-        )}
         {!!bill.bagCharge && (
           <div className="flex justify-between">
             <span>

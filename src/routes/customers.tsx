@@ -27,6 +27,7 @@ import { Plus, SlidersHorizontal, MoreHorizontal } from "lucide-react";
 import { toast } from "sonner";
 import { useCustomers, customersStore } from "@/lib/customers-store";
 import { useBills } from "@/lib/bills-store";
+import { useSettings } from "@/lib/settings-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
 import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
 
@@ -66,6 +67,7 @@ const emptyForm = {
 function CustomersPage() {
   const customers = useCustomers();
   const bills = useBills();
+  const settings = useSettings();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm);
@@ -97,10 +99,14 @@ function CustomersPage() {
   const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
 
   function createCustomer() {
+    if (settings.customer.requireMobileOnCreate && !form.mobile.trim()) {
+      toast.error("Mobile number is required (Settings > Customer).");
+      return;
+    }
     const limit = parseFloat(form.creditLimit) || 0;
     customersStore.create({ name: form.name, mobile: form.mobile, limit });
     toast.success(`Customer "${form.name}" created`);
-    setForm(emptyForm);
+    setForm({ ...emptyForm, creditLimit: String(settings.customer.defaultCreditLimit) });
     setOpen(false);
   }
 
@@ -122,7 +128,13 @@ function CustomersPage() {
             <Button variant="outline" size="icon" onClick={() => toast("Filter customers")}>
               <SlidersHorizontal className="h-4 w-4" />
             </Button>
-            <Button onClick={() => setOpen(true)} className="gap-1.5">
+            <Button
+              onClick={() => {
+                setForm({ ...emptyForm, creditLimit: String(settings.customer.defaultCreditLimit) });
+                setOpen(true);
+              }}
+              className="gap-1.5"
+            >
               <Plus className="h-4 w-4" /> New
             </Button>
             <Button
@@ -217,7 +229,10 @@ function CustomersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>
-                <span className="text-destructive">*</span> Mobile
+                {settings.customer.requireMobileOnCreate && (
+                  <span className="text-destructive">*</span>
+                )}{" "}
+                Mobile
               </Label>
               <Input
                 value={form.mobile}
@@ -296,7 +311,13 @@ function CustomersPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={!form.name.trim() || !form.mobile.trim()} onClick={createCustomer}>
+            <Button
+              disabled={
+                !form.name.trim() ||
+                (settings.customer.requireMobileOnCreate && !form.mobile.trim())
+              }
+              onClick={createCustomer}
+            >
               Create
             </Button>
           </SheetFooter>

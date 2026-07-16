@@ -53,6 +53,7 @@ import { useHasPermission } from "@/lib/permissions";
 import { useProducts } from "@/lib/products-store";
 import { useCustomers } from "@/lib/customers-store";
 import { type Bill, type BillLineItem } from "@/lib/pos-data";
+import { useSettings } from "@/lib/settings-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
 import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
 
@@ -75,6 +76,7 @@ function BillHistoryPage() {
   useBillsPolling();
   const customers = useCustomers();
   const currentUser = useCurrentUser();
+  const currency = useSettings().general.currency;
   const canViewAll = useHasPermission("sales.viewAll");
   const canManage = useHasPermission("sales.manage");
   const bills = canViewAll ? allBills : allBills.filter((b) => b.by === currentUser?.name);
@@ -130,7 +132,7 @@ function BillHistoryPage() {
               <span className="font-semibold">
                 {pendingBills.length} bill{pendingBills.length === 1 ? "" : "s"}
               </span>{" "}
-              awaiting payment — {pendingTotal.toFixed(2)} total on credit.
+              awaiting payment — {currency} {pendingTotal.toFixed(2)} total on credit.
             </p>
           </div>
         )}
@@ -191,7 +193,9 @@ function BillHistoryPage() {
                       </button>
                     )}
                   </TableCell>
-                  <TableCell>{b.total.toFixed(2)}</TableCell>
+                  <TableCell>
+                    {currency} {b.total.toFixed(2)}
+                  </TableCell>
                   <TableCell>
                     {b.created}
                     <span className="block text-xs text-muted-foreground">By {b.by}</span>
@@ -298,6 +302,8 @@ function BillHistoryPage() {
 }
 
 function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
+  const settings = useSettings();
+  const currency = settings.general.currency;
   return (
     <DialogContent className="max-w-lg">
       <DialogHeader>
@@ -352,8 +358,12 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
                     ) : null}
                   </TableCell>
                   <TableCell>{i.qty}</TableCell>
-                  <TableCell>{i.price.toFixed(2)}</TableCell>
-                  <TableCell>{(i.price * i.qty).toFixed(2)}</TableCell>
+                  <TableCell>
+                    {currency} {i.price.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    {currency} {(i.price * i.qty).toFixed(2)}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -362,25 +372,26 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
         <div className="space-y-0.5 text-right text-sm">
           <p className="text-muted-foreground">
             Subtotal:{" "}
-            <span className="font-medium text-foreground">{bill.subtotal.toFixed(2)}</span>
+            <span className="font-medium text-foreground">
+              {currency} {bill.subtotal.toFixed(2)}
+            </span>
           </p>
           <p className="text-muted-foreground">
-            GST: <span className="font-medium text-foreground">{bill.gst.toFixed(2)}</span>
+            {settings.tax.gstLabel}:{" "}
+            <span className="font-medium text-foreground">
+              {currency} {bill.gst.toFixed(2)}
+            </span>
           </p>
-          {!!bill.unitTaxTotal && (
-            <p className="text-muted-foreground">
-              Per-Unit Tax:{" "}
-              <span className="font-medium text-foreground">{bill.unitTaxTotal.toFixed(2)}</span>
-            </p>
-          )}
           {!!bill.bagCharge && (
             <p className="text-muted-foreground">
               Plastic Bag Charge ({bill.bagQty}):{" "}
-              <span className="font-medium text-foreground">{bill.bagCharge.toFixed(2)}</span>
+              <span className="font-medium text-foreground">
+                {currency} {bill.bagCharge.toFixed(2)}
+              </span>
             </p>
           )}
           <p className="text-base font-bold text-foreground">
-            Grand Total: {bill.total.toFixed(2)}
+            Grand Total: {currency} {bill.total.toFixed(2)}
           </p>
         </div>
         {(bill.editedAt || bill.voidedAt || (bill.refunds && bill.refunds.length > 0)) && (
@@ -389,7 +400,8 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
               <p className="text-muted-foreground">
                 Edited by <span className="font-medium text-foreground">{bill.editedBy}</span> on{" "}
                 {bill.editedAt}
-                {bill.originalTotal != null && ` (original total ${bill.originalTotal.toFixed(2)})`}
+                {bill.originalTotal != null &&
+                  ` (original total ${currency} ${bill.originalTotal.toFixed(2)})`}
               </p>
             )}
             {bill.voidedAt && (
@@ -401,7 +413,10 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
             )}
             {bill.refunds?.map((r) => (
               <p key={r.id} className="text-muted-foreground">
-                Refunded <span className="font-medium text-foreground">{r.amount.toFixed(2)}</span>{" "}
+                Refunded{" "}
+                <span className="font-medium text-foreground">
+                  {currency} {r.amount.toFixed(2)}
+                </span>{" "}
                 by {r.by} on {r.at}
                 {r.reason && ` — ${r.reason}`}
               </p>
@@ -420,6 +435,7 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
 
 function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
   const products = useProducts();
+  const currency = useSettings().general.currency;
   const [items, setItems] = useState<BillLineItem[]>(bill.items.map((i) => ({ ...i })));
   const [addProductId, setAddProductId] = useState("");
 
@@ -446,7 +462,6 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
               name: product.name,
               price: product.price,
               qty: 1,
-              unitTax: product.unitTax || undefined,
             },
           ],
     );
@@ -526,8 +541,12 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell>{i.price.toFixed(2)}</TableCell>
-                  <TableCell>{(i.price * i.qty).toFixed(2)}</TableCell>
+                  <TableCell>
+                    {currency} {i.price.toFixed(2)}
+                  </TableCell>
+                  <TableCell>
+                    {currency} {(i.price * i.qty).toFixed(2)}
+                  </TableCell>
                   <TableCell>
                     <Button size="icon" variant="ghost" onClick={() => setQty(i.productId, 0)}>
                       <Trash2 className="h-4 w-4" />
@@ -539,7 +558,10 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
           </Table>
         </div>
         <p className="text-right text-sm text-muted-foreground">
-          Subtotal: <span className="font-medium text-foreground">{subtotal.toFixed(2)}</span>{" "}
+          Subtotal:{" "}
+          <span className="font-medium text-foreground">
+            {currency} {subtotal.toFixed(2)}
+          </span>{" "}
           (total &amp; GST recompute on save)
         </p>
       </div>
@@ -554,6 +576,7 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
 }
 
 function RefundBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
+  const currency = useSettings().general.currency;
   const remaining = bill.items
     .map((i) => ({ ...i, remaining: i.qty - (i.refundedQty ?? 0) }))
     .filter((i) => i.remaining > 0);

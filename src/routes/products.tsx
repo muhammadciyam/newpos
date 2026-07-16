@@ -36,6 +36,7 @@ import { findProductImage } from "@/lib/image-search";
 import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import { useHasPermission } from "@/lib/permissions";
 import { ProductImportDialog } from "@/components/product-import-dialog";
+import { useSettings } from "@/lib/settings-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
@@ -57,7 +58,6 @@ const emptyForm = {
   image: "",
   countable: true,
   gstApplicable: true,
-  unitTax: "",
 };
 
 function ProductsPage() {
@@ -65,6 +65,8 @@ function ProductsPage() {
   const products = useProducts();
   useProductsPolling();
   const categories = useCategories();
+  const settings = useSettings();
+  const currency = settings.general.currency;
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -104,7 +106,6 @@ function ProductsPage() {
       image: p.image,
       countable: p.countable ?? true,
       gstApplicable: p.gstApplicable ?? true,
-      unitTax: p.unitTax ? String(p.unitTax) : "",
     });
     setOpen(true);
   }
@@ -118,15 +119,27 @@ function ProductsPage() {
   }
 
   async function save() {
+    if (settings.product.skuRequired && !form.sku.trim()) {
+      toast.error("SKU is required (Settings > Product > Require SKU on new products).");
+      return;
+    }
+    // Auto-generate a barcode when the setting is on and none was entered manually —
+    // a 12-digit numeric code in the same shape as a real UPC/EAN, not itself validated
+    // against any external registry.
+    const barcode =
+      form.barcode.trim() ||
+      (settings.product.barcodeAutoGenerate
+        ? String(Date.now()).slice(-12).padStart(12, "0")
+        : "");
+
     const basePayload = {
       name: form.name,
       price: parseFloat(form.price) || 0,
       category: form.category,
-      barcode: form.barcode.trim() || undefined,
+      barcode: barcode || undefined,
       sku: form.sku.trim() || undefined,
       countable: form.countable,
       gstApplicable: form.gstApplicable,
-      unitTax: parseFloat(form.unitTax) || undefined,
     };
 
     if (editingId) {
@@ -266,9 +279,11 @@ function ProductsPage() {
                   </TableCell>
                   <TableCell className="capitalize text-muted-foreground">{p.category}</TableCell>
                   <TableCell className="text-muted-foreground">
-                    {p.cost != null ? `$${p.cost.toFixed(2)}` : "—"}
+                    {p.cost != null ? `${currency} ${p.cost.toFixed(2)}` : "—"}
                   </TableCell>
-                  <TableCell className="font-semibold">${p.price.toFixed(2)}</TableCell>
+                  <TableCell className="font-semibold">
+                    {currency} {p.price.toFixed(2)}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={p.stock < 15 ? "destructive" : "secondary"}>{p.stock}</Badge>
                   </TableCell>
@@ -377,11 +392,15 @@ function ProductsPage() {
                 <Input
                   value={form.barcode}
                   onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))}
-                  placeholder="e.g. 8901030"
+                  placeholder={
+                    settings.product.barcodeAutoGenerate
+                      ? "Leave blank to auto-generate"
+                      : "e.g. 8901030"
+                  }
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>SKU</Label>
+                <Label>SKU{settings.product.skuRequired && " *"}</Label>
                 <Input
                   value={form.sku}
                   onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
@@ -485,21 +504,6 @@ function ProductsPage() {
                 onCheckedChange={(v) => setForm((f) => ({ ...f, gstApplicable: v }))}
               />
             </div>
-            <div className="space-y-1.5 rounded-lg border border-border p-3">
-              <Label>Per-Unit Tax (MVR)</Label>
-              <p className="text-xs text-muted-foreground">
-                A flat tax charged per unit sold, on top of the price — e.g. the plastic bag
-                tax (2.00 per bag). Leave blank if none applies. Not itself subject to GST.
-              </p>
-              <Input
-                type="number"
-                min={0}
-                step={0.01}
-                value={form.unitTax}
-                onChange={(e) => setForm((f) => ({ ...f, unitTax: e.target.value }))}
-                placeholder="e.g. 2.00"
-              />
-            </div>
             {!editingId && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3" /> New products start with 0 stock — receive them
@@ -511,7 +515,14 @@ function ProductsPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={!form.name.trim() || !form.price} onClick={save}>
+            <Button
+              disabled={
+                !form.name.trim() ||
+                !form.price ||
+                (settings.product.skuRequired && !form.sku.trim())
+              }
+              onClick={save}
+            >
               {editingId ? "Save Changes" : "Add Product"}
             </Button>
           </DialogFooter>

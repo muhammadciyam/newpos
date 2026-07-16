@@ -16,10 +16,6 @@ export type Product = {
   // Whether GST applies to this product when sold. Undefined counts as true (existing
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
-  // A flat, per-unit tax charged on top of the price for each unit sold — e.g. Maldives'
-  // plastic bag fee (MVR 2 per bag), not a percentage like GST and not itself GST-taxed.
-  // Undefined/0 means no per-unit tax applies.
-  unitTax?: number;
 };
 
 export const categories: Category[] = [
@@ -125,9 +121,6 @@ export type BillLineItem = {
   name: string;
   price: number;
   qty: number;
-  // Snapshot of the product's per-unit tax (e.g. plastic bag fee) at sale time, so it
-  // stays accurate on this bill even if the product's rate changes later.
-  unitTax?: number;
   refundedQty?: number;
 };
 
@@ -151,9 +144,6 @@ export type Bill = {
   subtotal: number;
   discount: number;
   gst: number;
-  // Sum of each line's (unitTax * qty) at sale time — e.g. plastic bag fees. Already
-  // folded into `total`; kept as its own field so receipts/reports can show it separately.
-  unitTaxTotal?: number;
   // The Sell page's "Plastic Bag" checkout option — cashier-entered bag count and the
   // resulting charge (qty * Settings > Tax > Plastic Bag Charge, snapshotted at sale
   // time). Both undefined when the option wasn't ticked; already folded into `total`.

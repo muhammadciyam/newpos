@@ -167,18 +167,14 @@ function SellPage() {
 
   const subtotal = tab.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
   const gst = subtotal * (settings.tax.gstPercent / 100);
-  // Flat per-unit tax (e.g. plastic bag tax) — a fixed amount per unit sold, not a
-  // percentage, and not itself subject to GST.
-  const unitTax = tab.items.reduce((s, i) => s + (i.product.unitTax ?? 0) * i.qty, 0);
   // The Sell page's "Plastic Bag" checkbox — cashier-entered bag count * the configured
-  // per-bag rate. Not itself subject to GST, same as unitTax above.
+  // per-bag rate. Not itself subject to GST.
   const bagQtyNum = tab.bagEnabled ? parseInt(tab.bagQty, 10) || 0 : 0;
   const bagCharge = bagQtyNum * settings.tax.bagFeeRate;
-  // Free of Charge — the discount is set to cover the full subtotal+gst+unitTax+bagCharge
-  // so total lands on exactly 0, rather than being a separate code path through the totals
-  // below.
-  const discount = tab.foc ? subtotal + gst + unitTax + bagCharge : 0;
-  const total = subtotal - discount + gst + unitTax + bagCharge;
+  // Free of Charge — the discount is set to cover the full subtotal+gst+bagCharge so total
+  // lands on exactly 0, rather than being a separate code path through the totals below.
+  const discount = tab.foc ? subtotal + gst + bagCharge : 0;
+  const total = subtotal - discount + gst + bagCharge;
   // Display-only conversion for the Currency quick action — `rate` is MVR (base) per 1
   // unit of the alternate currency, so dividing converts base -> alternate.
   const currencyTotal = tab.currency && tab.currencyRate ? total / tab.currencyRate : null;
@@ -352,12 +348,10 @@ function SellPage() {
         name: i.product.name,
         price: linePrice(i),
         qty: i.qty,
-        unitTax: i.product.unitTax || undefined,
       })),
       subtotal,
       discount,
       gst,
-      unitTaxTotal: unitTax || undefined,
       bagQty: tab.bagEnabled && bagQtyNum > 0 ? bagQtyNum : undefined,
       bagCharge: tab.bagEnabled && bagQtyNum > 0 ? bagCharge : undefined,
       total,
@@ -427,9 +421,8 @@ function SellPage() {
         <div className="flex items-center gap-6 overflow-x-auto border-b border-border bg-background px-4">
           {tabs.map((t) => {
             const tSubtotal = t.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
-            const tUnitTax = t.items.reduce((s, i) => s + (i.product.unitTax ?? 0) * i.qty, 0);
             const tBagCharge = t.bagEnabled ? (parseInt(t.bagQty, 10) || 0) * settings.tax.bagFeeRate : 0;
-            const tTotal = tSubtotal * (1 + settings.tax.gstPercent / 100) + tUnitTax + tBagCharge;
+            const tTotal = tSubtotal * (1 + settings.tax.gstPercent / 100) + tBagCharge;
             return (
               <button
                 key={t.id}
@@ -605,18 +598,12 @@ function SellPage() {
                   </TableRow>
                   <TableRow>
                     <TableCell colSpan={3} className="text-right font-semibold">
-                      {subtotal > 0 ? `GST @ ${settings.tax.gstPercent}%` : "Total Taxes"}
+                      {subtotal > 0
+                        ? `${settings.tax.gstLabel} @ ${settings.tax.gstPercent}%`
+                        : "Total Taxes"}
                     </TableCell>
                     <TableCell className="font-semibold">{gst.toFixed(2)}</TableCell>
                   </TableRow>
-                  {unitTax > 0 && (
-                    <TableRow>
-                      <TableCell colSpan={3} className="text-right font-semibold">
-                        Per-Unit Tax
-                      </TableCell>
-                      <TableCell className="font-semibold">{unitTax.toFixed(2)}</TableCell>
-                    </TableRow>
-                  )}
                   {tab.bagEnabled && bagQtyNum > 0 && (
                     <TableRow>
                       <TableCell colSpan={3} className="text-right font-semibold">
