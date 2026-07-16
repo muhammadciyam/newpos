@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -29,8 +30,8 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Search, Filter, Pencil, Trash2, Upload, Loader2 } from "lucide-react";
-import { categories } from "@/lib/pos-data";
 import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
+import { useCategories, categoriesStore } from "@/lib/categories-store";
 import { findProductImage } from "@/lib/image-search";
 import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import { useHasPermission } from "@/lib/permissions";
@@ -46,17 +47,29 @@ export const Route = createFileRoute("/products")({
   component: ProductsPage,
 });
 
-const emptyForm = { name: "", price: "", category: "drinks", barcode: "", sku: "", image: "" };
+const emptyForm = {
+  name: "",
+  price: "",
+  category: "drinks",
+  barcode: "",
+  sku: "",
+  image: "",
+  countable: true,
+  gstApplicable: true,
+};
 
 function ProductsPage() {
   const canManage = useHasPermission("products.manage");
   const products = useProducts();
   useProductsPolling();
+  const categories = useCategories();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const [addingCategory, setAddingCategory] = useState(false);
+  const [newCategoryName, setNewCategoryName] = useState("");
 
   const filtered = useMemo(
     () =>
@@ -86,6 +99,8 @@ function ProductsPage() {
       barcode: p.barcode ?? "",
       sku: p.sku ?? "",
       image: p.image,
+      countable: p.countable ?? true,
+      gstApplicable: p.gstApplicable ?? true,
     });
     setOpen(true);
   }
@@ -105,6 +120,8 @@ function ProductsPage() {
       category: form.category,
       barcode: form.barcode.trim() || undefined,
       sku: form.sku.trim() || undefined,
+      countable: form.countable,
+      gstApplicable: form.gstApplicable,
     };
 
     if (editingId) {
@@ -145,6 +162,18 @@ function ProductsPage() {
         }
       });
     }
+  }
+
+  function addCategory() {
+    const result = categoriesStore.create(newCategoryName);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    setForm((f) => ({ ...f, category: result.id }));
+    setNewCategoryName("");
+    setAddingCategory(false);
+    toast.success(`Category "${result.name}" added`);
   }
 
   async function remove(id: string, name: string) {
@@ -199,6 +228,8 @@ function ProductsPage() {
                 <TableHead>Cost</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Stock</TableHead>
+                <TableHead>Countable</TableHead>
+                <TableHead>GST</TableHead>
                 {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
@@ -233,6 +264,30 @@ function ProductsPage() {
                   <TableCell>
                     <Badge variant={p.stock < 15 ? "destructive" : "secondary"}>{p.stock}</Badge>
                   </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        p.countable === false
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-emerald-100 text-emerald-700"
+                      }
+                    >
+                      {p.countable === false ? "No" : "Yes"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    <Badge
+                      variant="outline"
+                      className={
+                        p.gstApplicable === false
+                          ? "bg-muted text-muted-foreground"
+                          : "bg-emerald-100 text-emerald-700"
+                      }
+                    >
+                      {p.gstApplicable === false ? "Exempt" : "Yes"}
+                    </Badge>
+                  </TableCell>
                   {canManage && (
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(p.id)}>
@@ -248,7 +303,7 @@ function ProductsPage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={canManage ? 6 : 5}
+                    colSpan={canManage ? 8 : 7}
                     className="py-10 text-center text-muted-foreground"
                   >
                     No products match your search.
@@ -337,24 +392,90 @@ function ProductsPage() {
               </div>
               <div className="space-y-1.5">
                 <Label>Category</Label>
-                <Select
-                  value={form.category}
-                  onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {categories
-                      .filter((c) => c.id !== "all")
-                      .map((c) => (
-                        <SelectItem key={c.id} value={c.id}>
-                          {c.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
+                {addingCategory ? (
+                  <div className="flex items-center gap-1.5">
+                    <Input
+                      autoFocus
+                      value={newCategoryName}
+                      onChange={(e) => setNewCategoryName(e.target.value)}
+                      placeholder="New category name"
+                      onKeyDown={(e) => e.key === "Enter" && addCategory()}
+                    />
+                    <Button
+                      type="button"
+                      size="sm"
+                      disabled={!newCategoryName.trim()}
+                      onClick={addCategory}
+                    >
+                      Add
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setAddingCategory(false);
+                        setNewCategoryName("");
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5">
+                    <Select
+                      value={form.category}
+                      onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {categories
+                          .filter((c) => c.id !== "all")
+                          .map((c) => (
+                            <SelectItem key={c.id} value={c.id}>
+                              {c.name}
+                            </SelectItem>
+                          ))}
+                      </SelectContent>
+                    </Select>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="icon"
+                      title="Add new category"
+                      onClick={() => setAddingCategory(true)}
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
               </div>
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <Label>Countable</Label>
+                <p className="text-xs text-muted-foreground">
+                  Shows on the Stock Count page for physical stock counts.
+                </p>
+              </div>
+              <Switch
+                checked={form.countable}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, countable: v }))}
+              />
+            </div>
+            <div className="flex items-center justify-between rounded-lg border border-border p-3">
+              <div>
+                <Label>GST</Label>
+                <p className="text-xs text-muted-foreground">
+                  Whether GST applies to this product when sold.
+                </p>
+              </div>
+              <Switch
+                checked={form.gstApplicable}
+                onCheckedChange={(v) => setForm((f) => ({ ...f, gstApplicable: v }))}
+              />
             </div>
             {!editingId && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">

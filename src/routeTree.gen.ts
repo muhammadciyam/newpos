@@ -9,7 +9,18 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as StockCountRouteImport } from './routes/stock-count'
 import { Route as ReportsRouteImport } from './routes/reports'
+import { Route as ReportStockMovementRouteImport } from './routes/report-stock-movement'
+import { Route as ReportStockRouteImport } from './routes/report-stock'
+import { Route as ReportSalesVoidRouteImport } from './routes/report-sales-void'
+import { Route as ReportReorderRouteImport } from './routes/report-reorder'
+import { Route as ReportProductSalesRouteImport } from './routes/report-product-sales'
+import { Route as ReportPeriodSalesRouteImport } from './routes/report-period-sales'
+import { Route as ReportOutstandingBillsRouteImport } from './routes/report-outstanding-bills'
+import { Route as ReportFocBillsRouteImport } from './routes/report-foc-bills'
+import { Route as ReportDaySummaryRouteImport } from './routes/report-day-summary'
+import { Route as ReportCustomerSalesRouteImport } from './routes/report-customer-sales'
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventoryRouteImport } from './routes/inventory'
@@ -23,6 +34,7 @@ import { Route as PosRegisterRouteImport } from './routes/pos.register'
 import { Route as PosQuotationsRouteImport } from './routes/pos.quotations'
 import { Route as PosOnlinePaymentsRouteImport } from './routes/pos.online-payments'
 import { Route as PosBillHistoryRouteImport } from './routes/pos.bill-history'
+import { Route as EBillNumberRouteImport } from './routes/e-bill.$number'
 import { Route as AnalyticsSalesRouteImport } from './routes/analytics.sales'
 import { Route as AnalyticsInventoryRouteImport } from './routes/analytics.inventory'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
@@ -37,9 +49,64 @@ import { Route as AdminEmployeesRouteImport } from './routes/admin.employees'
 import { Route as AdminBillingRouteImport } from './routes/admin.billing'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin.audit-logs'
 
+const StockCountRoute = StockCountRouteImport.update({
+  id: '/stock-count',
+  path: '/stock-count',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ReportsRoute = ReportsRouteImport.update({
   id: '/reports',
   path: '/reports',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportStockMovementRoute = ReportStockMovementRouteImport.update({
+  id: '/report-stock-movement',
+  path: '/report-stock-movement',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportStockRoute = ReportStockRouteImport.update({
+  id: '/report-stock',
+  path: '/report-stock',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportSalesVoidRoute = ReportSalesVoidRouteImport.update({
+  id: '/report-sales-void',
+  path: '/report-sales-void',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportReorderRoute = ReportReorderRouteImport.update({
+  id: '/report-reorder',
+  path: '/report-reorder',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportProductSalesRoute = ReportProductSalesRouteImport.update({
+  id: '/report-product-sales',
+  path: '/report-product-sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportPeriodSalesRoute = ReportPeriodSalesRouteImport.update({
+  id: '/report-period-sales',
+  path: '/report-period-sales',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportOutstandingBillsRoute = ReportOutstandingBillsRouteImport.update({
+  id: '/report-outstanding-bills',
+  path: '/report-outstanding-bills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportFocBillsRoute = ReportFocBillsRouteImport.update({
+  id: '/report-foc-bills',
+  path: '/report-foc-bills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportDaySummaryRoute = ReportDaySummaryRouteImport.update({
+  id: '/report-day-summary',
+  path: '/report-day-summary',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportCustomerSalesRoute = ReportCustomerSalesRouteImport.update({
+  id: '/report-customer-sales',
+  path: '/report-customer-sales',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProductsRoute = ProductsRouteImport.update({
@@ -105,6 +172,11 @@ const PosOnlinePaymentsRoute = PosOnlinePaymentsRouteImport.update({
 const PosBillHistoryRoute = PosBillHistoryRouteImport.update({
   id: '/pos/bill-history',
   path: '/pos/bill-history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const EBillNumberRoute = EBillNumberRouteImport.update({
+  id: '/e-bill/$number',
+  path: '/e-bill/$number',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnalyticsSalesRoute = AnalyticsSalesRouteImport.update({
@@ -181,7 +253,18 @@ export interface FileRoutesByFullPath {
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/products': typeof ProductsRoute
+  '/report-customer-sales': typeof ReportCustomerSalesRoute
+  '/report-day-summary': typeof ReportDaySummaryRoute
+  '/report-foc-bills': typeof ReportFocBillsRoute
+  '/report-outstanding-bills': typeof ReportOutstandingBillsRoute
+  '/report-period-sales': typeof ReportPeriodSalesRoute
+  '/report-product-sales': typeof ReportProductSalesRoute
+  '/report-reorder': typeof ReportReorderRoute
+  '/report-sales-void': typeof ReportSalesVoidRoute
+  '/report-stock': typeof ReportStockRoute
+  '/report-stock-movement': typeof ReportStockMovementRoute
   '/reports': typeof ReportsRoute
+  '/stock-count': typeof StockCountRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/employees': typeof AdminEmployeesRoute
@@ -195,6 +278,7 @@ export interface FileRoutesByFullPath {
   '/admin/users': typeof AdminUsersRoute
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
+  '/e-bill/$number': typeof EBillNumberRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -210,7 +294,18 @@ export interface FileRoutesByTo {
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/products': typeof ProductsRoute
+  '/report-customer-sales': typeof ReportCustomerSalesRoute
+  '/report-day-summary': typeof ReportDaySummaryRoute
+  '/report-foc-bills': typeof ReportFocBillsRoute
+  '/report-outstanding-bills': typeof ReportOutstandingBillsRoute
+  '/report-period-sales': typeof ReportPeriodSalesRoute
+  '/report-product-sales': typeof ReportProductSalesRoute
+  '/report-reorder': typeof ReportReorderRoute
+  '/report-sales-void': typeof ReportSalesVoidRoute
+  '/report-stock': typeof ReportStockRoute
+  '/report-stock-movement': typeof ReportStockMovementRoute
   '/reports': typeof ReportsRoute
+  '/stock-count': typeof StockCountRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/employees': typeof AdminEmployeesRoute
@@ -224,6 +319,7 @@ export interface FileRoutesByTo {
   '/admin/users': typeof AdminUsersRoute
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
+  '/e-bill/$number': typeof EBillNumberRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -240,7 +336,18 @@ export interface FileRoutesById {
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
   '/products': typeof ProductsRoute
+  '/report-customer-sales': typeof ReportCustomerSalesRoute
+  '/report-day-summary': typeof ReportDaySummaryRoute
+  '/report-foc-bills': typeof ReportFocBillsRoute
+  '/report-outstanding-bills': typeof ReportOutstandingBillsRoute
+  '/report-period-sales': typeof ReportPeriodSalesRoute
+  '/report-product-sales': typeof ReportProductSalesRoute
+  '/report-reorder': typeof ReportReorderRoute
+  '/report-sales-void': typeof ReportSalesVoidRoute
+  '/report-stock': typeof ReportStockRoute
+  '/report-stock-movement': typeof ReportStockMovementRoute
   '/reports': typeof ReportsRoute
+  '/stock-count': typeof StockCountRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/billing': typeof AdminBillingRoute
   '/admin/employees': typeof AdminEmployeesRoute
@@ -254,6 +361,7 @@ export interface FileRoutesById {
   '/admin/users': typeof AdminUsersRoute
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
+  '/e-bill/$number': typeof EBillNumberRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -271,7 +379,18 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/login'
     | '/products'
+    | '/report-customer-sales'
+    | '/report-day-summary'
+    | '/report-foc-bills'
+    | '/report-outstanding-bills'
+    | '/report-period-sales'
+    | '/report-product-sales'
+    | '/report-reorder'
+    | '/report-sales-void'
+    | '/report-stock'
+    | '/report-stock-movement'
     | '/reports'
+    | '/stock-count'
     | '/admin/audit-logs'
     | '/admin/billing'
     | '/admin/employees'
@@ -285,6 +404,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/analytics/inventory'
     | '/analytics/sales'
+    | '/e-bill/$number'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -300,7 +420,18 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/login'
     | '/products'
+    | '/report-customer-sales'
+    | '/report-day-summary'
+    | '/report-foc-bills'
+    | '/report-outstanding-bills'
+    | '/report-period-sales'
+    | '/report-product-sales'
+    | '/report-reorder'
+    | '/report-sales-void'
+    | '/report-stock'
+    | '/report-stock-movement'
     | '/reports'
+    | '/stock-count'
     | '/admin/audit-logs'
     | '/admin/billing'
     | '/admin/employees'
@@ -314,6 +445,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/analytics/inventory'
     | '/analytics/sales'
+    | '/e-bill/$number'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -329,7 +461,18 @@ export interface FileRouteTypes {
     | '/inventory'
     | '/login'
     | '/products'
+    | '/report-customer-sales'
+    | '/report-day-summary'
+    | '/report-foc-bills'
+    | '/report-outstanding-bills'
+    | '/report-period-sales'
+    | '/report-product-sales'
+    | '/report-reorder'
+    | '/report-sales-void'
+    | '/report-stock'
+    | '/report-stock-movement'
     | '/reports'
+    | '/stock-count'
     | '/admin/audit-logs'
     | '/admin/billing'
     | '/admin/employees'
@@ -343,6 +486,7 @@ export interface FileRouteTypes {
     | '/admin/users'
     | '/analytics/inventory'
     | '/analytics/sales'
+    | '/e-bill/$number'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -359,7 +503,18 @@ export interface RootRouteChildren {
   InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
   ProductsRoute: typeof ProductsRoute
+  ReportCustomerSalesRoute: typeof ReportCustomerSalesRoute
+  ReportDaySummaryRoute: typeof ReportDaySummaryRoute
+  ReportFocBillsRoute: typeof ReportFocBillsRoute
+  ReportOutstandingBillsRoute: typeof ReportOutstandingBillsRoute
+  ReportPeriodSalesRoute: typeof ReportPeriodSalesRoute
+  ReportProductSalesRoute: typeof ReportProductSalesRoute
+  ReportReorderRoute: typeof ReportReorderRoute
+  ReportSalesVoidRoute: typeof ReportSalesVoidRoute
+  ReportStockRoute: typeof ReportStockRoute
+  ReportStockMovementRoute: typeof ReportStockMovementRoute
   ReportsRoute: typeof ReportsRoute
+  StockCountRoute: typeof StockCountRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
   AdminBillingRoute: typeof AdminBillingRoute
   AdminEmployeesRoute: typeof AdminEmployeesRoute
@@ -373,6 +528,7 @@ export interface RootRouteChildren {
   AdminUsersRoute: typeof AdminUsersRoute
   AnalyticsInventoryRoute: typeof AnalyticsInventoryRoute
   AnalyticsSalesRoute: typeof AnalyticsSalesRoute
+  EBillNumberRoute: typeof EBillNumberRoute
   PosBillHistoryRoute: typeof PosBillHistoryRoute
   PosOnlinePaymentsRoute: typeof PosOnlinePaymentsRoute
   PosQuotationsRoute: typeof PosQuotationsRoute
@@ -383,11 +539,88 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/stock-count': {
+      id: '/stock-count'
+      path: '/stock-count'
+      fullPath: '/stock-count'
+      preLoaderRoute: typeof StockCountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/reports': {
       id: '/reports'
       path: '/reports'
       fullPath: '/reports'
       preLoaderRoute: typeof ReportsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-stock-movement': {
+      id: '/report-stock-movement'
+      path: '/report-stock-movement'
+      fullPath: '/report-stock-movement'
+      preLoaderRoute: typeof ReportStockMovementRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-stock': {
+      id: '/report-stock'
+      path: '/report-stock'
+      fullPath: '/report-stock'
+      preLoaderRoute: typeof ReportStockRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-sales-void': {
+      id: '/report-sales-void'
+      path: '/report-sales-void'
+      fullPath: '/report-sales-void'
+      preLoaderRoute: typeof ReportSalesVoidRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-reorder': {
+      id: '/report-reorder'
+      path: '/report-reorder'
+      fullPath: '/report-reorder'
+      preLoaderRoute: typeof ReportReorderRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-product-sales': {
+      id: '/report-product-sales'
+      path: '/report-product-sales'
+      fullPath: '/report-product-sales'
+      preLoaderRoute: typeof ReportProductSalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-period-sales': {
+      id: '/report-period-sales'
+      path: '/report-period-sales'
+      fullPath: '/report-period-sales'
+      preLoaderRoute: typeof ReportPeriodSalesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-outstanding-bills': {
+      id: '/report-outstanding-bills'
+      path: '/report-outstanding-bills'
+      fullPath: '/report-outstanding-bills'
+      preLoaderRoute: typeof ReportOutstandingBillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-foc-bills': {
+      id: '/report-foc-bills'
+      path: '/report-foc-bills'
+      fullPath: '/report-foc-bills'
+      preLoaderRoute: typeof ReportFocBillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-day-summary': {
+      id: '/report-day-summary'
+      path: '/report-day-summary'
+      fullPath: '/report-day-summary'
+      preLoaderRoute: typeof ReportDaySummaryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-customer-sales': {
+      id: '/report-customer-sales'
+      path: '/report-customer-sales'
+      fullPath: '/report-customer-sales'
+      preLoaderRoute: typeof ReportCustomerSalesRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/products': {
@@ -479,6 +712,13 @@ declare module '@tanstack/react-router' {
       path: '/pos/bill-history'
       fullPath: '/pos/bill-history'
       preLoaderRoute: typeof PosBillHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/e-bill/$number': {
+      id: '/e-bill/$number'
+      path: '/e-bill/$number'
+      fullPath: '/e-bill/$number'
+      preLoaderRoute: typeof EBillNumberRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/analytics/sales': {
@@ -583,7 +823,18 @@ const rootRouteChildren: RootRouteChildren = {
   InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
   ProductsRoute: ProductsRoute,
+  ReportCustomerSalesRoute: ReportCustomerSalesRoute,
+  ReportDaySummaryRoute: ReportDaySummaryRoute,
+  ReportFocBillsRoute: ReportFocBillsRoute,
+  ReportOutstandingBillsRoute: ReportOutstandingBillsRoute,
+  ReportPeriodSalesRoute: ReportPeriodSalesRoute,
+  ReportProductSalesRoute: ReportProductSalesRoute,
+  ReportReorderRoute: ReportReorderRoute,
+  ReportSalesVoidRoute: ReportSalesVoidRoute,
+  ReportStockRoute: ReportStockRoute,
+  ReportStockMovementRoute: ReportStockMovementRoute,
   ReportsRoute: ReportsRoute,
+  StockCountRoute: StockCountRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,
   AdminBillingRoute: AdminBillingRoute,
   AdminEmployeesRoute: AdminEmployeesRoute,
@@ -597,6 +848,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminUsersRoute: AdminUsersRoute,
   AnalyticsInventoryRoute: AnalyticsInventoryRoute,
   AnalyticsSalesRoute: AnalyticsSalesRoute,
+  EBillNumberRoute: EBillNumberRoute,
   PosBillHistoryRoute: PosBillHistoryRoute,
   PosOnlinePaymentsRoute: PosOnlinePaymentsRoute,
   PosQuotationsRoute: PosQuotationsRoute,

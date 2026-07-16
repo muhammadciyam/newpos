@@ -1,44 +1,33 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { getSupabase } from "@/lib/supabase-client";
 
 // Server-only. Only audit-log-api.ts (the createServerFn boundary) should import this.
+// Backed by Supabase (see supabase/migrations/0001_init.sql). Unlike the old node:fs
+// version, older entries are never deleted — the 500-entry cap is applied at read time
+// so the full audit trail is retained in the database. Ordered by the event's own `at`
+// timestamp (not insertion/id order) so backfilling older history never outranks entries
+// that were already written live.
 
 export type ServerAuditLog = {
   user: string;
-  action: "create" | "update" | "delete" | "login" | "logout";
+  action: "create" | "update" | "delete" | "login" | "logout" | "view";
   object: string;
   at: string;
 };
 
-const DATA_DIR = join(process.cwd(), ".data");
-const DATA_FILE = join(DATA_DIR, "audit-log-state.json");
-
-function loadFromDisk(): ServerAuditLog[] | null {
-  try {
-    if (!existsSync(DATA_FILE)) return null;
-    return JSON.parse(readFileSync(DATA_FILE, "utf-8")) as ServerAuditLog[];
-  } catch {
-    return null;
-  }
+export async function getServerAuditLog(): Promise<ServerAuditLog[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from("audit_log")
+    .select("data")
+    .order("at", { ascending: false })
+    .limit(500);
+  if (error) throw error;
+  return data.map((row) => row.data as ServerAuditLog);
 }
 
-function persistToDisk() {
-  try {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(DATA_FILE, JSON.stringify(state), "utf-8");
-  } catch {
-    // Best-effort — in-memory state is still correct even if the write fails.
-  }
-}
-
-let state: ServerAuditLog[] = loadFromDisk() ?? [];
-
-export function getServerAuditLog(): ServerAuditLog[] {
-  return state;
-}
-
-export function appendServerAuditLog(entry: ServerAuditLog): ServerAuditLog[] {
-  state = [entry, ...state].slice(0, 500);
-  persistToDisk();
-  return state;
+export async function appendServerAuditLog(entry: ServerAuditLog): Promise<ServerAuditLog[]> {
+  const supabase = getSupabase();
+  const { error } = await supabase.from("audit_log").insert({ at: entry.at, data: entry });
+  if (error) throw error;
+  return getServerAuditLog();
 }

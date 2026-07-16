@@ -130,6 +130,9 @@ function InventoryPage() {
     setProductId(id);
     const product = products.find((p) => p.id === id);
     setCostPrice(product?.cost != null ? String(product.cost) : "");
+    // GST is set on the product itself (Products > edit > GST switch) — a purchase invoice
+    // line always follows that, never an independent choice made here.
+    setLineGstApplicable(product?.gstApplicable ?? true);
   }
 
   const draftTotals = invoiceTotals({
@@ -373,11 +376,11 @@ function InventoryPage() {
                   placeholder="0.00"
                 />
               </div>
-              <label className="flex items-center gap-1.5 whitespace-nowrap pb-2 text-sm text-foreground">
-                <Checkbox
-                  checked={lineGstApplicable}
-                  onCheckedChange={(v) => setLineGstApplicable(!!v)}
-                />{" "}
+              <label
+                className="flex items-center gap-1.5 whitespace-nowrap pb-2 text-sm text-muted-foreground"
+                title="Set on the product itself (Products > edit > GST) — not editable here."
+              >
+                <Checkbox checked={lineGstApplicable} disabled />
                 GST
               </label>
               <Button

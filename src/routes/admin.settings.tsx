@@ -4,8 +4,16 @@ import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
@@ -21,12 +29,18 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Trash2 } from "lucide-react";
+import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
-import { paymentMethods, cashDenominations, numberFormats } from "@/lib/pos-data";
+import { cashDenominations } from "@/lib/pos-data";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
-import { useSettings, settingsStore, type AppSettings } from "@/lib/settings-store";
+import {
+  useSettings,
+  settingsStore,
+  type AppSettings,
+  type PaymentMethodConfig,
+  type WebhookConfig,
+} from "@/lib/settings-store";
 import {
   printTemplates,
   printTemplatesStore,
@@ -34,10 +48,18 @@ import {
   type PrintTemplateId,
 } from "@/lib/print-templates-store";
 
+// Lets other pages deep-link straight to a tab, e.g. /admin/settings?tab=Tax — used by
+// the Taxes sidebar entry, which redirects here rather than duplicating a second,
+// out-of-sync tax UI (see admin.taxes.tsx).
+const validateSearch = (search: Record<string, unknown>): { tab?: string } => ({
+  tab: typeof search.tab === "string" ? search.tab : undefined,
+});
+
 export const Route = createFileRoute("/admin/settings")({
   head: () => ({
     meta: [{ title: "Settings — Dhipos" }],
   }),
+  validateSearch,
   component: SettingsPage,
 });
 
@@ -62,6 +84,12 @@ const tabs = [
   "Developers",
 ];
 
+// The stable identity of a payment method row — its `key` when it's one of the built-ins,
+// otherwise its (unique) name for custom methods that never got a key.
+function methodId(m: PaymentMethodConfig): string {
+  return m.key ?? m.name;
+}
+
 function SettingRow({
   label,
   desc,
@@ -82,22 +110,7 @@ function SettingRow({
   );
 }
 
-function YesNoSelect({ defaultValue }: { defaultValue: string }) {
-  return (
-    <Select defaultValue={defaultValue}>
-      <SelectTrigger>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        <SelectItem value={defaultValue}>{defaultValue}</SelectItem>
-        <SelectItem value="alt">Alternative</SelectItem>
-      </SelectContent>
-    </Select>
-  );
-}
-
-// A real, persisted Yes/No select bound to a boolean setting — unlike YesNoSelect
-// above (which is decorative for tabs we intentionally left out of scope).
+// A real, persisted Yes/No select bound to a boolean setting.
 function BoolSelect({
   value,
   onChange,
@@ -126,14 +139,108 @@ function SettingsPage() {
   const canManage = useHasPermission("settings.manage");
   const settings = useSettings();
   const printSettings = usePrintSettings();
-  const [tab, setTab] = useState("Modules");
+  const { tab: initialTab } = Route.useSearch();
+  const [tab, setTab] = useState(initialTab && tabs.includes(initialTab) ? initialTab : "Modules");
   const [draft, setDraft] = useState<AppSettings>(settings);
+
+  const [editingFormatType, setEditingFormatType] = useState<string | null>(null);
+  const [formatDraft, setFormatDraft] = useState("");
+
+  const [editingMethod, setEditingMethod] = useState<PaymentMethodConfig | null>(null);
+  const [methodDraft, setMethodDraft] = useState<PaymentMethodConfig>({
+    name: "",
+    type: "manual",
+    details: "",
+  });
+  const [addMethodOpen, setAddMethodOpen] = useState(false);
+
+  const [addWebhookOpen, setAddWebhookOpen] = useState(false);
+  const [webhookDraft, setWebhookDraft] = useState({ url: "", event: "bill.created", authHeader: "" });
 
   if (!canManage) return <RestrictedPage />;
 
   function saveSection<K extends keyof AppSettings>(section: K) {
     settingsStore.updateSection(section, draft[section]);
     toast.success(`${String(section)} settings updated`);
+  }
+
+  function handleLogoFile(file: File | undefined) {
+    if (!file) return;
+    if (file.size > 30 * 1024) {
+      toast.error("Logo must be 30kb or smaller.");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setDraft((d) => ({ ...d, general: { ...d.general, companyLogo: reader.result as string } }));
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function saveFormatEdit() {
+    if (!editingFormatType) return;
+    settingsStore.updateSection("numbering", {
+      formats: settings.numbering.formats.map((f) =>
+        f.type === editingFormatType ? { ...f, format: formatDraft } : f,
+      ),
+    });
+    toast.success(`${editingFormatType} number format updated`);
+    setEditingFormatType(null);
+  }
+
+  function openEditMethod(m: PaymentMethodConfig) {
+    setEditingMethod(m);
+    setMethodDraft(m);
+  }
+
+  function saveMethodEdit() {
+    if (!editingMethod) return;
+    settingsStore.updateSection("payments", {
+      methods: settings.payments.methods.map((m) =>
+        methodId(m) === methodId(editingMethod) ? { ...methodDraft, key: m.key } : m,
+      ),
+    });
+    toast.success(`${methodDraft.name} payment method updated`);
+    setEditingMethod(null);
+  }
+
+  function deleteMethod(id: string) {
+    settingsStore.updateSection("payments", {
+      methods: settings.payments.methods.filter((m) => methodId(m) !== id),
+    });
+    toast.success("Payment method removed");
+  }
+
+  function addMethod() {
+    if (!methodDraft.name.trim()) return;
+    settingsStore.updateSection("payments", {
+      methods: [...settings.payments.methods, methodDraft],
+    });
+    toast.success(`${methodDraft.name} payment method added`);
+    setAddMethodOpen(false);
+    setMethodDraft({ name: "", type: "manual", details: "" });
+  }
+
+  function addWebhook() {
+    if (!webhookDraft.url.trim()) return;
+    const hook: WebhookConfig = {
+      id: crypto.randomUUID(),
+      url: webhookDraft.url.trim(),
+      event: webhookDraft.event,
+      authHeader: webhookDraft.authHeader.trim(),
+      active: true,
+    };
+    settingsStore.updateSection("webhooks", { hooks: [...settings.webhooks.hooks, hook] });
+    toast.success("Webhook added");
+    setAddWebhookOpen(false);
+    setWebhookDraft({ url: "", event: "bill.created", authHeader: "" });
+  }
+
+  function removeWebhook(id: string) {
+    settingsStore.updateSection("webhooks", {
+      hooks: settings.webhooks.hooks.filter((h) => h.id !== id),
+    });
+    toast.success("Webhook removed");
   }
 
   return (
@@ -161,6 +268,9 @@ function SettingsPage() {
               <p className="text-xl font-bold text-foreground">Modules</p>
               <p className="text-sm text-muted-foreground">
                 Dhipos is module based so you can easily pick and choose only the modules you need.
+                These three are required by the rest of the app (Sell, Register, Inventory, and
+                Reports all depend on them), so they're always on rather than a toggle that would
+                silently break other pages if switched off.
               </p>
               <div className="mt-4 space-y-6">
                 <div className="flex items-start justify-between gap-4 border-t border-border pt-5">
@@ -170,7 +280,7 @@ function SettingsPage() {
                       <li>Catalogue Management</li>
                     </ul>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked disabled title="Required — always enabled" />
                 </div>
                 <div className="flex items-start justify-between gap-4 border-t border-border pt-5">
                   <div>
@@ -180,7 +290,7 @@ function SettingsPage() {
                       <li>Allows you to manage Gift Cards and redeem them at outlets</li>
                     </ul>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked disabled title="Required — always enabled" />
                 </div>
                 <div className="flex items-start justify-between gap-4 border-t border-border pt-5">
                   <div>
@@ -194,7 +304,7 @@ function SettingsPage() {
                       </li>
                     </ul>
                   </div>
-                  <Switch defaultChecked />
+                  <Switch checked disabled title="Required — always enabled" />
                 </div>
               </div>
             </Card>
@@ -286,7 +396,20 @@ function SettingsPage() {
                   label="Company Logo"
                   desc="Upload a PNG logo file (maximum 30kb) which will be the default logo printed on generated documents."
                 >
-                  <Input type="file" accept="image/png" />
+                  <div className="flex items-center gap-3">
+                    {draft.general.companyLogo && (
+                      <img
+                        src={draft.general.companyLogo}
+                        alt="Company logo"
+                        className="h-10 w-10 rounded border border-border object-contain"
+                      />
+                    )}
+                    <Input
+                      type="file"
+                      accept="image/png"
+                      onChange={(e) => handleLogoFile(e.target.files?.[0])}
+                    />
+                  </div>
                 </SettingRow>
               </div>
               <div className="mt-4 flex justify-end border-t border-border pt-4">
@@ -312,7 +435,7 @@ function SettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {numberFormats.map((f) => (
+                    {settings.numbering.formats.map((f) => (
                       <TableRow key={f.type}>
                         <TableCell className="font-medium">{f.type}</TableCell>
                         <TableCell className="font-mono text-sm">{f.format}</TableCell>
@@ -320,7 +443,10 @@ function SettingsPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => toast(`Edit ${f.type} number format`)}
+                            onClick={() => {
+                              setEditingFormatType(f.type);
+                              setFormatDraft(f.format);
+                            }}
                           >
                             Edit
                           </Button>
@@ -341,7 +467,14 @@ function SettingsPage() {
                   label="Company Sales Email"
                   desc="Quotations, Sales Receipts sent to customers will be cc'd to this email. This email will also be set as the Reply-To email address"
                 >
-                  <Input placeholder="Email address" />
+                  <Input
+                    type="email"
+                    placeholder="Email address"
+                    value={draft.sales.salesEmail}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, sales: { ...d.sales, salesEmail: e.target.value } }))
+                    }
+                  />
                 </SettingRow>
                 <SettingRow
                   label="Can edit sales price?"
@@ -445,8 +578,8 @@ function SettingsPage() {
                       </TableRow>
                     </TableHeader>
                     <TableBody>
-                      {paymentMethods.map((m) => (
-                        <TableRow key={m.name}>
+                      {settings.payments.methods.map((m) => (
+                        <TableRow key={methodId(m)}>
                           <TableCell>
                             <p className="font-medium text-foreground">{m.name}</p>
                             {m.details && (
@@ -459,16 +592,16 @@ function SettingsPage() {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                disabled={m.name === "Cash"}
-                                onClick={() => toast(`Edit ${m.name} payment method`)}
+                                disabled={methodId(m) === "Cash"}
+                                onClick={() => openEditMethod(m)}
                               >
                                 Edit
                               </Button>
-                              {m.name !== "Cash" && (
+                              {methodId(m) !== "Cash" && (
                                 <Button
                                   variant="destructive"
                                   size="sm"
-                                  onClick={() => toast.success(`${m.name} payment method removed`)}
+                                  onClick={() => deleteMethod(methodId(m))}
                                 >
                                   Delete
                                 </Button>
@@ -480,7 +613,13 @@ function SettingsPage() {
                     </TableBody>
                   </Table>
                 </div>
-                <Button className="mt-4" onClick={() => toast("Add payment method form opened")}>
+                <Button
+                  className="mt-4"
+                  onClick={() => {
+                    setMethodDraft({ name: "", type: "manual", details: "" });
+                    setAddMethodOpen(true);
+                  }}
+                >
                   Add Payment Method
                 </Button>
               </Card>
@@ -644,11 +783,6 @@ function SettingsPage() {
                   />
                 </SettingRow>
               </div>
-              <div className="flex justify-end border-t border-border pt-4">
-                <Button onClick={() => toast.success("Inventory settings updated")}>
-                  Update Settings
-                </Button>
-              </div>
             </Card>
           )}
 
@@ -660,13 +794,18 @@ function SettingsPage() {
                   label="Enable Restaurant Module?"
                   desc="Are any of your outlets restaurants"
                 >
-                  <YesNoSelect defaultValue="No, Disable Module" />
+                  <BoolSelect
+                    value={draft.restaurant.enabled}
+                    onChange={(v) =>
+                      setDraft((d) => ({ ...d, restaurant: { ...d.restaurant, enabled: v } }))
+                    }
+                    yesLabel="Yes, Enable Module"
+                    noLabel="No, Disable Module"
+                  />
                 </SettingRow>
               </div>
               <div className="flex justify-end border-t border-border pt-4">
-                <Button onClick={() => toast.success("Restaurant settings updated")}>
-                  Update Settings
-                </Button>
+                <Button onClick={() => saveSection("restaurant")}>Update Settings</Button>
               </div>
             </Card>
           )}
@@ -679,25 +818,53 @@ function SettingsPage() {
                   label="Gift cards"
                   desc="Gift cards of pre-defined amounts which can be redeemed once"
                 >
-                  <YesNoSelect defaultValue="No, Disable" />
+                  <BoolSelect
+                    value={draft.discounts.giftCardsEnabled}
+                    onChange={(v) =>
+                      setDraft((d) => ({
+                        ...d,
+                        discounts: { ...d.discounts, giftCardsEnabled: v },
+                      }))
+                    }
+                    yesLabel="Yes, Enable"
+                    noLabel="No, Disable"
+                  />
                 </SettingRow>
                 <SettingRow
                   label="Enable Loyalty Programs?"
                   desc="Create and manage loyalty programs to engage with your loyal customers. You can manage loyalty programs at Company Admin > Loyalty Programs."
                 >
-                  <YesNoSelect defaultValue="Yes, Enable" />
+                  <BoolSelect
+                    value={draft.discounts.loyaltyProgramsEnabled}
+                    onChange={(v) =>
+                      setDraft((d) => ({
+                        ...d,
+                        discounts: { ...d.discounts, loyaltyProgramsEnabled: v },
+                      }))
+                    }
+                    yesLabel="Yes, Enable"
+                    noLabel="No, Disable"
+                  />
                 </SettingRow>
                 <SettingRow
                   label="Only Fixed Discounts?"
                   desc="Only allow pre-defined discounts on bills?"
                 >
-                  <YesNoSelect defaultValue="No, Any Discount Allowed" />
+                  <BoolSelect
+                    value={draft.discounts.onlyFixedDiscounts}
+                    onChange={(v) =>
+                      setDraft((d) => ({
+                        ...d,
+                        discounts: { ...d.discounts, onlyFixedDiscounts: v },
+                      }))
+                    }
+                    yesLabel="Yes, Fixed Only"
+                    noLabel="No, Any Discount Allowed"
+                  />
                 </SettingRow>
               </div>
               <div className="flex justify-end border-t border-border pt-4">
-                <Button onClick={() => toast.success("Discount settings updated")}>
-                  Update Settings
-                </Button>
+                <Button onClick={() => saveSection("discounts")}>Update Settings</Button>
               </div>
             </Card>
           )}
@@ -708,10 +875,14 @@ function SettingsPage() {
                 <div>
                   <p className="text-xl font-bold text-foreground">Webhooks</p>
                   <p className="text-sm text-muted-foreground">
-                    Create webhooks to receive an API request on events of interest.
+                    Create webhooks to receive an API request on events of interest. This app
+                    doesn't have an outbound delivery worker, so hooks are saved here but not
+                    actually fired — this list is the configuration record for when that's added.
                   </p>
                 </div>
-                <Button onClick={() => toast("Add webhook form opened")}>Add New</Button>
+                <Button onClick={() => setAddWebhookOpen(true)} className="gap-1.5">
+                  <Plus className="h-4 w-4" /> Add New
+                </Button>
               </div>
               <div className="mt-4 overflow-x-auto">
                 <Table>
@@ -725,11 +896,28 @@ function SettingsPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
-                        No data
-                      </TableCell>
-                    </TableRow>
+                    {settings.webhooks.hooks.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={5} className="py-10 text-center text-muted-foreground">
+                          No data
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {settings.webhooks.hooks.map((h) => (
+                      <TableRow key={h.id}>
+                        <TableCell className="font-mono text-sm">{h.url}</TableCell>
+                        <TableCell>{h.event}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {h.authHeader || "—"}
+                        </TableCell>
+                        <TableCell>{h.active ? "Active" : "Disabled"}</TableCell>
+                        <TableCell>
+                          <Button variant="destructive" size="sm" onClick={() => removeWebhook(h.id)}>
+                            Delete
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
                   </TableBody>
                 </Table>
               </div>
@@ -1088,6 +1276,172 @@ function SettingsPage() {
           )}
         </div>
       </div>
+
+      <Dialog open={!!editingFormatType} onOpenChange={(v) => !v && setEditingFormatType(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editingFormatType} number format</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>Format</Label>
+            <Input
+              value={formatDraft}
+              onChange={(e) => setFormatDraft(e.target.value)}
+              className="font-mono"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingFormatType(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveFormatEdit}>Save</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingMethod} onOpenChange={(v) => !v && setEditingMethod(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editingMethod?.name} payment method</DialogTitle>
+          </DialogHeader>
+          {editingMethod?.key && (
+            <p className="text-xs text-muted-foreground">
+              Renaming this updates its label on the Sell page immediately — the underlying
+              record it saves against on bills/reports doesn't change.
+            </p>
+          )}
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={methodDraft.name}
+                onChange={(e) => setMethodDraft((m) => ({ ...m, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Input
+                value={methodDraft.type}
+                onChange={(e) => setMethodDraft((m) => ({ ...m, type: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Details</Label>
+              <Input
+                value={methodDraft.details}
+                onChange={(e) => setMethodDraft((m) => ({ ...m, details: e.target.value }))}
+                placeholder="e.g. account number"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingMethod(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveMethodEdit} disabled={!methodDraft.name.trim()}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addMethodOpen} onOpenChange={setAddMethodOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Payment Method</DialogTitle>
+          </DialogHeader>
+          <p className="text-xs text-muted-foreground">
+            Cash, Card, and Bank Transfer are the only methods with a full collection workflow
+            (cash tendered, card slip #, transfer slip) on the Sell page. A custom name here is
+            saved as a reference/record but won't appear as a selectable option at Sell.
+          </p>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={methodDraft.name}
+                onChange={(e) => setMethodDraft((m) => ({ ...m, name: e.target.value }))}
+                placeholder="e.g. Store Credit"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Type</Label>
+              <Input
+                value={methodDraft.type}
+                onChange={(e) => setMethodDraft((m) => ({ ...m, type: e.target.value }))}
+                placeholder="e.g. manual"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Details</Label>
+              <Input
+                value={methodDraft.details}
+                onChange={(e) => setMethodDraft((m) => ({ ...m, details: e.target.value }))}
+                placeholder="e.g. account number"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddMethodOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addMethod} disabled={!methodDraft.name.trim()}>
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addWebhookOpen} onOpenChange={setAddWebhookOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Webhook</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>URL</Label>
+              <Input
+                value={webhookDraft.url}
+                onChange={(e) => setWebhookDraft((w) => ({ ...w, url: e.target.value }))}
+                placeholder="https://example.com/webhook"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Event</Label>
+              <Select
+                value={webhookDraft.event}
+                onValueChange={(v) => setWebhookDraft((w) => ({ ...w, event: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="bill.created">Bill Created</SelectItem>
+                  <SelectItem value="bill.voided">Bill Voided</SelectItem>
+                  <SelectItem value="purchase_invoice.approved">Purchase Invoice Approved</SelectItem>
+                  <SelectItem value="product.created">Product Created</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Authorisation Header</Label>
+              <Input
+                value={webhookDraft.authHeader}
+                onChange={(e) => setWebhookDraft((w) => ({ ...w, authHeader: e.target.value }))}
+                placeholder="Optional"
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddWebhookOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addWebhook} disabled={!webhookDraft.url.trim()}>
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }

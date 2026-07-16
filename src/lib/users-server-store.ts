@@ -1,19 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { getSupabase } from "@/lib/supabase-client";
 import type { AppUser } from "@/lib/auth-store";
 
 // Server-only. Never import this from a client component or from auth-store.ts's
 // client-facing exports — it must stay out of the client bundle. Only users-api.ts
 // (the createServerFn boundary) should import it.
 //
-// This is the canonical account directory. Before this existed, accounts lived only in
-// whichever browser's localStorage created them — a user created on one device simply
-// didn't exist from any other device's point of view, so they could never log in
-// anywhere else. Moving it here is what makes a newly created account work from any
-// device, the same fix already applied to registers and login sessions.
-
-const DATA_DIR = join(process.cwd(), ".data");
-const DATA_FILE = join(DATA_DIR, "users-state.json");
+// This is the canonical account directory, backed by Supabase (see
+// supabase/migrations/0001_init.sql) so an account created on one device works from any
+// other device/process — the same fix already applied to registers and login sessions.
 
 const seedAdmin: AppUser = {
   id: "seed-admin",
@@ -41,32 +35,55 @@ const seedAdmin: AppUser = {
   certificates: [],
 };
 
-function loadFromDisk(): AppUser[] | null {
-  try {
-    if (!existsSync(DATA_FILE)) return null;
-    return JSON.parse(readFileSync(DATA_FILE, "utf-8")) as AppUser[];
-  } catch {
-    return null;
+let seeded = false;
+
+async function ensureSeeded() {
+  if (seeded) return;
+  seeded = true;
+  const supabase = getSupabase();
+  const { count, error } = await supabase.from("users").select("id", { count: "exact", head: true });
+  if (error) throw error;
+  if (count === 0) {
+    const { error: insertError } = await supabase.from("users").insert({
+      id: seedAdmin.id,
+      email: seedAdmin.email,
+      username: seedAdmin.username,
+      data: seedAdmin,
+    });
+    if (insertError) throw insertError;
   }
 }
 
-function persistToDisk() {
-  try {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(DATA_FILE, JSON.stringify(state), "utf-8");
-  } catch {
-    // Best-effort — in-memory state is still correct even if the write fails.
+export async function getServerUsers(): Promise<AppUser[]> {
+  await ensureSeeded();
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("users").select("data");
+  if (error) throw error;
+  return data.map((row) => row.data as AppUser);
+}
+
+export async function mutateServerUsers(
+  mutator: (users: AppUser[]) => AppUser[],
+): Promise<AppUser[]> {
+  const current = await getServerUsers();
+  const next = mutator(current);
+  const supabase = getSupabase();
+
+  if (next.length > 0) {
+    const { error } = await supabase
+      .from("users")
+      .upsert(
+        next.map((u) => ({ id: u.id, email: u.email, username: u.username, data: u })),
+        { onConflict: "id" },
+      );
+    if (error) throw error;
   }
-}
-
-let state: AppUser[] = loadFromDisk() ?? [seedAdmin];
-
-export function getServerUsers(): AppUser[] {
-  return state;
-}
-
-export function mutateServerUsers(mutator: (users: AppUser[]) => AppUser[]): AppUser[] {
-  state = mutator(state);
-  persistToDisk();
-  return state;
+  const currentIds = new Set(current.map((u) => u.id));
+  const nextIds = new Set(next.map((u) => u.id));
+  const removedIds = [...currentIds].filter((id) => !nextIds.has(id));
+  if (removedIds.length > 0) {
+    const { error } = await supabase.from("users").delete().in("id", removedIds);
+    if (error) throw error;
+  }
+  return next;
 }

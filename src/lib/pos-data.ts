@@ -17,6 +17,12 @@ export type Product = {
   sku?: string;
   // Last known unit cost, set from the most recently approved Purchase Invoice line for this product.
   cost?: number;
+  // Whether this product shows up on the Stock Count page. Undefined counts as true
+  // (existing products default to countable) — only an explicit `false` excludes it.
+  countable?: boolean;
+  // Whether GST applies to this product when sold. Undefined counts as true (existing
+  // products default to GST-applicable) — only an explicit `false` marks it exempt.
+  gstApplicable?: boolean;
 };
 
 export const categories: Category[] = [
@@ -155,7 +161,10 @@ export type Bill = {
   total: number;
   created: string;
   by: string;
-  paymentMethod: "Cash" | "Card" | "Bank Transfer" | "Credit";
+  // The 4 built-ins keep autocomplete; `string & {}` also allows a custom payment method
+  // name configured in Settings > Payments (see admin.settings.tsx / pos.sell.tsx) — those
+  // are simple/generic payments with no specialized collection workflow of their own.
+  paymentMethod: "Cash" | "Card" | "Bank Transfer" | "Credit" | (string & {});
   paymentStatus: "Paid" | "Pending";
   settledBy?: string;
   settledAt?: string;
@@ -164,6 +173,8 @@ export type Bill = {
   transferSlip?: string;
   recipientNumber?: string;
   cardSlipNumber?: string;
+  // Required proof-of-payment reference for any custom (non-built-in) payment method.
+  customReceiptNumber?: string;
   printTemplateId?: string;
   editedBy?: string;
   editedAt?: string;
@@ -172,6 +183,19 @@ export type Bill = {
   voidedAt?: string;
   voidReason?: string;
   refunds?: BillRefund[];
+  // Set from the Sell page's Note/FOC/No Delivery/Tags/Currency quick actions.
+  note?: string;
+  // Free of Charge — when true, `discount` was set to cover the full subtotal+gst so
+  // `total` is 0. Kept as an explicit flag (rather than inferring from total === 0) so a
+  // legitimately free item and a fully-discounted paid sale don't look the same in reports.
+  foc?: boolean;
+  noDelivery?: boolean;
+  tags?: string[];
+  // Alternate-currency display, for reference only — `total` etc. always stay in the
+  // store's base currency; this is just what was shown/quoted to the customer at sale time.
+  currency?: string;
+  currencyRate?: number;
+  currencyTotal?: number;
 };
 
 // ---- Online Payments ----
@@ -187,23 +211,56 @@ export type OnlinePayment = {
 };
 
 // ---- Reports ----
-export const salesReports = [
-  { title: "Day Summary Reports", desc: "Sales, Payments, Register reports for a day" },
-  { title: "Product Sales Report", desc: "Sales summary by products" },
-  { title: "Period Sales Reports", desc: "Various sales reports for given period" },
-  { title: "Customer Sales Report", desc: "Sales by customers" },
+// `path` is only set for reports that actually have a page built — see reports.tsx and
+// the "Recent Activity" inbox in app-shell.tsx, which both link to it when present.
+export type ReportItem = { title: string; desc: string; path?: string };
+
+export const salesReports: ReportItem[] = [
+  {
+    title: "Day Summary Reports",
+    desc: "Sales, Payments, Register reports for a day",
+    path: "/report-day-summary",
+  },
+  {
+    title: "Product Sales Report",
+    desc: "Sales summary by products",
+    path: "/report-product-sales",
+  },
+  {
+    title: "Period Sales Reports",
+    desc: "Various sales reports for given period",
+    path: "/report-period-sales",
+  },
+  {
+    title: "Customer Sales Report",
+    desc: "Sales by customers",
+    path: "/report-customer-sales",
+  },
   {
     title: "Outstanding Bills Report",
     desc: "Unsettled sales bills (Credit Sales, Layaway Bills)",
+    path: "/report-outstanding-bills",
   },
-  { title: "Sales Void Report", desc: "Reports of voided invoices" },
-  { title: "FOC Bills Report", desc: "Details of all FOC bills" },
+  {
+    title: "Sales Void Report",
+    desc: "Reports of voided invoices",
+    path: "/report-sales-void",
+  },
+  {
+    title: "FOC Bills Report",
+    desc: "Details of all FOC bills",
+    path: "/report-foc-bills",
+  },
 ];
 
-export const productReports = [
-  { title: "Stock Report", desc: "Current stock levels by product" },
-  { title: "Stock Movement Report", desc: "Stock in/out movement history" },
-  { title: "Reorder Report", desc: "Products below reorder level" },
+export const productReports: ReportItem[] = [
+  { title: "Stock Report", desc: "Current stock levels by product", path: "/report-stock" },
+  {
+    title: "Stock Movement Report",
+    desc: "Stock in/out movement history",
+    path: "/report-stock-movement",
+  },
+  { title: "Reorder Report", desc: "Products below reorder level", path: "/report-reorder" },
 ];
 
 // ---- Payment methods / cash denominations ----
@@ -223,6 +280,9 @@ export const cashDenominations = [
   { name: "Rf 10", value: 10.0, type: "Note", currency: "MVR" },
   { name: "Rf 20", value: 20.0, type: "Note", currency: "MVR" },
   { name: "Rf 50", value: 50.0, type: "Note", currency: "MVR" },
+  { name: "Rf 100", value: 100.0, type: "Note", currency: "MVR" },
+  { name: "Rf 500", value: 500.0, type: "Note", currency: "MVR" },
+  { name: "Rf 1000", value: 1000.0, type: "Note", currency: "MVR" },
 ];
 
 export const usdDenominations = [

@@ -30,14 +30,14 @@ const emptyProfile: EmployeeProfile = {
 };
 
 export const fetchUsersOnServer = createServerFn({ method: "GET" }).handler(async () => {
-  return getServerUsers().map(scrub);
+  return (await getServerUsers()).map(scrub);
 });
 
 export const loginOnServer = createServerFn({ method: "POST" })
   .validator((data: { identifier: string; password: string }) => data)
   .handler(async ({ data }) => {
     const id = normalize(data.identifier);
-    const match = getServerUsers().find(
+    const match = (await getServerUsers()).find(
       (u) => (u.email === id || u.username.toLowerCase() === id) && u.password === data.password,
     );
     if (!match) return { error: "invalid" as const };
@@ -63,7 +63,7 @@ export const createUserOnServer = createServerFn({ method: "POST" })
     if (data.role === "Super Admin") return { error: "Super Admin cannot be created" };
     const email = normalize(data.email);
     const username = normalize(data.username);
-    const users = getServerUsers();
+    const users = await getServerUsers();
     if (users.some((u) => u.email === email)) {
       return { error: "A user with that email already exists" };
     }
@@ -97,16 +97,16 @@ export const createUserOnServer = createServerFn({ method: "POST" })
       idCardPhoto: data.idCardPhoto ?? null,
       certificates: data.certificates ?? [],
     };
-    mutateServerUsers((us) => [...us, user]);
+    await mutateServerUsers((us) => [...us, user]);
     return { ok: true as const, user: scrub(user) };
   });
 
 export const setStatusOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; status: UserStatus }) => data)
   .handler(async ({ data }) => {
-    const user = getServerUsers().find((u) => u.id === data.id);
+    const user = (await getServerUsers()).find((u) => u.id === data.id);
     if (!user || user.role === "Super Admin") return { error: "Cannot change this user's status" };
-    mutateServerUsers((us) =>
+    await mutateServerUsers((us) =>
       us.map((u) => (u.id === data.id ? { ...u, status: data.status } : u)),
     );
     return { ok: true as const, email: user.email };
@@ -115,11 +115,11 @@ export const setStatusOnServer = createServerFn({ method: "POST" })
 export const setRoleOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; role: Role }) => data)
   .handler(async ({ data }) => {
-    const user = getServerUsers().find((u) => u.id === data.id);
+    const user = (await getServerUsers()).find((u) => u.id === data.id);
     if (!user || user.role === "Super Admin" || data.role === "Super Admin") {
       return { error: "Cannot change this user's role" };
     }
-    mutateServerUsers((us) => us.map((u) => (u.id === data.id ? { ...u, role: data.role } : u)));
+    await mutateServerUsers((us) => us.map((u) => (u.id === data.id ? { ...u, role: data.role } : u)));
     return { ok: true as const, email: user.email };
   });
 
@@ -131,17 +131,17 @@ export const updateProfileOnServer = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
-    const user = getServerUsers().find((u) => u.id === data.id);
+    const user = (await getServerUsers()).find((u) => u.id === data.id);
     if (!user) return { error: "User not found" };
-    mutateServerUsers((us) => us.map((u) => (u.id === data.id ? { ...u, ...data.patch } : u)));
+    await mutateServerUsers((us) => us.map((u) => (u.id === data.id ? { ...u, ...data.patch } : u)));
     return { ok: true as const, email: user.email };
   });
 
 export const removeUserOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string }) => data)
   .handler(async ({ data }) => {
-    const user = getServerUsers().find((u) => u.id === data.id);
+    const user = (await getServerUsers()).find((u) => u.id === data.id);
     if (!user || user.role === "Super Admin") return { error: "Cannot remove this user" };
-    mutateServerUsers((us) => us.filter((u) => u.id !== data.id));
+    await mutateServerUsers((us) => us.filter((u) => u.id !== data.id));
     return { ok: true as const, email: user.email };
   });

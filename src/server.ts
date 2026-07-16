@@ -1,3 +1,8 @@
+// Must load before anything else — `vite dev` (unlike a Nitro dev server) does not auto-load
+// a root .env file into process.env, so server-only secrets (Supabase, etc.) would otherwise
+// be undefined. No-ops harmlessly if .env doesn't exist (e.g. in a deployed environment that
+// injects real env vars another way).
+import "dotenv/config";
 import "./lib/error-capture";
 
 import { consumeLastCapturedError } from "./lib/error-capture";

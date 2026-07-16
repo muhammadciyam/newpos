@@ -16,6 +16,16 @@ export type SaleTab = {
   transferSlip: string;
   recipientNumber: string;
   cardSlipNumber: string;
+  // Required reference for any custom payment method (anything other than the 4
+  // built-ins) — those have no other collection fields of their own, so this is the one
+  // thing tying the sale to proof of payment (e.g. a mobile wallet transaction ID).
+  customReceiptNumber: string;
+  note: string;
+  foc: boolean;
+  noDelivery: boolean;
+  tags: string[];
+  currency: string | null;
+  currencyRate: number | null;
 };
 
 export function emptySaleTab(id: number): SaleTab {
@@ -28,6 +38,13 @@ export function emptySaleTab(id: number): SaleTab {
     transferSlip: "",
     recipientNumber: "",
     cardSlipNumber: "",
+    customReceiptNumber: "",
+    note: "",
+    foc: false,
+    noDelivery: false,
+    tags: [],
+    currency: null,
+    currencyRate: null,
   };
 }
 
@@ -44,6 +61,15 @@ function isSaleTabsState(x: unknown): x is SaleTabsState {
   return (
     Array.isArray(s.tabs) && typeof s.activeTab === "number" && typeof s.nextTabId === "number"
   );
+}
+
+// Backfills the Note/FOC/No Delivery/Tags/Currency fields onto a held bill saved before
+// those existed, so an older held sale doesn't crash the UI with `undefined` fields.
+function normalizeState(s: SaleTabsState): SaleTabsState {
+  return {
+    ...s,
+    tabs: s.tabs.map((t) => ({ ...emptySaleTab(t.id), ...t })),
+  };
 }
 
 // Persisted so a held sale (items added but not yet saved as a bill) survives a
@@ -97,7 +123,7 @@ export function useSaleTabs(): SaleTabsState {
     if (linkedRegister === registerName) return;
     linkedRegister = registerName;
     const heldBill = register.registers[registerName]?.heldBill;
-    store.set(isSaleTabsState(heldBill) ? heldBill : emptySaleTabsState());
+    store.set(isSaleTabsState(heldBill) ? normalizeState(heldBill) : emptySaleTabsState());
     // Only re-run when the register we're looking at changes — register.registers updates
     // on every poll tick and must not re-trigger hydration each time.
     // eslint-disable-next-line react-hooks/exhaustive-deps

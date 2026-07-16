@@ -11,9 +11,12 @@ export const fetchSessionsOnServer = createServerFn({ method: "GET" }).handler(a
 export const claimSessionOnServer = createServerFn({ method: "POST" })
   .validator((data: { email: string; deviceId: string }) => data)
   .handler(async ({ data }) => {
-    const existing = getServerSessionState()[data.email];
+    const existing = (await getServerSessionState())[data.email];
     const loginAt = existing?.deviceId === data.deviceId ? existing.loginAt : Date.now();
-    mutateServerSessionState((s) => ({ ...s, [data.email]: { deviceId: data.deviceId, loginAt } }));
+    await mutateServerSessionState((s) => ({
+      ...s,
+      [data.email]: { deviceId: data.deviceId, loginAt },
+    }));
     return { ok: true as const };
   });
 
@@ -24,14 +27,14 @@ export const claimSessionOnServer = createServerFn({ method: "POST" })
 export const checkSessionOnServer = createServerFn({ method: "POST" })
   .validator((data: { email: string; deviceId: string }) => data)
   .handler(async ({ data }) => {
-    const existing = getServerSessionState()[data.email];
+    const existing = (await getServerSessionState())[data.email];
     return { valid: existing?.deviceId === data.deviceId };
   });
 
 export const releaseSessionOnServer = createServerFn({ method: "POST" })
   .validator((data: { email: string }) => data)
   .handler(async ({ data }) => {
-    mutateServerSessionState((s) => {
+    await mutateServerSessionState((s) => {
       const next = { ...s };
       delete next[data.email];
       return next;
@@ -49,7 +52,7 @@ export const forceLogoutOnServer = createServerFn({ method: "POST" })
     if (data.role !== "Admin" && data.role !== "Super Admin") {
       return { error: "Only an Admin can force-logout a user" };
     }
-    mutateServerSessionState((s) => {
+    await mutateServerSessionState((s) => {
       const next = { ...s };
       delete next[data.email];
       return next;

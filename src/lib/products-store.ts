@@ -11,6 +11,7 @@ import {
   setProductImageOnServer,
   setProductCostOnServer,
   increaseStockOnServer,
+  setStockCountOnServer,
 } from "@/lib/products-api";
 
 function actor() {
@@ -112,6 +113,29 @@ export const productsStore = {
   async setCost(id: string, cost: number): Promise<void> {
     const result = await safeServerCall(() => setProductCostOnServer({ data: { id, cost } }));
     if (!("networkError" in result)) patchProduct(id, { cost });
+  },
+
+  // Stock Count — sets a product's stock to a manually counted quantity, up or down, with
+  // a reason for the audit trail (Settings > Inventory > Stock Adjustment Types).
+  async setStockCount(
+    id: string,
+    newQty: number,
+    reason: string,
+  ): Promise<{ ok: true } | { error: string }> {
+    const product = products.find((p) => p.id === id);
+    const result = await safeServerCall(() =>
+      setStockCountOnServer({ data: { id, newQty, reason } }),
+    );
+    if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
+    patchProduct(id, { stock: result.stock });
+    const sign = result.delta > 0 ? "+" : "";
+    logAudit(
+      actor(),
+      "update",
+      `Stock Count / ${product?.name ?? id} ${sign}${result.delta} (${reason})`,
+    );
+    return { ok: true };
   },
 };
 

@@ -136,6 +136,188 @@
   --sidebar-ring: oklch(0.551 0.027 264.364);
 }
 
+/*
+ * User-selectable accent color (see src/lib/theme-store.ts and the theme picker in
+ * app-shell.tsx). "blue" is the default already defined in :root/.dark above, so it has
+ * no override block here — these five just replace the same hue-dependent variables with
+ * a different hue, applied via a `data-accent` attribute the root layout sets on <html>.
+ */
+:root[data-accent="green"] {
+  --primary: oklch(0.546 0.16 145);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.546 0.16 145);
+  --sidebar-primary: oklch(0.546 0.16 145);
+  --sidebar-accent-foreground: oklch(0.546 0.16 145);
+  --sidebar-ring: oklch(0.546 0.16 145);
+}
+.dark[data-accent="green"] {
+  --primary: oklch(0.75 0.14 145);
+  --primary-foreground: oklch(0.16 0.02 145);
+  --ring: oklch(0.62 0.16 145);
+  --sidebar-primary: oklch(0.75 0.14 145);
+  --sidebar-ring: oklch(0.62 0.16 145);
+}
+
+:root[data-accent="red"] {
+  --primary: oklch(0.577 0.22 22);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.577 0.22 22);
+  --sidebar-primary: oklch(0.577 0.22 22);
+  --sidebar-accent-foreground: oklch(0.577 0.22 22);
+  --sidebar-ring: oklch(0.577 0.22 22);
+}
+.dark[data-accent="red"] {
+  --primary: oklch(0.75 0.18 22);
+  --primary-foreground: oklch(0.16 0.02 22);
+  --ring: oklch(0.62 0.2 22);
+  --sidebar-primary: oklch(0.75 0.18 22);
+  --sidebar-ring: oklch(0.62 0.2 22);
+}
+
+:root[data-accent="orange"] {
+  --primary: oklch(0.68 0.18 55);
+  --primary-foreground: oklch(0.2 0.02 55);
+  --ring: oklch(0.68 0.18 55);
+  --sidebar-primary: oklch(0.68 0.18 55);
+  --sidebar-accent-foreground: oklch(0.68 0.18 55);
+  --sidebar-ring: oklch(0.68 0.18 55);
+}
+.dark[data-accent="orange"] {
+  --primary: oklch(0.78 0.16 55);
+  --primary-foreground: oklch(0.18 0.02 55);
+  --ring: oklch(0.68 0.18 55);
+  --sidebar-primary: oklch(0.78 0.16 55);
+  --sidebar-ring: oklch(0.68 0.18 55);
+}
+
+:root[data-accent="purple"] {
+  --primary: oklch(0.546 0.22 305);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.546 0.22 305);
+  --sidebar-primary: oklch(0.546 0.22 305);
+  --sidebar-accent-foreground: oklch(0.546 0.22 305);
+  --sidebar-ring: oklch(0.546 0.22 305);
+}
+.dark[data-accent="purple"] {
+  --primary: oklch(0.75 0.16 305);
+  --primary-foreground: oklch(0.16 0.02 305);
+  --ring: oklch(0.62 0.18 305);
+  --sidebar-primary: oklch(0.75 0.16 305);
+  --sidebar-ring: oklch(0.62 0.18 305);
+}
+
+:root[data-accent="teal"] {
+  --primary: oklch(0.546 0.13 200);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.546 0.13 200);
+  --sidebar-primary: oklch(0.546 0.13 200);
+  --sidebar-accent-foreground: oklch(0.546 0.13 200);
+  --sidebar-ring: oklch(0.546 0.13 200);
+}
+.dark[data-accent="teal"] {
+  --primary: oklch(0.75 0.12 200);
+  --primary-foreground: oklch(0.16 0.02 200);
+  --ring: oklch(0.62 0.14 200);
+  --sidebar-primary: oklch(0.75 0.12 200);
+  --sidebar-ring: oklch(0.62 0.14 200);
+}
+
+:root[data-accent="rose"] {
+  --primary: oklch(0.577 0.22 350);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.577 0.22 350);
+  --sidebar-primary: oklch(0.577 0.22 350);
+  --sidebar-accent-foreground: oklch(0.577 0.22 350);
+  --sidebar-ring: oklch(0.577 0.22 350);
+}
+.dark[data-accent="rose"] {
+  --primary: oklch(0.75 0.18 350);
+  --primary-foreground: oklch(0.16 0.02 350);
+  --ring: oklch(0.62 0.2 350);
+  --sidebar-primary: oklch(0.75 0.18 350);
+  --sidebar-ring: oklch(0.62 0.2 350);
+}
+
+:root[data-accent="yellow"] {
+  --primary: oklch(0.8 0.15 95);
+  --primary-foreground: oklch(0.2 0.02 95);
+  --ring: oklch(0.8 0.15 95);
+  --sidebar-primary: oklch(0.8 0.15 95);
+  --sidebar-accent-foreground: oklch(0.8 0.15 95);
+  --sidebar-ring: oklch(0.8 0.15 95);
+}
+.dark[data-accent="yellow"] {
+  --primary: oklch(0.85 0.15 95);
+  --primary-foreground: oklch(0.2 0.02 95);
+  --ring: oklch(0.75 0.17 95);
+  --sidebar-primary: oklch(0.85 0.15 95);
+  --sidebar-ring: oklch(0.75 0.17 95);
+}
+
+:root[data-accent="indigo"] {
+  --primary: oklch(0.546 0.2 280);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.546 0.2 280);
+  --sidebar-primary: oklch(0.546 0.2 280);
+  --sidebar-accent-foreground: oklch(0.546 0.2 280);
+  --sidebar-ring: oklch(0.546 0.2 280);
+}
+.dark[data-accent="indigo"] {
+  --primary: oklch(0.75 0.16 280);
+  --primary-foreground: oklch(0.16 0.02 280);
+  --ring: oklch(0.62 0.18 280);
+  --sidebar-primary: oklch(0.75 0.16 280);
+  --sidebar-ring: oklch(0.62 0.18 280);
+}
+
+:root[data-accent="sky"] {
+  --primary: oklch(0.55 0.16 230);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.55 0.16 230);
+  --sidebar-primary: oklch(0.55 0.16 230);
+  --sidebar-accent-foreground: oklch(0.55 0.16 230);
+  --sidebar-ring: oklch(0.55 0.16 230);
+}
+.dark[data-accent="sky"] {
+  --primary: oklch(0.75 0.13 230);
+  --primary-foreground: oklch(0.16 0.02 230);
+  --ring: oklch(0.62 0.15 230);
+  --sidebar-primary: oklch(0.75 0.13 230);
+  --sidebar-ring: oklch(0.62 0.15 230);
+}
+
+:root[data-accent="lime"] {
+  --primary: oklch(0.75 0.17 120);
+  --primary-foreground: oklch(0.18 0.02 120);
+  --ring: oklch(0.75 0.17 120);
+  --sidebar-primary: oklch(0.75 0.17 120);
+  --sidebar-accent-foreground: oklch(0.75 0.17 120);
+  --sidebar-ring: oklch(0.75 0.17 120);
+}
+.dark[data-accent="lime"] {
+  --primary: oklch(0.82 0.15 120);
+  --primary-foreground: oklch(0.18 0.02 120);
+  --ring: oklch(0.7 0.16 120);
+  --sidebar-primary: oklch(0.82 0.15 120);
+  --sidebar-ring: oklch(0.7 0.16 120);
+}
+
+:root[data-accent="brown"] {
+  --primary: oklch(0.5 0.09 50);
+  --primary-foreground: oklch(0.99 0 0);
+  --ring: oklch(0.5 0.09 50);
+  --sidebar-primary: oklch(0.5 0.09 50);
+  --sidebar-accent-foreground: oklch(0.5 0.09 50);
+  --sidebar-ring: oklch(0.5 0.09 50);
+}
+.dark[data-accent="brown"] {
+  --primary: oklch(0.68 0.09 50);
+  --primary-foreground: oklch(0.18 0.02 50);
+  --ring: oklch(0.58 0.1 50);
+  --sidebar-primary: oklch(0.68 0.09 50);
+  --sidebar-ring: oklch(0.58 0.1 50);
+}
+
 @layer base {
   * {
     border-color: var(--color-border);
@@ -172,5 +354,15 @@
   }
   @page {
     margin: 8mm;
+  }
+  .report-print-area,
+  .report-print-area * {
+    visibility: visible;
+  }
+  .report-print-area {
+    position: fixed;
+    inset: 0;
+    margin: 0;
+    padding: 12mm;
   }
 }

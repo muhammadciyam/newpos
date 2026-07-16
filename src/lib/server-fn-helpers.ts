@@ -15,7 +15,8 @@ export async function safeServerCall<T>(
 ): Promise<T | ServerCallFailure> {
   try {
     return await fn();
-  } catch {
+  } catch (err) {
+    console.error("safeServerCall failed:", err);
     return { networkError: true, error: fallbackMessage };
   }
 }

@@ -1,11 +1,13 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { RestrictedPage } from "@/components/restricted-page";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { salesReports, productReports } from "@/lib/pos-data";
+import { salesReports, productReports, type ReportItem } from "@/lib/pos-data";
 import { useHasPermission } from "@/lib/permissions";
+import { authStore } from "@/lib/auth-store";
+import { logAudit } from "@/lib/audit-log-store";
 
 export const Route = createFileRoute("/reports")({
   head: () => ({
@@ -17,7 +19,7 @@ export const Route = createFileRoute("/reports")({
   component: ReportsPage,
 });
 
-function ReportSection({ title, items }: { title: string; items: { title: string; desc: string }[] }) {
+function ReportSection({ title, items }: { title: string; items: ReportItem[] }) {
   return (
     <Card className="overflow-hidden">
       <div className="border-b border-border p-5">
@@ -33,9 +35,27 @@ function ReportSection({ title, items }: { title: string; items: { title: string
               <p className="font-medium text-foreground">{r.title}</p>
               <p className="text-sm text-muted-foreground">{r.desc}</p>
             </div>
-            <Button variant="outline" size="sm" onClick={() => toast(`Opening ${r.title}`)}>
-              View
-            </Button>
+            {r.path ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link
+                  to={r.path}
+                  onClick={() => {
+                    toast.success(`Opening ${r.title}...`);
+                    logAudit(authStore.getCurrentUser()?.name ?? "System", "view", r.title);
+                  }}
+                >
+                  View
+                </Link>
+              </Button>
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => toast(`${r.title} isn't built yet`)}
+              >
+                View
+              </Button>
+            )}
           </div>
         ))}
       </div>

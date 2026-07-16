@@ -74,6 +74,14 @@ export const billsStore = {
     transferSlip?: string;
     recipientNumber?: string;
     cardSlipNumber?: string;
+    customReceiptNumber?: string;
+    note?: string;
+    foc?: boolean;
+    noDelivery?: boolean;
+    tags?: string[];
+    currency?: string;
+    currencyRate?: number;
+    currencyTotal?: number;
   }): Promise<Bill | { error: string }> {
     const result = await safeServerCall(() =>
       createBillOnServer({ data: { ...input, customerId: input.customerId ?? null } }),

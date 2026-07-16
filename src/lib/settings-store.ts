@@ -2,6 +2,29 @@ import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 
+export type AlternateCurrency = { code: string; rate: number };
+// `key` is the stable identifier the Sell page and every Bill/report keys off
+// ("Cash"/"Card"/"Bank Transfer" — matching Bill["paymentMethod"]'s literal type) and is
+// never itself editable. `name` is purely the display label shown in the Payments table
+// and the Sell page's dropdown, so renaming one here (e.g. "Card" -> "Credit Card")
+// relabels Sell immediately without touching any stored Bill data or report logic, which
+// all still compare against `key`. Custom methods added with no matching key are
+// reference-only — they have no collection workflow on the Sell page.
+export type PaymentMethodConfig = {
+  key?: "Cash" | "Card" | "Bank Transfer";
+  name: string;
+  type: string;
+  details: string;
+};
+export type NumberFormatConfig = { type: string; format: string };
+export type WebhookConfig = {
+  id: string;
+  url: string;
+  event: string;
+  authHeader: string;
+  active: boolean;
+};
+
 export type AppSettings = {
   general: {
     currency: string;
@@ -9,6 +32,12 @@ export type AppSettings = {
     uniqueCustomerMobile: boolean;
     optimizeBillHistoryLoading: boolean;
     smsShortCode: string;
+    // Manually-entered display-only rates (relative to `currency`) for the Sell page's
+    // Currency quick action — no live rate lookups, this app has no external API calls.
+    alternateCurrencies: AlternateCurrency[];
+    // Data URL of the uploaded PNG logo (read client-side via FileReader) — no file
+    // storage backend exists here, so it's kept inline like employee/ID photos already are.
+    companyLogo: string | null;
   };
   sales: {
     salesPriceEditable: boolean;
@@ -17,6 +46,16 @@ export type AppSettings = {
     allowSellWithoutStock: boolean;
     billDateIsRegisterDate: boolean;
     allowSetBillDate: boolean;
+    salesEmail: string;
+  };
+  payments: {
+    methods: PaymentMethodConfig[];
+  };
+  numbering: {
+    formats: NumberFormatConfig[];
+  };
+  webhooks: {
+    hooks: WebhookConfig[];
   };
   myDhipos: {
     enabled: boolean;
@@ -75,6 +114,8 @@ const defaults: AppSettings = {
     uniqueCustomerMobile: true,
     optimizeBillHistoryLoading: true,
     smsShortCode: "SEVENMART",
+    alternateCurrencies: [{ code: "USD", rate: 15.42 }],
+    companyLogo: null,
   },
   sales: {
     salesPriceEditable: false,
@@ -83,6 +124,27 @@ const defaults: AppSettings = {
     allowSellWithoutStock: false,
     billDateIsRegisterDate: false,
     allowSetBillDate: false,
+    salesEmail: "",
+  },
+  payments: {
+    methods: [
+      { key: "Cash", name: "Cash", type: "manual", details: "" },
+      { key: "Card", name: "Card", type: "manual", details: "" },
+      { key: "Bank Transfer", name: "Bank Transfer", type: "bank-transfer", details: "7730000639888" },
+    ],
+  },
+  numbering: {
+    formats: [
+      { type: "Bill", format: "{registerNumber}/{sequence}" },
+      { type: "Payments", format: "P/{year:4}/{sequence}" },
+      { type: "Quotations", format: "QT/{sequence}" },
+      { type: "Purchase Orders", format: "PO/{sequence}" },
+      { type: "Purchase Receives", format: "PR/{sequence}" },
+      { type: "Transfer Requests", format: "TR/{sequence}" },
+    ],
+  },
+  webhooks: {
+    hooks: [],
   },
   myDhipos: {
     enabled: false,
@@ -150,6 +212,20 @@ export const settingsStore = {
   },
 };
 
-export function useSettings() {
-  return usePersistedStore(store);
+// Backfills `key` for payment methods saved by an older version of this store (before
+// `key` existed), by matching their still-original `name` against the known built-ins —
+// so a device that already has "Cash"/"Card"/"Bank Transfer" persisted keeps working
+// without a one-time migration step. Only relevant until that entry is ever renamed.
+function normalizePaymentMethods(methods: PaymentMethodConfig[]): PaymentMethodConfig[] {
+  const knownKeys = ["Cash", "Card", "Bank Transfer"] as const;
+  return methods.map((m) => {
+    if (m.key) return m;
+    const matched = knownKeys.find((k) => k === m.name);
+    return matched ? { ...m, key: matched } : m;
+  });
+}
+
+export function useSettings(): AppSettings {
+  const settings = usePersistedStore(store);
+  return { ...settings, payments: { methods: normalizePaymentMethods(settings.payments.methods) } };
 }

@@ -3,8 +3,8 @@ import { getServerBills, mutateServerBills, formatBillTimestamp } from "@/lib/bi
 import { adjustStock, getServerProducts } from "@/lib/products-server-store";
 import type { Bill, BillLineItem } from "@/lib/pos-data";
 
-function stockPatchesFor(productIds: Iterable<string>) {
-  const products = getServerProducts();
+async function stockPatchesFor(productIds: Iterable<string>) {
+  const products = await getServerProducts();
   return [...productIds].map((productId) => ({
     productId,
     stock: products.find((p) => p.id === productId)?.stock ?? 0,
@@ -14,6 +14,17 @@ function stockPatchesFor(productIds: Iterable<string>) {
 export const fetchBills = createServerFn({ method: "GET" }).handler(async () => {
   return getServerBills();
 });
+
+// Public — powers the e-bill QR code on printed receipts. Only exposes the single bill
+// requested (by its unguessable-enough number), never the full bill list, since this is
+// reachable without login.
+export const fetchBillByNumber = createServerFn({ method: "GET" })
+  .validator((data: { number: string }) => data)
+  .handler(async ({ data }) => {
+    const bill = (await getServerBills()).find((b) => b.number === data.number);
+    if (!bill) return { error: "Bill not found" };
+    return { ok: true as const, bill };
+  });
 
 export const createBillOnServer = createServerFn({ method: "POST" })
   .validator(
@@ -35,10 +46,18 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       transferSlip?: string;
       recipientNumber?: string;
       cardSlipNumber?: string;
+      customReceiptNumber?: string;
+      note?: string;
+      foc?: boolean;
+      noDelivery?: boolean;
+      tags?: string[];
+      currency?: string;
+      currencyRate?: number;
+      currencyTotal?: number;
     }) => data,
   )
   .handler(async ({ data }) => {
-    const existing = getServerBills();
+    const existing = await getServerBills();
     const maxSeq = existing.reduce((max, b) => {
       const seq = parseInt(b.number.split("/")[1] ?? "0", 10);
       return Number.isFinite(seq) ? Math.max(max, seq) : max;
@@ -64,12 +83,20 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       transferSlip: data.transferSlip,
       recipientNumber: data.recipientNumber,
       cardSlipNumber: data.cardSlipNumber,
+      customReceiptNumber: data.customReceiptNumber,
+      note: data.note || undefined,
+      foc: data.foc || undefined,
+      noDelivery: data.noDelivery || undefined,
+      tags: data.tags && data.tags.length > 0 ? data.tags : undefined,
+      currency: data.currency,
+      currencyRate: data.currencyRate,
+      currencyTotal: data.currencyTotal,
     };
-    mutateServerBills((bs) => [bill, ...bs]);
+    await mutateServerBills((bs) => [bill, ...bs]);
     // Stock is decremented here, atomically with bill creation, in the same server
     // process — no separate client round trip that could partially fail.
-    for (const item of data.items) adjustStock(item.productId, -item.qty);
-    const updatedStock = stockPatchesFor(new Set(data.items.map((i) => i.productId)));
+    for (const item of data.items) await adjustStock(item.productId, -item.qty);
+    const updatedStock = await stockPatchesFor(new Set(data.items.map((i) => i.productId)));
     return { ok: true as const, bill, updatedStock };
   });
 
@@ -78,7 +105,7 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
     (data: { number: string; items: BillLineItem[]; actor: string; gstPercent: number }) => data,
   )
   .handler(async ({ data }) => {
-    const bill = getServerBills().find((b) => b.number === data.number);
+    const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
     if (bill.status !== "Sale") return { error: `Cannot edit a bill that is ${bill.status}` };
 
@@ -95,13 +122,13 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
         stockDeltas.set(productId, (stockDeltas.get(productId) ?? 0) + oldItem.qty);
       }
     }
-    for (const [productId, delta] of stockDeltas) adjustStock(productId, delta);
+    for (const [productId, delta] of stockDeltas) await adjustStock(productId, delta);
 
     const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
     const gst = subtotal * (data.gstPercent / 100);
     const total = subtotal - bill.discount + gst;
 
-    mutateServerBills((bs) =>
+    await mutateServerBills((bs) =>
       bs.map((b) =>
         b.number === data.number
           ? {
@@ -117,7 +144,7 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
           : b,
       ),
     );
-    const updatedStock = stockPatchesFor(stockDeltas.keys());
+    const updatedStock = await stockPatchesFor(stockDeltas.keys());
     return { ok: true as const, updatedStock };
   });
 
@@ -128,16 +155,16 @@ function remainingQty(item: BillLineItem) {
 export const voidBillOnServer = createServerFn({ method: "POST" })
   .validator((data: { number: string; reason: string | undefined; actor: string }) => data)
   .handler(async ({ data }) => {
-    const bill = getServerBills().find((b) => b.number === data.number);
+    const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
     if (bill.status !== "Sale" && bill.status !== "Partially Refunded") {
       return { error: `Bill is already ${bill.status}` };
     }
     for (const item of bill.items) {
       const qty = remainingQty(item);
-      if (qty > 0) adjustStock(item.productId, qty);
+      if (qty > 0) await adjustStock(item.productId, qty);
     }
-    mutateServerBills((bs) =>
+    await mutateServerBills((bs) =>
       bs.map((b) =>
         b.number === data.number
           ? {
@@ -150,7 +177,7 @@ export const voidBillOnServer = createServerFn({ method: "POST" })
           : b,
       ),
     );
-    const updatedStock = stockPatchesFor(bill.items.map((i) => i.productId));
+    const updatedStock = await stockPatchesFor(bill.items.map((i) => i.productId));
     return { ok: true as const, updatedStock };
   });
 
@@ -164,7 +191,7 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
-    const bill = getServerBills().find((b) => b.number === data.number);
+    const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
     if (bill.status !== "Sale" && bill.status !== "Partially Refunded") {
       return { error: `Cannot refund a bill that is ${bill.status}` };
@@ -189,7 +216,7 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
     if (refundItems.length === 0) return { error: "Nothing selected to refund" };
 
     const amount = refundItems.reduce((s, i) => s + i.price * i.qty, 0);
-    for (const ri of refundItems) adjustStock(ri.productId, ri.qty);
+    for (const ri of refundItems) await adjustStock(ri.productId, ri.qty);
 
     const refund = {
       id: `refund-${Date.now()}`,
@@ -200,7 +227,7 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
       reason: data.reason,
     };
 
-    mutateServerBills((bs) =>
+    await mutateServerBills((bs) =>
       bs.map((b) => {
         if (b.number !== data.number) return b;
         const updatedItems = b.items.map((item) => {
@@ -216,17 +243,17 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
         };
       }),
     );
-    const updatedStock = stockPatchesFor(refundItems.map((i) => i.productId));
+    const updatedStock = await stockPatchesFor(refundItems.map((i) => i.productId));
     return { ok: true as const, amount, updatedStock };
   });
 
 export const settleCreditOnServer = createServerFn({ method: "POST" })
   .validator((data: { number: string; actor: string }) => data)
   .handler(async ({ data }) => {
-    const bill = getServerBills().find((b) => b.number === data.number);
+    const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
     if (bill.paymentStatus !== "Pending") return { error: "This bill has no pending payment" };
-    mutateServerBills((bs) =>
+    await mutateServerBills((bs) =>
       bs.map((b) =>
         b.number === data.number
           ? { ...b, paymentStatus: "Paid", settledBy: data.actor, settledAt: formatBillTimestamp() }
@@ -240,7 +267,7 @@ export const settleCreditOnServer = createServerFn({ method: "POST" })
 export const recordPrintOnServer = createServerFn({ method: "POST" })
   .validator((data: { number: string; templateId: string }) => data)
   .handler(async ({ data }) => {
-    mutateServerBills((bs) =>
+    await mutateServerBills((bs) =>
       bs.map((b) => (b.number === data.number ? { ...b, printTemplateId: data.templateId } : b)),
     );
     return { ok: true as const };

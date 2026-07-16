@@ -12,6 +12,7 @@ import { useEffect, type ReactNode } from "react";
 import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { Toaster } from "@/components/ui/sonner";
+import { useAccentColor } from "@/lib/theme-store";
 
 function NotFoundComponent() {
   return (
@@ -117,6 +118,15 @@ function RootShell({ children }: { children: ReactNode }) {
 
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
+  const accent = useAccentColor();
+
+  useEffect(() => {
+    if (accent === "blue") {
+      document.documentElement.removeAttribute("data-accent");
+    } else {
+      document.documentElement.setAttribute("data-accent", accent);
+    }
+  }, [accent]);
 
   return (
     <QueryClientProvider client={queryClient}>

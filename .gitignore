@@ -20,6 +20,11 @@ dist-ssr
 .wrangler/
 .dev.vars
 
+# Server secrets (Supabase URL/keys, etc.) — never commit real values
+.env
+.env.*
+!.env.example
+
 # Local server-side data (register lock state, etc.)
 .data/
 

@@ -93,8 +93,9 @@ async function refreshUsersFromServer() {
   try {
     const result = await fetchUsersOnServer();
     setServerUsers(result);
-  } catch {
+  } catch (err) {
     // Network hiccup — keep the last known snapshot; individual actions surface their own errors.
+    console.error("refreshUsersFromServer failed:", err);
   }
 }
 

@@ -53,7 +53,14 @@ const items: NavItem[] = [
   },
   { title: "Customers", url: "/customers", icon: Users },
   { title: "Products", url: "/products", icon: Tags },
-  { title: "Inventory", url: "/inventory", icon: Database },
+  {
+    title: "Inventory",
+    icon: Database,
+    children: [
+      { title: "Purchase Invoices", url: "/inventory" },
+      { title: "Stock Count", url: "/stock-count" },
+    ],
+  },
   { title: "Ecommerce", url: "/ecommerce", icon: ShoppingCart },
   { title: "Expenses", url: "/expenses", icon: Wallet },
   { title: "Reports", url: "/reports", icon: Calculator },

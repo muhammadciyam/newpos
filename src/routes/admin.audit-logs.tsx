@@ -26,6 +26,7 @@ const actionColor: Record<string, string> = {
   delete: "bg-destructive/10 text-destructive hover:bg-destructive/10",
   login: "bg-primary/10 text-primary hover:bg-primary/10",
   logout: "bg-muted text-muted-foreground hover:bg-muted",
+  view: "bg-violet-100 text-violet-700 hover:bg-violet-100",
 };
 
 function AuditLogsPage() {

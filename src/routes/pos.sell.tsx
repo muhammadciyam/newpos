@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Textarea } from "@/components/ui/textarea";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -42,8 +44,9 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { categories, type Product, type Bill } from "@/lib/pos-data";
+import { type Product, type Bill } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
+import { useCategories } from "@/lib/categories-store";
 import { billsStore } from "@/lib/bills-store";
 import { onlinePaymentsStore } from "@/lib/online-payments-store";
 import { useCustomers, customersStore } from "@/lib/customers-store";
@@ -76,11 +79,28 @@ function linePrice(i: CartLine) {
 
 function SellPage() {
   const products = useProducts();
+  const categories = useCategories();
   useProductsPolling();
   const customers = useCustomers();
   const register = useRegister();
   const currentUser = useCurrentUser();
   const settings = useSettings();
+  // "Credit" is a sale-outcome (unsettled/AR), not a collectible payment method, so it's
+  // always offered regardless of what's configured in Settings > Payments. Cash/Card/Bank
+  // Transfer each have their own hardcoded collection workflow below (cash tendered, card
+  // slip #, transfer slip) tied to their stable `key`, which is what's actually stored on
+  // the Bill — so whether one is offered, and its display label, both come from Settings,
+  // but a rename there can never desync from what past/future bills are tagged with. Any
+  // other configured method (no `key`) is a generic/simple payment — selectable at Sell,
+  // marked Paid immediately, with no extra slip/reference fields to collect.
+  const methodsByKey = new Map<string, (typeof settings.payments.methods)[number]>(
+    settings.payments.methods.filter((m) => m.key).map((m) => [m.key as string, m]),
+  );
+  const specialPayMethods = (["Cash", "Card", "Bank Transfer"] as const)
+    .map((key) => methodsByKey.get(key))
+    .filter((m): m is (typeof settings.payments.methods)[number] => m !== undefined);
+  const customPayMethods = settings.payments.methods.filter((m) => !m.key);
+  const availablePayMethods = [...specialPayMethods, ...customPayMethods];
   const saleTabsState = useSaleTabs();
   const tabs = saleTabsState.tabs;
   const activeTab = saleTabsState.activeTab;
@@ -94,6 +114,11 @@ function SellPage() {
   const [newCustomerMobile, setNewCustomerMobile] = useState("");
   const [savedBill, setSavedBill] = useState<Bill | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
+  const [noteOpen, setNoteOpen] = useState(false);
+  const [noteDraft, setNoteDraft] = useState("");
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [tagDraft, setTagDraft] = useState("");
+  const [currencyOpen, setCurrencyOpen] = useState(false);
   const slipInput = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -140,9 +165,14 @@ function SellPage() {
     customerFocused && customerQuery.trim().length > 0 && filteredCustomers.length > 0;
 
   const subtotal = tab.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
-  const discount = 0;
   const gst = subtotal * (settings.tax.gstPercent / 100);
+  // Free of Charge — the discount is set to cover the full subtotal+gst so total lands
+  // on exactly 0, rather than being a separate code path through the totals below.
+  const discount = tab.foc ? subtotal + gst : 0;
   const total = subtotal - discount + gst;
+  // Display-only conversion for the Currency quick action — `rate` is MVR (base) per 1
+  // unit of the alternate currency, so dividing converts base -> alternate.
+  const currencyTotal = tab.currency && tab.currencyRate ? total / tab.currencyRate : null;
   const cashReceived = parseFloat(tab.cashReceived || "0") || 0;
   const pending = tab.payMethod === "Cash" ? Math.max(0, total - cashReceived) : 0;
   const balance = tab.payMethod === "Cash" ? Math.max(0, cashReceived - total) : 0;
@@ -189,6 +219,13 @@ function SellPage() {
       transferSlip: "",
       recipientNumber: "",
       cardSlipNumber: "",
+      customReceiptNumber: "",
+      note: "",
+      foc: false,
+      noDelivery: false,
+      tags: [],
+      currency: null,
+      currencyRate: null,
     });
     setCustomerQuery("");
   }
@@ -220,6 +257,60 @@ function SellPage() {
     toast.success(`Customer "${customer.name}" added`);
   }
 
+  function openNote() {
+    setNoteDraft(tab.note);
+    setNoteOpen(true);
+  }
+
+  function saveNote() {
+    updateTab({ note: noteDraft.trim() });
+    setNoteOpen(false);
+    toast.success(noteDraft.trim() ? "Note saved" : "Note cleared");
+  }
+
+  function toggleFoc() {
+    updateTab({ foc: !tab.foc });
+    toast.success(tab.foc ? "FOC removed — bill will be charged normally" : "Marked as Free of Charge");
+  }
+
+  function toggleNoDelivery() {
+    updateTab({ noDelivery: !tab.noDelivery });
+    toast.success(tab.noDelivery ? "Delivery re-enabled for this bill" : "Delivery disabled for this bill");
+  }
+
+  function addTag() {
+    const value = tagDraft.trim();
+    if (!value || tab.tags.includes(value)) {
+      setTagDraft("");
+      return;
+    }
+    updateTab({ tags: [...tab.tags, value] });
+    setTagDraft("");
+  }
+
+  function removeTag(value: string) {
+    updateTab({ tags: tab.tags.filter((t) => t !== value) });
+  }
+
+  function selectCurrency(code: string | null) {
+    if (!code) {
+      updateTab({ currency: null, currencyRate: null });
+      return;
+    }
+    const found = settings.general.alternateCurrencies.find((c) => c.code === code);
+    updateTab({ currency: code, currencyRate: found?.rate ?? 1 });
+  }
+
+  function setCurrencyRate(rate: number) {
+    if (!tab.currency || !Number.isFinite(rate) || rate <= 0) return;
+    updateTab({ currencyRate: rate });
+    settingsStore.updateSection("general", {
+      alternateCurrencies: settings.general.alternateCurrencies.map((c) =>
+        c.code === tab.currency ? { ...c, rate } : c,
+      ),
+    });
+  }
+
   async function saveBill() {
     const payMethod = tab.payMethod;
     if (!register.register) return toast.error("Open a register before selling");
@@ -235,6 +326,9 @@ function SellPage() {
       return toast.error("Enter the slip number or transfer ID");
     if (payMethod === "Credit" && !tab.customerId)
       return toast.error("Select a customer for a credit sale");
+    const isCustomPayMethod = customPayMethods.some((m) => m.name === payMethod);
+    if (isCustomPayMethod && !tab.customReceiptNumber.trim())
+      return toast.error("Enter the receipt number");
     // Stock is decremented atomically on the server as part of creating the bill (see
     // createBillOnServer in bills-api.ts) — no separate client-side stock call needed.
     const bill = await billsStore.create({
@@ -260,6 +354,14 @@ function SellPage() {
       transferSlip: payMethod === "Bank Transfer" ? tab.transferSlip : undefined,
       recipientNumber: payMethod === "Bank Transfer" ? tab.recipientNumber : undefined,
       cardSlipNumber: payMethod === "Card" ? tab.cardSlipNumber : undefined,
+      customReceiptNumber: isCustomPayMethod ? tab.customReceiptNumber.trim() : undefined,
+      note: tab.note.trim() || undefined,
+      foc: tab.foc,
+      noDelivery: tab.noDelivery,
+      tags: tab.tags,
+      currency: tab.currency ?? undefined,
+      currencyRate: tab.currencyRate ?? undefined,
+      currencyTotal: currencyTotal ?? undefined,
     });
     if ("error" in bill) {
       toast.error(bill.error);
@@ -277,7 +379,7 @@ function SellPage() {
     toast.success(
       payMethod === "Credit"
         ? `Bill ${bill.number} saved for ${total.toFixed(2)} on credit`
-        : `Bill ${bill.number} saved for ${total.toFixed(2)} via ${payMethod}`,
+        : `Bill ${bill.number} saved for ${total.toFixed(2)} via ${methodsByKey.get(payMethod)?.name ?? payMethod}`,
     );
     setSavedBill(bill);
     setPrintOpen(true);
@@ -482,7 +584,7 @@ function SellPage() {
                     <TableCell colSpan={3} className="text-right font-semibold">
                       Discount
                     </TableCell>
-                    <TableCell className="font-semibold">{discount}</TableCell>
+                    <TableCell className="font-semibold">{discount.toFixed(2)}</TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell colSpan={3} className="text-right font-semibold">
@@ -496,31 +598,55 @@ function SellPage() {
                     </TableCell>
                     <TableCell className="text-base font-bold">{total.toFixed(2)}</TableCell>
                   </TableRow>
+                  {currencyTotal !== null && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-right text-muted-foreground">
+                        ≈ {tab.currency}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {currencyTotal.toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
 
+              {(tab.note || tab.tags.length > 0) && (
+                <div className="mt-3 flex flex-wrap items-center gap-1.5">
+                  {tab.note && (
+                    <Badge variant="outline" className="gap-1">
+                      <StickyNote className="h-3 w-3" /> {tab.note}
+                    </Badge>
+                  )}
+                  {tab.tags.map((t) => (
+                    <Badge key={t} variant="secondary">
+                      {t}
+                    </Badge>
+                  ))}
+                </div>
+              )}
+
               <div className="mt-4 flex flex-wrap gap-6 border-t border-border pt-4">
-                <IconAction
-                  icon={StickyNote}
-                  label="Note"
-                  onClick={() => toast("Add a note to this bill")}
-                />
+                <IconAction icon={StickyNote} label="Note" active={!!tab.note} onClick={openNote} />
                 <IconAction
                   icon={Globe}
                   label="Currency"
-                  onClick={() => toast("Currency switcher coming soon")}
+                  active={!!tab.currency}
+                  onClick={() => setCurrencyOpen(true)}
                 />
-                <IconAction
-                  icon={Smile}
-                  label="FOC"
-                  onClick={() => toast.success("Marked as Free of Charge")}
-                />
+                <IconAction icon={Smile} label="FOC" active={tab.foc} onClick={toggleFoc} />
                 <IconAction
                   icon={PackageX}
                   label="No Delivery"
-                  onClick={() => toast.success("Delivery disabled for this bill")}
+                  active={tab.noDelivery}
+                  onClick={toggleNoDelivery}
                 />
-                <IconAction icon={Tag} label="Tags" onClick={() => toast("Tag this bill")} />
+                <IconAction
+                  icon={Tag}
+                  label="Tags"
+                  active={tab.tags.length > 0}
+                  onClick={() => setTagsOpen(true)}
+                />
               </div>
             </div>
 
@@ -614,9 +740,11 @@ function SellPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Cash">Cash</SelectItem>
-                  <SelectItem value="Card">Card</SelectItem>
-                  <SelectItem value="Bank Transfer">Bank Transfer</SelectItem>
+                  {availablePayMethods.map((m) => (
+                    <SelectItem key={m.key ?? m.name} value={m.key ?? m.name}>
+                      {m.name}
+                    </SelectItem>
+                  ))}
                   <SelectItem value="Credit">Credit</SelectItem>
                 </SelectContent>
               </Select>
@@ -716,6 +844,17 @@ function SellPage() {
               </div>
             )}
 
+            {customPayMethods.some((m) => m.name === tab.payMethod) && (
+              <div className="space-y-1.5 rounded-lg border border-border p-3">
+                <Label>Receipt Number</Label>
+                <Input
+                  value={tab.customReceiptNumber}
+                  onChange={(e) => updateTab({ customReceiptNumber: e.target.value })}
+                  placeholder="Proof of payment reference"
+                />
+              </div>
+            )}
+
             {outOfStock && (
               <p className="rounded-md bg-destructive/10 py-2 text-center text-sm font-medium text-destructive">
                 Not enough stock
@@ -725,7 +864,12 @@ function SellPage() {
             <Button
               size="lg"
               onClick={saveBill}
-              disabled={!tab.items.length || (tab.payMethod === "Credit" && !tab.customerId)}
+              disabled={
+                !tab.items.length ||
+                (tab.payMethod === "Credit" && !tab.customerId) ||
+                (customPayMethods.some((m) => m.name === tab.payMethod) &&
+                  !tab.customReceiptNumber.trim())
+              }
             >
               Save Bill (Alt+S)
             </Button>
@@ -779,6 +923,115 @@ function SellPage() {
         }}
         autoPrint={settings.printing.autoPrintOnSave}
       />
+
+      <Dialog open={noteOpen} onOpenChange={setNoteOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bill Note</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            value={noteDraft}
+            onChange={(e) => setNoteDraft(e.target.value)}
+            placeholder="e.g. Gift wrap, deliver after 5pm..."
+            rows={4}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setNoteOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={saveNote}>Save Note</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={tagsOpen} onOpenChange={setTagsOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Tag This Bill</DialogTitle>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Input
+              value={tagDraft}
+              onChange={(e) => setTagDraft(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && addTag()}
+              placeholder="e.g. wholesale, gift"
+            />
+            <Button type="button" variant="outline" onClick={addTag} disabled={!tagDraft.trim()}>
+              Add
+            </Button>
+          </div>
+          {tab.tags.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {tab.tags.map((t) => (
+                <Badge key={t} variant="secondary" className="gap-1">
+                  {t}
+                  <button type="button" onClick={() => removeTag(t)}>
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              ))}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setTagsOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={currencyOpen} onOpenChange={setCurrencyOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Show Total In Another Currency</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Currency</Label>
+              <Select value={tab.currency ?? "none"} onValueChange={(v) => selectCurrency(v === "none" ? null : v)}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">None ({settings.general.currency} only)</SelectItem>
+                  {settings.general.alternateCurrencies.map((c) => (
+                    <SelectItem key={c.code} value={c.code}>
+                      {c.code}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {tab.currency && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>
+                    Rate ({settings.general.currency} per 1 {tab.currency})
+                  </Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={tab.currencyRate ?? ""}
+                    onChange={(e) => setCurrencyRate(parseFloat(e.target.value))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Manually entered — saved as the default rate for {tab.currency} going forward.
+                  </p>
+                </div>
+                {currencyTotal !== null && (
+                  <div className="rounded-lg border border-border p-3 text-sm">
+                    <p className="text-xs uppercase text-muted-foreground">Total in {tab.currency}</p>
+                    <p className="text-lg font-semibold text-foreground">
+                      {currencyTotal.toFixed(2)}
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setCurrencyOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
@@ -787,17 +1040,25 @@ function IconAction({
   icon: Icon,
   label,
   onClick,
+  active,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   onClick?: () => void;
+  active?: boolean;
 }) {
   return (
     <button
       onClick={onClick}
-      className="flex flex-col items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+      className={`flex flex-col items-center gap-1 text-xs ${
+        active ? "text-primary" : "text-muted-foreground hover:text-foreground"
+      }`}
     >
-      <span className="flex h-9 w-9 items-center justify-center rounded-full border border-border">
+      <span
+        className={`flex h-9 w-9 items-center justify-center rounded-full border ${
+          active ? "border-primary bg-primary/10" : "border-border"
+        }`}
+      >
         <Icon className="h-4 w-4" />
       </span>
       {label}

@@ -16,14 +16,35 @@ import { Inbox, Store, LogOut } from "lucide-react";
 import { toast } from "sonner";
 import { useRegister } from "@/lib/register-store";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
-import { logAudit } from "@/lib/audit-log-store";
+import { logAudit, useAuditLogs, useAuditLogPolling } from "@/lib/audit-log-store";
 import { pendingSaleStore } from "@/lib/pending-sale-store";
+import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
+import { accentColors, setAccentColor, useAccentColor } from "@/lib/theme-store";
+import { cn } from "@/lib/utils";
+
+// Per-device — just remembers the newest activity timestamp already seen, so the dot only
+// shows when something happened since the last time this device's inbox was opened.
+const lastSeenStore = createPersistedStore<string | null>("dhipos-notifications-last-seen", null);
+
+const actionLabels: Record<"create" | "update" | "delete" | "login" | "logout" | "view", string> = {
+  create: "created",
+  update: "updated",
+  delete: "deleted",
+  login: "logged in",
+  logout: "logged out",
+  view: "viewed",
+};
 
 export function AppShell({ title, children }: { title?: string; children: ReactNode }) {
   const register = useRegister();
   const user = useCurrentUser();
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
+  const activity = useAuditLogs();
+  useAuditLogPolling();
+  const lastSeenAt = usePersistedStore(lastSeenStore);
+  const hasUnseen = activity.length > 0 && activity[0].at !== lastSeenAt;
+  const accent = useAccentColor();
 
   useEffect(() => {
     let cancelled = false;
@@ -99,10 +120,39 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                   </Link>
                 </Button>
               )}
-              <button onClick={() => toast("No new messages")} className="relative">
-                <Inbox className="h-5 w-5 text-muted-foreground" />
-                <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-muted-foreground/60" />
-              </button>
+              <DropdownMenu
+                onOpenChange={(open) => {
+                  if (open && activity.length > 0) lastSeenStore.set(activity[0].at);
+                }}
+              >
+                <DropdownMenuTrigger asChild>
+                  <button className="relative">
+                    <Inbox className="h-5 w-5 text-muted-foreground" />
+                    {hasUnseen && (
+                      <span className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-destructive" />
+                    )}
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80">
+                  <DropdownMenuLabel>Recent Activity</DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {activity.length === 0 && (
+                    <p className="px-2 py-3 text-center text-sm text-muted-foreground">
+                      Nothing yet.
+                    </p>
+                  )}
+                  {activity.slice(0, 10).map((entry, idx) => (
+                    <DropdownMenuItem key={idx} className="flex-col items-start gap-0.5">
+                      <p className="text-sm text-foreground">
+                        <span className="font-medium">{entry.user}</span>{" "}
+                        <span className="text-muted-foreground">{actionLabels[entry.action]}</span>{" "}
+                        {entry.object}
+                      </p>
+                      <p className="text-xs text-muted-foreground">{entry.at}</p>
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2">
@@ -125,6 +175,26 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                     <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
                     <p className="text-xs font-normal text-muted-foreground">{user.role}</p>
                   </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <div className="px-2 py-1.5">
+                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">Theme Color</p>
+                    <div className="grid w-40 grid-cols-6 gap-1.5">
+                      {accentColors.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          aria-label={c.label}
+                          title={c.label}
+                          onClick={() => setAccentColor(c.id)}
+                          className={cn(
+                            "h-6 w-6 rounded-full border-2 transition-transform hover:scale-110",
+                            accent === c.id ? "border-foreground" : "border-transparent",
+                          )}
+                          style={{ backgroundColor: c.swatch }}
+                        />
+                      ))}
+                    </div>
+                  </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={logout}>
                     <LogOut className="mr-2 h-4 w-4" /> Log Out

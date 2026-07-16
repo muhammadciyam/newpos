@@ -4,7 +4,7 @@ import { safeServerCall } from "@/lib/server-fn-helpers";
 
 export type AuditLog = {
   user: string;
-  action: "create" | "update" | "delete" | "login" | "logout";
+  action: "create" | "update" | "delete" | "login" | "logout" | "view";
   object: string;
   at: string;
 };

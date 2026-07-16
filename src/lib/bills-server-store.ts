@@ -1,46 +1,13 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { getSupabase } from "@/lib/supabase-client";
 import type { Bill } from "@/lib/pos-data";
 
 // Server-only. Only bills-api.ts (the createServerFn boundary) should import this.
-
-const DATA_DIR = join(process.cwd(), ".data");
-const DATA_FILE = join(DATA_DIR, "bills-state.json");
-
-function loadFromDisk(): Bill[] | null {
-  try {
-    if (!existsSync(DATA_FILE)) return null;
-    return JSON.parse(readFileSync(DATA_FILE, "utf-8")) as Bill[];
-  } catch {
-    return null;
-  }
-}
-
-function persistToDisk() {
-  try {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(DATA_FILE, JSON.stringify(state), "utf-8");
-  } catch {
-    // Best-effort — in-memory state is still correct even if the write fails.
-  }
-}
-
-let state: Bill[] = loadFromDisk() ?? [];
-
-export function getServerBills(): Bill[] {
-  return state;
-}
-
-export function mutateServerBills(mutator: (bills: Bill[]) => Bill[]): Bill[] {
-  state = mutator(state);
-  persistToDisk();
-  return state;
-}
+// Backed by Supabase — see supabase/migrations/0001_init.sql.
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 // Same "DD-Mon-YY, HH:MM" format the app already uses everywhere else (register sessions,
-// bills) — kept here since bill timestamps are now always stamped server-side.
+// bills) — kept here since bill timestamps are always stamped server-side.
 export function formatBillTimestamp(): string {
   const d = new Date();
   const day = String(d.getDate()).padStart(2, "0");
@@ -49,4 +16,42 @@ export function formatBillTimestamp(): string {
   const hours = String(d.getHours()).padStart(2, "0");
   const mins = String(d.getMinutes()).padStart(2, "0");
   return `${day}-${month}-${year}, ${hours}:${mins}`;
+}
+
+// Bill numbers look like "1/23" — the table has no separate ordering column, so newest-first
+// is recovered by parsing the sequence number rather than relying on select() row order.
+function billSeq(number: string): number {
+  const seq = parseInt(number.split("/")[1] ?? "0", 10);
+  return Number.isFinite(seq) ? seq : 0;
+}
+
+export async function getServerBills(): Promise<Bill[]> {
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("bills").select("data");
+  if (error) throw error;
+  return data.map((row) => row.data as Bill).sort((a, b) => billSeq(b.number) - billSeq(a.number));
+}
+
+export async function mutateServerBills(mutator: (bills: Bill[]) => Bill[]): Promise<Bill[]> {
+  const current = await getServerBills();
+  const next = mutator(current);
+  const supabase = getSupabase();
+
+  if (next.length > 0) {
+    const { error } = await supabase
+      .from("bills")
+      .upsert(
+        next.map((b) => ({ number: b.number, data: b })),
+        { onConflict: "number" },
+      );
+    if (error) throw error;
+  }
+  const currentNumbers = new Set(current.map((b) => b.number));
+  const nextNumbers = new Set(next.map((b) => b.number));
+  const removedNumbers = [...currentNumbers].filter((n) => !nextNumbers.has(n));
+  if (removedNumbers.length > 0) {
+    const { error } = await supabase.from("bills").delete().in("number", removedNumbers);
+    if (error) throw error;
+  }
+  return next;
 }

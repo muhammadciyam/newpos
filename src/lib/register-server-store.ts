@@ -1,9 +1,11 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { join } from "node:path";
+import { getSupabase } from "@/lib/supabase-client";
 
 // Server-only. Never import this from a client component or from register-store.ts's
 // client-facing exports — it must stay out of the client bundle. Only register-api.ts
 // (the createServerFn boundary) should import it.
+//
+// Backed by Supabase (see supabase/migrations/0001_init.sql) so register open/close state
+// is shared across every device/process.
 
 export type ServerRegisterRecord = {
   isOpen: boolean;
@@ -28,52 +30,90 @@ export type ServerRegisterState = {
   registers: Record<string, ServerRegisterRecord>;
 };
 
-const DATA_DIR = join(process.cwd(), ".data");
-const DATA_FILE = join(DATA_DIR, "register-state.json");
+// Never mutated anywhere in the app (no server function sets it) — kept as a constant
+// rather than a column, matching the app's actual behavior.
+const STORE_NAME = "Seven Mart";
 
-const initialState: ServerRegisterState = {
-  storeName: "Seven Mart",
-  registers: {
-    "Counter 1": {
-      isOpen: false,
-      openedAt: null,
-      openedBy: null,
-      openedByDeviceId: null,
-      lastClosedAt: null,
-      heldBill: null,
+let seeded = false;
+
+async function ensureSeeded() {
+  if (seeded) return;
+  seeded = true;
+  const supabase = getSupabase();
+  const { count, error } = await supabase
+    .from("registers")
+    .select("name", { count: "exact", head: true });
+  if (error) throw error;
+  if (count === 0) {
+    const { error: insertError } = await supabase.from("registers").insert({
+      name: "Counter 1",
+      is_open: false,
+      opened_at: null,
+      opened_by: null,
+      opened_by_device_id: null,
+      last_closed_at: null,
+      held_bill: null,
       opening: null,
-    },
-  },
-};
-
-function loadFromDisk(): ServerRegisterState | null {
-  try {
-    if (!existsSync(DATA_FILE)) return null;
-    return JSON.parse(readFileSync(DATA_FILE, "utf-8")) as ServerRegisterState;
-  } catch {
-    return null;
+    });
+    if (insertError) throw insertError;
   }
 }
 
-function persistToDisk() {
-  try {
-    if (!existsSync(DATA_DIR)) mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(DATA_FILE, JSON.stringify(state), "utf-8");
-  } catch {
-    // Best-effort — in-memory state is still correct even if the write fails.
-  }
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function rowToRecord(row: any): ServerRegisterRecord {
+  return {
+    isOpen: row.is_open,
+    openedAt: row.opened_at,
+    openedBy: row.opened_by,
+    openedByDeviceId: row.opened_by_device_id,
+    lastClosedAt: row.last_closed_at,
+    heldBill: row.held_bill,
+    opening: row.opening,
+  };
 }
 
-let state: ServerRegisterState = loadFromDisk() ?? initialState;
-
-export function getServerRegisterState(): ServerRegisterState {
-  return state;
+export async function getServerRegisterState(): Promise<ServerRegisterState> {
+  await ensureSeeded();
+  const supabase = getSupabase();
+  const { data, error } = await supabase.from("registers").select("*");
+  if (error) throw error;
+  const registers: Record<string, ServerRegisterRecord> = {};
+  for (const row of data) registers[row.name] = rowToRecord(row);
+  return { storeName: STORE_NAME, registers };
 }
 
-export function mutateServerRegisterState(
+export async function mutateServerRegisterState(
   mutator: (s: ServerRegisterState) => ServerRegisterState,
-): ServerRegisterState {
-  state = mutator(state);
-  persistToDisk();
-  return state;
+): Promise<ServerRegisterState> {
+  const current = await getServerRegisterState();
+  const next = mutator(current);
+  const supabase = getSupabase();
+
+  const nextEntries = Object.entries(next.registers);
+  if (nextEntries.length > 0) {
+    const { error } = await supabase
+      .from("registers")
+      .upsert(
+        nextEntries.map(([name, r]) => ({
+          name,
+          is_open: r.isOpen,
+          opened_at: r.openedAt,
+          opened_by: r.openedBy,
+          opened_by_device_id: r.openedByDeviceId,
+          last_closed_at: r.lastClosedAt,
+          held_bill: r.heldBill,
+          opening: r.opening,
+        })),
+        { onConflict: "name" },
+      );
+    if (error) throw error;
+  }
+  const currentNames = new Set(Object.keys(current.registers));
+  const nextNames = new Set(Object.keys(next.registers));
+  const removedNames = [...currentNames].filter((n) => !nextNames.has(n));
+  if (removedNames.length > 0) {
+    const { error } = await supabase.from("registers").delete().in("name", removedNames);
+    if (error) throw error;
+  }
+  return next;
 }

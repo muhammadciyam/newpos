@@ -10,10 +10,10 @@ export const createRegisterOnServer = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     const name = data.name.trim();
     if (!name) return { error: "Register name is required" };
-    if (getServerRegisterState().registers[name]) {
+    if ((await getServerRegisterState()).registers[name]) {
       return { error: "A register with that name already exists" };
     }
-    mutateServerRegisterState((s) => ({
+    await mutateServerRegisterState((s) => ({
       ...s,
       registers: {
         ...s.registers,
@@ -36,7 +36,7 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
     (data: { name: string; by: string; deviceId: string; opening: Record<string, string> }) => data,
   )
   .handler(async ({ data }) => {
-    const state = getServerRegisterState();
+    const state = await getServerRegisterState();
     const existing = state.registers[data.name];
     if (existing?.isOpen) {
       const since = existing.openedAt
@@ -57,7 +57,7 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
       };
     }
     const now = Date.now();
-    mutateServerRegisterState((s) => ({
+    await mutateServerRegisterState((s) => ({
       ...s,
       registers: {
         ...s.registers,
@@ -78,10 +78,10 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
 export const closeRegisterOnServer = createServerFn({ method: "POST" })
   .validator((data: { name: string }) => data)
   .handler(async ({ data }) => {
-    const existing = getServerRegisterState().registers[data.name];
+    const existing = (await getServerRegisterState()).registers[data.name];
     if (!existing) return { error: "Register not found" };
     const now = Date.now();
-    mutateServerRegisterState((s) => ({
+    await mutateServerRegisterState((s) => ({
       ...s,
       registers: {
         ...s.registers,
@@ -109,10 +109,10 @@ export const forceCloseRegisterOnServer = createServerFn({ method: "POST" })
     if (data.role !== "Admin" && data.role !== "Super Admin") {
       return { error: "Only an Admin can force-close a register" };
     }
-    const existing = getServerRegisterState().registers[data.name];
+    const existing = (await getServerRegisterState()).registers[data.name];
     if (!existing) return { error: "Register not found" };
     const now = Date.now();
-    mutateServerRegisterState((s) => ({
+    await mutateServerRegisterState((s) => ({
       ...s,
       registers: {
         ...s.registers,
@@ -137,8 +137,8 @@ export const saveHeldBillOnServer = createServerFn({ method: "POST" })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   .validator((data: { name: string; heldBill: any }) => data)
   .handler(async ({ data }) => {
-    if (!getServerRegisterState().registers[data.name]) return { error: "Register not found" };
-    mutateServerRegisterState((s) => ({
+    if (!(await getServerRegisterState()).registers[data.name]) return { error: "Register not found" };
+    await mutateServerRegisterState((s) => ({
       ...s,
       registers: {
         ...s.registers,

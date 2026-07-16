@@ -1,6 +1,14 @@
+import { QRCodeSVG } from "qrcode.react";
 import { type Bill } from "@/lib/pos-data";
 import { type PrintTemplate } from "@/lib/print-templates-store";
 import { useSettings } from "@/lib/settings-store";
+
+// Same-origin so it resolves correctly whether this is opened on localhost during
+// development or on whatever host the app is actually deployed to.
+function eBillUrl(billNumber: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/e-bill/${encodeURIComponent(billNumber)}`;
+}
 
 export function Receipt({
   bill,
@@ -107,7 +115,22 @@ export function Receipt({
             {currency} {bill.total.toFixed(2)}
           </span>
         </div>
+        {bill.currency && bill.currencyTotal != null && (
+          <div className="flex justify-between text-muted-foreground">
+            <span>≈ {bill.currency}</span>
+            <span>{bill.currencyTotal.toFixed(2)}</span>
+          </div>
+        )}
       </div>
+
+      {(bill.foc || bill.noDelivery || bill.note || (bill.tags && bill.tags.length > 0)) && (
+        <div className="mt-2 border-t border-black/20 pt-2 text-xs">
+          {bill.foc && <p className="font-semibold uppercase">Free of Charge</p>}
+          {bill.noDelivery && <p>No Delivery</p>}
+          {bill.note && <p>Note: {bill.note}</p>}
+          {bill.tags && bill.tags.length > 0 && <p>Tags: {bill.tags.join(", ")}</p>}
+        </div>
+      )}
 
       <div className="mt-2 border-t border-black/20 pt-2 text-xs">
         <p>
@@ -128,6 +151,7 @@ export function Receipt({
         {bill.paymentMethod === "Card" && bill.cardSlipNumber && (
           <p>Slip #: {bill.cardSlipNumber}</p>
         )}
+        {bill.customReceiptNumber && <p>Receipt #: {bill.customReceiptNumber}</p>}
         {bill.paymentMethod === "Credit" && bill.paymentStatus === "Pending" && (
           <p>Amount owed: {bill.total.toFixed(2)}</p>
         )}
@@ -146,11 +170,7 @@ export function Receipt({
 
       {showQr && (
         <div className="mt-3 flex flex-col items-center gap-1">
-          <div className="grid h-16 w-16 grid-cols-4 grid-rows-4 gap-0.5 border border-black/40 p-1">
-            {Array.from({ length: 16 }).map((_, idx) => (
-              <div key={idx} className={idx % 3 === 0 ? "bg-black" : "bg-transparent"} />
-            ))}
-          </div>
+          <QRCodeSVG value={eBillUrl(bill.number)} size={64} level="M" />
           <p className="text-[10px]">Scan to view e-bill</p>
         </div>
       )}

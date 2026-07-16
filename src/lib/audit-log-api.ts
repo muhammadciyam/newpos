@@ -12,6 +12,6 @@ export const fetchAuditLog = createServerFn({ method: "GET" }).handler(async () 
 export const addAuditLogOnServer = createServerFn({ method: "POST" })
   .validator((data: ServerAuditLog) => data)
   .handler(async ({ data }) => {
-    appendServerAuditLog(data);
+    await appendServerAuditLog(data);
     return { ok: true as const };
   });
