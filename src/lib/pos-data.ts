@@ -1,10 +1,3 @@
-import coffee from "@/assets/prod-coffee.jpg";
-import burger from "@/assets/prod-burger.jpg";
-import pizza from "@/assets/prod-pizza.jpg";
-import salad from "@/assets/prod-salad.jpg";
-import donut from "@/assets/prod-donut.jpg";
-import juice from "@/assets/prod-juice.jpg";
-
 export type Category = { id: string; name: string };
 export type Product = {
   id: string;
@@ -23,6 +16,10 @@ export type Product = {
   // Whether GST applies to this product when sold. Undefined counts as true (existing
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
+  // A flat, per-unit tax charged on top of the price for each unit sold — e.g. Maldives'
+  // plastic bag fee (MVR 2 per bag), not a percentage like GST and not itself GST-taxed.
+  // Undefined/0 means no per-unit tax applies.
+  unitTax?: number;
 };
 
 export const categories: Category[] = [
@@ -32,16 +29,9 @@ export const categories: Category[] = [
   { id: "desserts", name: "Desserts" },
 ];
 
-export const products: Product[] = [
-  { id: "p1", name: "Espresso", price: 3.5, category: "drinks", image: coffee, stock: 42 },
-  { id: "p2", name: "Fresh Juice", price: 4.75, category: "drinks", image: juice, stock: 30 },
-  { id: "p3", name: "Cheeseburger", price: 9.99, category: "food", image: burger, stock: 18 },
-  { id: "p4", name: "Margherita Slice", price: 6.5, category: "food", image: pizza, stock: 25 },
-  { id: "p5", name: "Garden Salad", price: 7.25, category: "food", image: salad, stock: 12 },
-  { id: "p6", name: "Choco Donut", price: 2.5, category: "desserts", image: donut, stock: 60 },
-  { id: "p7", name: "Latte", price: 4.25, category: "drinks", image: coffee, stock: 35 },
-  { id: "p8", name: "Double Burger", price: 12.5, category: "food", image: burger, stock: 10 },
-];
+// No seed products — this shop's catalog is added via the Products page (one at a time or
+// bulk CSV import) instead of shipping with demo data.
+export const products: Product[] = [];
 
 export type Customer = {
   id: string;
@@ -135,6 +125,9 @@ export type BillLineItem = {
   name: string;
   price: number;
   qty: number;
+  // Snapshot of the product's per-unit tax (e.g. plastic bag fee) at sale time, so it
+  // stays accurate on this bill even if the product's rate changes later.
+  unitTax?: number;
   refundedQty?: number;
 };
 
@@ -158,6 +151,14 @@ export type Bill = {
   subtotal: number;
   discount: number;
   gst: number;
+  // Sum of each line's (unitTax * qty) at sale time — e.g. plastic bag fees. Already
+  // folded into `total`; kept as its own field so receipts/reports can show it separately.
+  unitTaxTotal?: number;
+  // The Sell page's "Plastic Bag" checkout option — cashier-entered bag count and the
+  // resulting charge (qty * Settings > Tax > Plastic Bag Charge, snapshotted at sale
+  // time). Both undefined when the option wasn't ticked; already folded into `total`.
+  bagQty?: number;
+  bagCharge?: number;
   total: number;
   created: string;
   by: string;

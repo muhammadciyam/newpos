@@ -367,7 +367,21 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
           <p className="text-muted-foreground">
             GST: <span className="font-medium text-foreground">{bill.gst.toFixed(2)}</span>
           </p>
-          <p className="text-base font-bold text-foreground">Total: {bill.total.toFixed(2)}</p>
+          {!!bill.unitTaxTotal && (
+            <p className="text-muted-foreground">
+              Per-Unit Tax:{" "}
+              <span className="font-medium text-foreground">{bill.unitTaxTotal.toFixed(2)}</span>
+            </p>
+          )}
+          {!!bill.bagCharge && (
+            <p className="text-muted-foreground">
+              Plastic Bag Charge ({bill.bagQty}):{" "}
+              <span className="font-medium text-foreground">{bill.bagCharge.toFixed(2)}</span>
+            </p>
+          )}
+          <p className="text-base font-bold text-foreground">
+            Grand Total: {bill.total.toFixed(2)}
+          </p>
         </div>
         {(bill.editedAt || bill.voidedAt || (bill.refunds && bill.refunds.length > 0)) && (
           <div className="space-y-2 border-t border-border pt-3 text-sm">
@@ -425,7 +439,16 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
     setItems((its) =>
       its.some((i) => i.productId === product.id)
         ? its.map((i) => (i.productId === product.id ? { ...i, qty: i.qty + 1 } : i))
-        : [...its, { productId: product.id, name: product.name, price: product.price, qty: 1 }],
+        : [
+            ...its,
+            {
+              productId: product.id,
+              name: product.name,
+              price: product.price,
+              qty: 1,
+              unitTax: product.unitTax || undefined,
+            },
+          ],
     );
     setAddProductId("");
   }

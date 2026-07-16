@@ -77,6 +77,7 @@ function linePrice(i: CartLine) {
   return i.priceOverride ?? i.product.price;
 }
 
+
 function SellPage() {
   const products = useProducts();
   const categories = useCategories();
@@ -166,10 +167,18 @@ function SellPage() {
 
   const subtotal = tab.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
   const gst = subtotal * (settings.tax.gstPercent / 100);
-  // Free of Charge — the discount is set to cover the full subtotal+gst so total lands
-  // on exactly 0, rather than being a separate code path through the totals below.
-  const discount = tab.foc ? subtotal + gst : 0;
-  const total = subtotal - discount + gst;
+  // Flat per-unit tax (e.g. plastic bag tax) — a fixed amount per unit sold, not a
+  // percentage, and not itself subject to GST.
+  const unitTax = tab.items.reduce((s, i) => s + (i.product.unitTax ?? 0) * i.qty, 0);
+  // The Sell page's "Plastic Bag" checkbox — cashier-entered bag count * the configured
+  // per-bag rate. Not itself subject to GST, same as unitTax above.
+  const bagQtyNum = tab.bagEnabled ? parseInt(tab.bagQty, 10) || 0 : 0;
+  const bagCharge = bagQtyNum * settings.tax.bagFeeRate;
+  // Free of Charge — the discount is set to cover the full subtotal+gst+unitTax+bagCharge
+  // so total lands on exactly 0, rather than being a separate code path through the totals
+  // below.
+  const discount = tab.foc ? subtotal + gst + unitTax + bagCharge : 0;
+  const total = subtotal - discount + gst + unitTax + bagCharge;
   // Display-only conversion for the Currency quick action — `rate` is MVR (base) per 1
   // unit of the alternate currency, so dividing converts base -> alternate.
   const currencyTotal = tab.currency && tab.currencyRate ? total / tab.currencyRate : null;
@@ -223,6 +232,8 @@ function SellPage() {
       note: "",
       foc: false,
       noDelivery: false,
+      bagEnabled: false,
+      bagQty: "1",
       tags: [],
       currency: null,
       currencyRate: null,
@@ -341,10 +352,14 @@ function SellPage() {
         name: i.product.name,
         price: linePrice(i),
         qty: i.qty,
+        unitTax: i.product.unitTax || undefined,
       })),
       subtotal,
       discount,
       gst,
+      unitTaxTotal: unitTax || undefined,
+      bagQty: tab.bagEnabled && bagQtyNum > 0 ? bagQtyNum : undefined,
+      bagCharge: tab.bagEnabled && bagQtyNum > 0 ? bagCharge : undefined,
       total,
       by: currentUser?.name ?? "Unknown",
       paymentMethod: payMethod as Bill["paymentMethod"],
@@ -412,7 +427,9 @@ function SellPage() {
         <div className="flex items-center gap-6 overflow-x-auto border-b border-border bg-background px-4">
           {tabs.map((t) => {
             const tSubtotal = t.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
-            const tTotal = tSubtotal * (1 + settings.tax.gstPercent / 100);
+            const tUnitTax = t.items.reduce((s, i) => s + (i.product.unitTax ?? 0) * i.qty, 0);
+            const tBagCharge = t.bagEnabled ? (parseInt(t.bagQty, 10) || 0) * settings.tax.bagFeeRate : 0;
+            const tTotal = tSubtotal * (1 + settings.tax.gstPercent / 100) + tUnitTax + tBagCharge;
             return (
               <button
                 key={t.id}
@@ -592,9 +609,26 @@ function SellPage() {
                     </TableCell>
                     <TableCell className="font-semibold">{gst.toFixed(2)}</TableCell>
                   </TableRow>
+                  {unitTax > 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-right font-semibold">
+                        Per-Unit Tax
+                      </TableCell>
+                      <TableCell className="font-semibold">{unitTax.toFixed(2)}</TableCell>
+                    </TableRow>
+                  )}
+                  {tab.bagEnabled && bagQtyNum > 0 && (
+                    <TableRow>
+                      <TableCell colSpan={3} className="text-right font-semibold">
+                        Plastic Bag Charge ({bagQtyNum} × {settings.tax.bagFeeRate.toFixed(2)}{" "}
+                        {settings.general.currency})
+                      </TableCell>
+                      <TableCell className="font-semibold">{bagCharge.toFixed(2)}</TableCell>
+                    </TableRow>
+                  )}
                   <TableRow>
                     <TableCell colSpan={3} className="text-right text-base font-bold">
-                      Total
+                      Grand Total
                     </TableCell>
                     <TableCell className="text-base font-bold">{total.toFixed(2)}</TableCell>
                   </TableRow>
@@ -647,6 +681,34 @@ function SellPage() {
                   active={tab.tags.length > 0}
                   onClick={() => setTagsOpen(true)}
                 />
+              </div>
+
+              <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-border pt-3">
+                <label className="flex items-center gap-2 text-sm text-foreground">
+                  <Checkbox
+                    checked={tab.bagEnabled}
+                    onCheckedChange={(v) =>
+                      updateTab({ bagEnabled: !!v, bagQty: tab.bagQty || "1" })
+                    }
+                  />
+                  Plastic Bag
+                </label>
+                {tab.bagEnabled && (
+                  <div className="flex items-center gap-2">
+                    <Label className="text-sm text-muted-foreground">Bag Quantity</Label>
+                    <Input
+                      type="number"
+                      min={1}
+                      value={tab.bagQty}
+                      onChange={(e) => updateTab({ bagQty: e.target.value })}
+                      className="w-20"
+                    />
+                    <span className="text-xs text-muted-foreground">
+                      × {settings.tax.bagFeeRate.toFixed(2)} {settings.general.currency} ={" "}
+                      {bagCharge.toFixed(2)} {settings.general.currency}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
 

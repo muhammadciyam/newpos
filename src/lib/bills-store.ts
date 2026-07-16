@@ -65,6 +65,9 @@ export const billsStore = {
     subtotal: number;
     discount: number;
     gst: number;
+    unitTaxTotal?: number;
+    bagQty?: number;
+    bagCharge?: number;
     total: number;
     by: string;
     paymentMethod: Bill["paymentMethod"];

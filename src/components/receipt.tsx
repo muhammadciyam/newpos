@@ -109,8 +109,26 @@ export function Receipt({
             {currency} {bill.gst.toFixed(2)}
           </span>
         </div>
+        {!!bill.unitTaxTotal && (
+          <div className="flex justify-between">
+            <span>Per-Unit Tax</span>
+            <span>
+              {currency} {bill.unitTaxTotal.toFixed(2)}
+            </span>
+          </div>
+        )}
+        {!!bill.bagCharge && (
+          <div className="flex justify-between">
+            <span>
+              Plastic Bag Charge ({bill.bagQty} × {settings.tax.bagFeeRate.toFixed(2)} {currency})
+            </span>
+            <span>
+              {currency} {bill.bagCharge.toFixed(2)}
+            </span>
+          </div>
+        )}
         <div className="flex justify-between text-sm font-bold">
-          <span>Total</span>
+          <span>Grand Total</span>
           <span>
             {currency} {bill.total.toFixed(2)}
           </span>

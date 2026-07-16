@@ -6,6 +6,7 @@ import { safeServerCall } from "@/lib/server-fn-helpers";
 import {
   fetchProducts,
   createProductOnServer,
+  createProductsBulkOnServer,
   updateProductOnServer,
   removeProductOnServer,
   setProductImageOnServer,
@@ -70,6 +71,17 @@ export const productsStore = {
     setProducts([result.product, ...products]);
     logAudit(actor(), "create", `Product / ${result.product.name}`);
     return result.product;
+  },
+
+  // Used by the Products page's CSV import.
+  async createBulk(
+    inputs: Omit<Product, "id" | "stock">[],
+  ): Promise<Product[] | { error: string }> {
+    const result = await safeServerCall(() => createProductsBulkOnServer({ data: { items: inputs } }));
+    if ("networkError" in result) return { error: result.error };
+    setProducts([...result.products, ...products]);
+    logAudit(actor(), "create", `${result.products.length} products imported from CSV`);
+    return result.products;
   },
 
   async update(

@@ -37,6 +37,9 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       subtotal: number;
       discount: number;
       gst: number;
+      unitTaxTotal?: number;
+      bagQty?: number;
+      bagCharge?: number;
       total: number;
       by: string;
       paymentMethod: Bill["paymentMethod"];
@@ -73,6 +76,9 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       subtotal: data.subtotal,
       discount: data.discount,
       gst: data.gst,
+      unitTaxTotal: data.unitTaxTotal,
+      bagQty: data.bagQty,
+      bagCharge: data.bagCharge,
       total: data.total,
       created: formatBillTimestamp(),
       by: data.by,
@@ -126,7 +132,10 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
 
     const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
     const gst = subtotal * (data.gstPercent / 100);
-    const total = subtotal - bill.discount + gst;
+    const unitTaxTotal = data.items.reduce((s, i) => s + (i.unitTax ?? 0) * i.qty, 0);
+    // The Plastic Bag charge isn't tied to line items, so editing them doesn't change it —
+    // carry the bill's existing bagCharge forward rather than silently dropping it here.
+    const total = subtotal - bill.discount + gst + unitTaxTotal + (bill.bagCharge ?? 0);
 
     await mutateServerBills((bs) =>
       bs.map((b) =>
@@ -136,6 +145,7 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
               items: data.items,
               subtotal,
               gst,
+              unitTaxTotal: unitTaxTotal || undefined,
               total,
               editedBy: data.actor,
               editedAt: formatBillTimestamp(),

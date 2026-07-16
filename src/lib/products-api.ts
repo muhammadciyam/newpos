@@ -16,6 +16,22 @@ export const createProductOnServer = createServerFn({ method: "POST" })
     return { ok: true as const, product };
   });
 
+// Bulk variant for the Products page's CSV import — same zero-stock rule as
+// createProductOnServer, just for many rows in one round trip. IDs are suffixed with the
+// row index (not just Date.now()) since a loop of single-ms inserts would otherwise collide.
+export const createProductsBulkOnServer = createServerFn({ method: "POST" })
+  .validator((data: { items: Omit<Product, "id" | "stock">[] }) => data)
+  .handler(async ({ data }) => {
+    const now = Date.now();
+    const created: Product[] = data.items.map((item, i) => ({
+      ...item,
+      id: `p-${now}-${i}`,
+      stock: 0,
+    }));
+    await mutateServerProducts((ps) => [...created, ...ps]);
+    return { ok: true as const, products: created };
+  });
+
 export const updateProductOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; patch: Partial<Omit<Product, "stock">> }) => data)
   .handler(async ({ data }) => {

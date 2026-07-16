@@ -40,6 +40,7 @@ import {
   type AppSettings,
   type PaymentMethodConfig,
   type WebhookConfig,
+  type CustomTaxConfig,
 } from "@/lib/settings-store";
 import {
   printTemplates,
@@ -157,6 +158,10 @@ function SettingsPage() {
   const [addWebhookOpen, setAddWebhookOpen] = useState(false);
   const [webhookDraft, setWebhookDraft] = useState({ url: "", event: "bill.created", authHeader: "" });
 
+  const [editingTax, setEditingTax] = useState<CustomTaxConfig | null>(null);
+  const [addTaxOpen, setAddTaxOpen] = useState(false);
+  const [taxDraft, setTaxDraft] = useState({ name: "", type: "percent" as "percent" | "unit", value: "" });
+
   if (!canManage) return <RestrictedPage />;
 
   function saveSection<K extends keyof AppSettings>(section: K) {
@@ -241,6 +246,43 @@ function SettingsPage() {
       hooks: settings.webhooks.hooks.filter((h) => h.id !== id),
     });
     toast.success("Webhook removed");
+  }
+
+  function addTax() {
+    const value = parseFloat(taxDraft.value);
+    if (!taxDraft.name.trim() || !Number.isFinite(value) || value < 0) return;
+    const tax: CustomTaxConfig = {
+      id: crypto.randomUUID(),
+      name: taxDraft.name.trim(),
+      type: taxDraft.type,
+      value,
+    };
+    settingsStore.updateSection("tax", { customTaxes: [...settings.tax.customTaxes, tax] });
+    toast.success(`${tax.name} tax added`);
+    setAddTaxOpen(false);
+    setTaxDraft({ name: "", type: "percent", value: "" });
+  }
+
+  function saveTaxEdit() {
+    if (!editingTax) return;
+    const value = parseFloat(taxDraft.value);
+    if (!taxDraft.name.trim() || !Number.isFinite(value) || value < 0) return;
+    settingsStore.updateSection("tax", {
+      customTaxes: settings.tax.customTaxes.map((t) =>
+        t.id === editingTax.id
+          ? { ...t, name: taxDraft.name.trim(), type: taxDraft.type, value }
+          : t,
+      ),
+    });
+    toast.success(`${taxDraft.name.trim()} tax updated`);
+    setEditingTax(null);
+  }
+
+  function removeTax(id: string) {
+    settingsStore.updateSection("tax", {
+      customTaxes: settings.tax.customTaxes.filter((t) => t.id !== id),
+    });
+    toast.success("Tax removed");
   }
 
   return (
@@ -1125,9 +1167,97 @@ function SettingsPage() {
                     noLabel="No, Exclusive"
                   />
                 </SettingRow>
+                <SettingRow
+                  label={`Plastic Bag Charge (${draft.general.currency} per bag)`}
+                  desc={'Charged when the cashier ticks "Plastic Bag" on the Sell page, per bag provided.'}
+                >
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={draft.tax.bagFeeRate}
+                    onChange={(e) =>
+                      setDraft((d) => ({
+                        ...d,
+                        tax: { ...d.tax, bagFeeRate: parseFloat(e.target.value) || 0 },
+                      }))
+                    }
+                  />
+                </SettingRow>
               </div>
               <div className="mt-4 flex justify-end border-t border-border pt-4">
                 <Button onClick={() => saveSection("tax")}>Update Settings</Button>
+              </div>
+            </Card>
+          )}
+
+          {tab === "Tax" && (
+            <Card className="mt-4 p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xl font-bold text-foreground">Other Taxes</p>
+                  <p className="text-sm text-muted-foreground">
+                    Additional named tax rates, separate from GST above — a reference list for
+                    now, not yet applied automatically at checkout.
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    setTaxDraft({ name: "", type: "percent", value: "" });
+                    setAddTaxOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Add New Tax
+                </Button>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Rate</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {settings.tax.customTaxes.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                          No other taxes added yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {settings.tax.customTaxes.map((t) => (
+                      <TableRow key={t.id}>
+                        <TableCell className="font-medium">{t.name}</TableCell>
+                        <TableCell>
+                          {t.type === "unit"
+                            ? `${settings.general.currency} ${t.value.toFixed(2)} / unit`
+                            : `${t.value}%`}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingTax(t);
+                                setTaxDraft({ name: t.name, type: t.type, value: String(t.value) });
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => removeTax(t.id)}>
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           )}
@@ -1438,6 +1568,106 @@ function SettingsPage() {
             </Button>
             <Button onClick={addWebhook} disabled={!webhookDraft.url.trim()}>
               Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addTaxOpen} onOpenChange={setAddTaxOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Tax</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={taxDraft.name}
+                onChange={(e) => setTaxDraft((t) => ({ ...t, name: e.target.value }))}
+                placeholder="e.g. Environmental Levy"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rate</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={taxDraft.type}
+                  onValueChange={(v) => setTaxDraft((t) => ({ ...t, type: v as "percent" | "unit" }))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">Percent (%)</SelectItem>
+                    <SelectItem value="unit">Per Unit ({settings.general.currency})</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={taxDraft.value}
+                  onChange={(e) => setTaxDraft((t) => ({ ...t, value: e.target.value }))}
+                  placeholder={taxDraft.type === "unit" ? "e.g. 2.00" : "e.g. 3"}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddTaxOpen(false)}>
+              Cancel
+            </Button>
+            <Button onClick={addTax} disabled={!taxDraft.name.trim() || !taxDraft.value}>
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingTax} onOpenChange={(v) => !v && setEditingTax(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editingTax?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={taxDraft.name}
+                onChange={(e) => setTaxDraft((t) => ({ ...t, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Rate</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={taxDraft.type}
+                  onValueChange={(v) => setTaxDraft((t) => ({ ...t, type: v as "percent" | "unit" }))}
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">Percent (%)</SelectItem>
+                    <SelectItem value="unit">Per Unit ({settings.general.currency})</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={taxDraft.value}
+                  onChange={(e) => setTaxDraft((t) => ({ ...t, value: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingTax(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveTaxEdit} disabled={!taxDraft.name.trim() || !taxDraft.value}>
+              Save
             </Button>
           </DialogFooter>
         </DialogContent>

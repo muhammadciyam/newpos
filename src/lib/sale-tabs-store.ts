@@ -23,6 +23,8 @@ export type SaleTab = {
   note: string;
   foc: boolean;
   noDelivery: boolean;
+  bagEnabled: boolean;
+  bagQty: string;
   tags: string[];
   currency: string | null;
   currencyRate: number | null;
@@ -42,6 +44,8 @@ export function emptySaleTab(id: number): SaleTab {
     note: "",
     foc: false,
     noDelivery: false,
+    bagEnabled: false,
+    bagQty: "1",
     tags: [],
     currency: null,
     currencyRate: null,

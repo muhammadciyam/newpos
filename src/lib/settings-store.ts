@@ -17,6 +17,11 @@ export type PaymentMethodConfig = {
   details: string;
 };
 export type NumberFormatConfig = { type: string; format: string };
+// A named tax rate in the Tax tab's registry, beyond the single primary GST rate above it.
+// Configuration only for now (like Service Fees below) — not yet applied automatically at
+// checkout on the Sell page. `value` is a percentage (e.g. 5 for 5%) or a flat amount per
+// unit (e.g. 2 for MVR 2/unit), depending on `type`.
+export type CustomTaxConfig = { id: string; name: string; type: "percent" | "unit"; value: number };
 export type WebhookConfig = {
   id: string;
   url: string;
@@ -80,6 +85,10 @@ export type AppSettings = {
     gstPercent: number;
     taxInclusivePricing: boolean;
     gstLabel: string;
+    customTaxes: CustomTaxConfig[];
+    // Charged per plastic bag on the Sell page's "Plastic Bag" checkout option — a flat
+    // amount per bag, not a percentage, and not itself subject to GST.
+    bagFeeRate: number;
   };
   serviceFees: {
     enabled: boolean;
@@ -169,6 +178,8 @@ const defaults: AppSettings = {
     gstPercent: 8,
     taxInclusivePricing: false,
     gstLabel: "GST",
+    customTaxes: [],
+    bagFeeRate: 2,
   },
   serviceFees: {
     enabled: false,
@@ -227,5 +238,16 @@ function normalizePaymentMethods(methods: PaymentMethodConfig[]): PaymentMethodC
 
 export function useSettings(): AppSettings {
   const settings = usePersistedStore(store);
-  return { ...settings, payments: { methods: normalizePaymentMethods(settings.payments.methods) } };
+  return {
+    ...settings,
+    payments: { methods: normalizePaymentMethods(settings.payments.methods) },
+    // Backfills fields for anyone with settings persisted before they existed —
+    // createPersistedStore replaces state wholesale on read rather than deep-merging with
+    // defaults, so an old blob would otherwise be missing them entirely.
+    tax: {
+      ...settings.tax,
+      customTaxes: settings.tax.customTaxes ?? [],
+      bagFeeRate: settings.tax.bagFeeRate ?? 2,
+    },
+  };
 }

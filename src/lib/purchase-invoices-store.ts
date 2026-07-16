@@ -159,6 +159,15 @@ export const purchaseInvoicesStore = {
     );
     logAudit(actor(), "update", `Purchase Invoice / ${invoice.number} rejected`);
   },
+  // Wipes every purchase invoice on this device's local storage. Does NOT reverse stock
+  // already added by previously-approved invoices — this only clears the invoice records
+  // themselves, since this store is local-only and has no server-side undo.
+  clearAll() {
+    const count = store.get().length;
+    if (count === 0) return;
+    store.set([]);
+    logAudit(actor(), "delete", `Purchase Invoices / cleared all ${count}`);
+  },
 };
 
 export function usePurchaseInvoices() {

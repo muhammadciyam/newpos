@@ -35,6 +35,7 @@ import { useCategories, categoriesStore } from "@/lib/categories-store";
 import { findProductImage } from "@/lib/image-search";
 import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import { useHasPermission } from "@/lib/permissions";
+import { ProductImportDialog } from "@/components/product-import-dialog";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
@@ -56,6 +57,7 @@ const emptyForm = {
   image: "",
   countable: true,
   gstApplicable: true,
+  unitTax: "",
 };
 
 function ProductsPage() {
@@ -65,6 +67,7 @@ function ProductsPage() {
   const categories = useCategories();
   const [search, setSearch] = useState("");
   const [open, setOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState(emptyForm);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -101,6 +104,7 @@ function ProductsPage() {
       image: p.image,
       countable: p.countable ?? true,
       gstApplicable: p.gstApplicable ?? true,
+      unitTax: p.unitTax ? String(p.unitTax) : "",
     });
     setOpen(true);
   }
@@ -122,6 +126,7 @@ function ProductsPage() {
       sku: form.sku.trim() || undefined,
       countable: form.countable,
       gstApplicable: form.gstApplicable,
+      unitTax: parseFloat(form.unitTax) || undefined,
     };
 
     if (editingId) {
@@ -195,6 +200,9 @@ function ProductsPage() {
           </div>
           {canManage && (
             <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setImportOpen(true)}>
+                <Upload className="mr-1 h-4 w-4" /> Import CSV
+              </Button>
               <Button onClick={openCreate}>
                 <Plus className="mr-1 h-4 w-4" /> Add Product
               </Button>
@@ -477,6 +485,21 @@ function ProductsPage() {
                 onCheckedChange={(v) => setForm((f) => ({ ...f, gstApplicable: v }))}
               />
             </div>
+            <div className="space-y-1.5 rounded-lg border border-border p-3">
+              <Label>Per-Unit Tax (MVR)</Label>
+              <p className="text-xs text-muted-foreground">
+                A flat tax charged per unit sold, on top of the price — e.g. the plastic bag
+                tax (2.00 per bag). Leave blank if none applies. Not itself subject to GST.
+              </p>
+              <Input
+                type="number"
+                min={0}
+                step={0.01}
+                value={form.unitTax}
+                onChange={(e) => setForm((f) => ({ ...f, unitTax: e.target.value }))}
+                placeholder="e.g. 2.00"
+              />
+            </div>
             {!editingId && (
               <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Loader2 className="h-3 w-3" /> New products start with 0 stock — receive them
@@ -494,6 +517,8 @@ function ProductsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <ProductImportDialog open={importOpen} onOpenChange={setImportOpen} />
     </AppShell>
   );
 }
