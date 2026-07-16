@@ -604,7 +604,7 @@ function RefundBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) 
       toast.error(result.error);
       return;
     }
-    toast.success(`Refunded ${amount.toFixed(2)} on bill ${bill.number}`);
+    toast.success(`Refunded ${currency} ${amount.toFixed(2)} on bill ${bill.number}`);
     onDone();
   }
 
@@ -661,7 +661,7 @@ function RefundBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) 
           />
         </div>
         <p className="text-right text-base font-bold text-foreground">
-          Refund Amount: {amount.toFixed(2)}
+          Refund Amount: {currency} {amount.toFixed(2)}
         </p>
       </div>
       <DialogFooter>

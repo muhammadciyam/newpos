@@ -1155,6 +1155,29 @@ function SettingsPage() {
                   />
                 </SettingRow>
                 <SettingRow
+                  label="GST TIN"
+                  desc="Taxpayer Identification Number, as it appears on your GST Registration Certificate — printed on the GST Return report."
+                >
+                  <Input
+                    value={draft.tax.gstTin}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, tax: { ...d.tax, gstTin: e.target.value } }))
+                    }
+                    placeholder="e.g. 1234567"
+                  />
+                </SettingRow>
+                <SettingRow
+                  label="Taxpayer Name"
+                  desc="Your name/business name as it appears on your GST Registration Certificate."
+                >
+                  <Input
+                    value={draft.tax.taxpayerName}
+                    onChange={(e) =>
+                      setDraft((d) => ({ ...d, tax: { ...d.tax, taxpayerName: e.target.value } }))
+                    }
+                  />
+                </SettingRow>
+                <SettingRow
                   label="Tax-inclusive pricing?"
                   desc="If enabled, product prices already include tax."
                 >

@@ -16,6 +16,9 @@ export type Product = {
   // Whether GST applies to this product when sold. Undefined counts as true (existing
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
+  // Optional per-unit price for Wholesale Orders (src/routes/ecommerce.wholesaler.tsx) —
+  // undefined means the wholesale cart falls back to the regular `price`.
+  wholesalePrice?: number;
 };
 
 export const categories: Category[] = [
@@ -241,6 +244,11 @@ export const salesReports: ReportItem[] = [
     title: "FOC Bills Report",
     desc: "Details of all FOC bills",
     path: "/report-foc-bills",
+  },
+  {
+    title: "GST Return",
+    desc: "Quarterly GST return (MIRA 205) prepared from sales and purchase data",
+    path: "/report-gst-return",
   },
 ];
 

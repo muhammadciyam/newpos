@@ -61,7 +61,14 @@ const items: NavItem[] = [
       { title: "Stock Count", url: "/stock-count" },
     ],
   },
-  { title: "Ecommerce", url: "/ecommerce", icon: ShoppingCart },
+  {
+    title: "Ecommerce",
+    icon: ShoppingCart,
+    children: [
+      { title: "Overview", url: "/ecommerce" },
+      { title: "Wholesaler", url: "/ecommerce/wholesaler" },
+    ],
+  },
   { title: "Expenses", url: "/expenses", icon: Wallet },
   { title: "Reports", url: "/reports", icon: Calculator },
   {

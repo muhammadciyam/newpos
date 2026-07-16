@@ -18,6 +18,7 @@ import { Route as ReportReorderRouteImport } from './routes/report-reorder'
 import { Route as ReportProductSalesRouteImport } from './routes/report-product-sales'
 import { Route as ReportPeriodSalesRouteImport } from './routes/report-period-sales'
 import { Route as ReportOutstandingBillsRouteImport } from './routes/report-outstanding-bills'
+import { Route as ReportGstReturnRouteImport } from './routes/report-gst-return'
 import { Route as ReportFocBillsRouteImport } from './routes/report-foc-bills'
 import { Route as ReportDaySummaryRouteImport } from './routes/report-day-summary'
 import { Route as ReportCustomerSalesRouteImport } from './routes/report-customer-sales'
@@ -34,6 +35,7 @@ import { Route as PosRegisterRouteImport } from './routes/pos.register'
 import { Route as PosQuotationsRouteImport } from './routes/pos.quotations'
 import { Route as PosOnlinePaymentsRouteImport } from './routes/pos.online-payments'
 import { Route as PosBillHistoryRouteImport } from './routes/pos.bill-history'
+import { Route as EcommerceWholesalerRouteImport } from './routes/ecommerce.wholesaler'
 import { Route as EBillNumberRouteImport } from './routes/e-bill.$number'
 import { Route as AnalyticsSalesRouteImport } from './routes/analytics.sales'
 import { Route as AnalyticsInventoryRouteImport } from './routes/analytics.inventory'
@@ -92,6 +94,11 @@ const ReportPeriodSalesRoute = ReportPeriodSalesRouteImport.update({
 const ReportOutstandingBillsRoute = ReportOutstandingBillsRouteImport.update({
   id: '/report-outstanding-bills',
   path: '/report-outstanding-bills',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ReportGstReturnRoute = ReportGstReturnRouteImport.update({
+  id: '/report-gst-return',
+  path: '/report-gst-return',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportFocBillsRoute = ReportFocBillsRouteImport.update({
@@ -174,6 +181,11 @@ const PosBillHistoryRoute = PosBillHistoryRouteImport.update({
   path: '/pos/bill-history',
   getParentRoute: () => rootRouteImport,
 } as any)
+const EcommerceWholesalerRoute = EcommerceWholesalerRouteImport.update({
+  id: '/wholesaler',
+  path: '/wholesaler',
+  getParentRoute: () => EcommerceRoute,
+} as any)
 const EBillNumberRoute = EBillNumberRouteImport.update({
   id: '/e-bill/$number',
   path: '/e-bill/$number',
@@ -248,7 +260,7 @@ const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/ecommerce': typeof EcommerceRoute
+  '/ecommerce': typeof EcommerceRouteWithChildren
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
@@ -256,6 +268,7 @@ export interface FileRoutesByFullPath {
   '/report-customer-sales': typeof ReportCustomerSalesRoute
   '/report-day-summary': typeof ReportDaySummaryRoute
   '/report-foc-bills': typeof ReportFocBillsRoute
+  '/report-gst-return': typeof ReportGstReturnRoute
   '/report-outstanding-bills': typeof ReportOutstandingBillsRoute
   '/report-period-sales': typeof ReportPeriodSalesRoute
   '/report-product-sales': typeof ReportProductSalesRoute
@@ -279,6 +292,7 @@ export interface FileRoutesByFullPath {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
+  '/ecommerce/wholesaler': typeof EcommerceWholesalerRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -289,7 +303,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/ecommerce': typeof EcommerceRoute
+  '/ecommerce': typeof EcommerceRouteWithChildren
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
@@ -297,6 +311,7 @@ export interface FileRoutesByTo {
   '/report-customer-sales': typeof ReportCustomerSalesRoute
   '/report-day-summary': typeof ReportDaySummaryRoute
   '/report-foc-bills': typeof ReportFocBillsRoute
+  '/report-gst-return': typeof ReportGstReturnRoute
   '/report-outstanding-bills': typeof ReportOutstandingBillsRoute
   '/report-period-sales': typeof ReportPeriodSalesRoute
   '/report-product-sales': typeof ReportProductSalesRoute
@@ -320,6 +335,7 @@ export interface FileRoutesByTo {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
+  '/ecommerce/wholesaler': typeof EcommerceWholesalerRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -331,7 +347,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/customers': typeof CustomersRoute
-  '/ecommerce': typeof EcommerceRoute
+  '/ecommerce': typeof EcommerceRouteWithChildren
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
@@ -339,6 +355,7 @@ export interface FileRoutesById {
   '/report-customer-sales': typeof ReportCustomerSalesRoute
   '/report-day-summary': typeof ReportDaySummaryRoute
   '/report-foc-bills': typeof ReportFocBillsRoute
+  '/report-gst-return': typeof ReportGstReturnRoute
   '/report-outstanding-bills': typeof ReportOutstandingBillsRoute
   '/report-period-sales': typeof ReportPeriodSalesRoute
   '/report-product-sales': typeof ReportProductSalesRoute
@@ -362,6 +379,7 @@ export interface FileRoutesById {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
+  '/ecommerce/wholesaler': typeof EcommerceWholesalerRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -382,6 +400,7 @@ export interface FileRouteTypes {
     | '/report-customer-sales'
     | '/report-day-summary'
     | '/report-foc-bills'
+    | '/report-gst-return'
     | '/report-outstanding-bills'
     | '/report-period-sales'
     | '/report-product-sales'
@@ -405,6 +424,7 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
+    | '/ecommerce/wholesaler'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -423,6 +443,7 @@ export interface FileRouteTypes {
     | '/report-customer-sales'
     | '/report-day-summary'
     | '/report-foc-bills'
+    | '/report-gst-return'
     | '/report-outstanding-bills'
     | '/report-period-sales'
     | '/report-product-sales'
@@ -446,6 +467,7 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
+    | '/ecommerce/wholesaler'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -464,6 +486,7 @@ export interface FileRouteTypes {
     | '/report-customer-sales'
     | '/report-day-summary'
     | '/report-foc-bills'
+    | '/report-gst-return'
     | '/report-outstanding-bills'
     | '/report-period-sales'
     | '/report-product-sales'
@@ -487,6 +510,7 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
+    | '/ecommerce/wholesaler'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -498,7 +522,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   CustomersRoute: typeof CustomersRoute
-  EcommerceRoute: typeof EcommerceRoute
+  EcommerceRoute: typeof EcommerceRouteWithChildren
   ExpensesRoute: typeof ExpensesRoute
   InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
@@ -506,6 +530,7 @@ export interface RootRouteChildren {
   ReportCustomerSalesRoute: typeof ReportCustomerSalesRoute
   ReportDaySummaryRoute: typeof ReportDaySummaryRoute
   ReportFocBillsRoute: typeof ReportFocBillsRoute
+  ReportGstReturnRoute: typeof ReportGstReturnRoute
   ReportOutstandingBillsRoute: typeof ReportOutstandingBillsRoute
   ReportPeriodSalesRoute: typeof ReportPeriodSalesRoute
   ReportProductSalesRoute: typeof ReportProductSalesRoute
@@ -600,6 +625,13 @@ declare module '@tanstack/react-router' {
       path: '/report-outstanding-bills'
       fullPath: '/report-outstanding-bills'
       preLoaderRoute: typeof ReportOutstandingBillsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/report-gst-return': {
+      id: '/report-gst-return'
+      path: '/report-gst-return'
+      fullPath: '/report-gst-return'
+      preLoaderRoute: typeof ReportGstReturnRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/report-foc-bills': {
@@ -714,6 +746,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosBillHistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ecommerce/wholesaler': {
+      id: '/ecommerce/wholesaler'
+      path: '/wholesaler'
+      fullPath: '/ecommerce/wholesaler'
+      preLoaderRoute: typeof EcommerceWholesalerRouteImport
+      parentRoute: typeof EcommerceRoute
+    }
     '/e-bill/$number': {
       id: '/e-bill/$number'
       path: '/e-bill/$number'
@@ -815,10 +854,22 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface EcommerceRouteChildren {
+  EcommerceWholesalerRoute: typeof EcommerceWholesalerRoute
+}
+
+const EcommerceRouteChildren: EcommerceRouteChildren = {
+  EcommerceWholesalerRoute: EcommerceWholesalerRoute,
+}
+
+const EcommerceRouteWithChildren = EcommerceRoute._addFileChildren(
+  EcommerceRouteChildren,
+)
+
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   CustomersRoute: CustomersRoute,
-  EcommerceRoute: EcommerceRoute,
+  EcommerceRoute: EcommerceRouteWithChildren,
   ExpensesRoute: ExpensesRoute,
   InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
@@ -826,6 +877,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportCustomerSalesRoute: ReportCustomerSalesRoute,
   ReportDaySummaryRoute: ReportDaySummaryRoute,
   ReportFocBillsRoute: ReportFocBillsRoute,
+  ReportGstReturnRoute: ReportGstReturnRoute,
   ReportOutstandingBillsRoute: ReportOutstandingBillsRoute,
   ReportPeriodSalesRoute: ReportPeriodSalesRoute,
   ReportProductSalesRoute: ReportProductSalesRoute,

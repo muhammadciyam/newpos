@@ -10,7 +10,9 @@ export type Permission =
   | "reports.view" // Reports + Analytics pages
   | "customers.manage" // create customers
   | "sales.viewAll" // Bill History shows everyone's bills, not just their own
-  | "sales.manage"; // edit / void / refund bills in Bill History
+  | "sales.manage" // edit / void / refund bills in Bill History
+  | "wholesale.access" // view/create Wholesalers and Wholesale Orders
+  | "wholesale.approve"; // confirm/cancel Wholesale Orders (stock deducts on confirm)
 
 const rolePermissions: Record<Role, Permission[]> = {
   "Super Admin": [
@@ -23,6 +25,8 @@ const rolePermissions: Record<Role, Permission[]> = {
     "customers.manage",
     "sales.viewAll",
     "sales.manage",
+    "wholesale.access",
+    "wholesale.approve",
   ],
   Admin: [
     "users.manage",
@@ -34,6 +38,8 @@ const rolePermissions: Record<Role, Permission[]> = {
     "customers.manage",
     "sales.viewAll",
     "sales.manage",
+    "wholesale.access",
+    "wholesale.approve",
   ],
   Manager: [
     "products.manage",
@@ -42,8 +48,16 @@ const rolePermissions: Record<Role, Permission[]> = {
     "reports.view",
     "customers.manage",
     "sales.viewAll",
+    "wholesale.access",
+    "wholesale.approve",
   ],
-  Supervisor: ["inventory.access", "reports.view", "customers.manage", "sales.viewAll"],
+  Supervisor: [
+    "inventory.access",
+    "reports.view",
+    "customers.manage",
+    "sales.viewAll",
+    "wholesale.access",
+  ],
   Cashier: ["customers.manage"],
 };
 

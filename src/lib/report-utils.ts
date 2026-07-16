@@ -56,3 +56,13 @@ export function endOfMonthIso(): string {
   const d = new Date();
   return dateToIso(new Date(d.getFullYear(), d.getMonth() + 1, 0));
 }
+
+// Q1 = Jan-Mar, Q2 = Apr-Jun, Q3 = Jul-Sep, Q4 = Oct-Dec — matches MIRA's GST Return
+// quarters (src/routes/report-gst-return.tsx).
+export function quarterRange(year: number, quarter: 1 | 2 | 3 | 4): { from: string; to: string } {
+  const startMonth = (quarter - 1) * 3;
+  return {
+    from: dateToIso(new Date(year, startMonth, 1)),
+    to: dateToIso(new Date(year, startMonth + 3, 0)),
+  };
+}

@@ -89,6 +89,10 @@ export type AppSettings = {
     // Charged per plastic bag on the Sell page's "Plastic Bag" checkout option — a flat
     // amount per bag, not a percentage, and not itself subject to GST.
     bagFeeRate: number;
+    // Identity fields required on the printed MIRA 205 GST Return (Reports > GST Return) —
+    // not used in any calculation, just printed on the form header.
+    gstTin: string;
+    taxpayerName: string;
   };
   serviceFees: {
     enabled: boolean;
@@ -180,6 +184,8 @@ const defaults: AppSettings = {
     gstLabel: "GST",
     customTaxes: [],
     bagFeeRate: 2,
+    gstTin: "",
+    taxpayerName: "",
   },
   serviceFees: {
     enabled: false,
@@ -248,6 +254,8 @@ export function useSettings(): AppSettings {
       ...settings.tax,
       customTaxes: settings.tax.customTaxes ?? [],
       bagFeeRate: settings.tax.bagFeeRate ?? 2,
+      gstTin: settings.tax.gstTin ?? "",
+      taxpayerName: settings.tax.taxpayerName ?? "",
     },
   };
 }
