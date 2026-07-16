@@ -6,7 +6,7 @@ import {
   Users,
   Tags,
   Database,
-  ShoppingCart,
+  Store,
   Wallet,
   Calculator,
   BarChart3,
@@ -61,14 +61,7 @@ const items: NavItem[] = [
       { title: "Stock Count", url: "/stock-count" },
     ],
   },
-  {
-    title: "Ecommerce",
-    icon: ShoppingCart,
-    children: [
-      { title: "Overview", url: "/ecommerce" },
-      { title: "Wholesaler", url: "/ecommerce/wholesaler" },
-    ],
-  },
+  { title: "Supply", url: "/supply/home", icon: Store },
   { title: "Expenses", url: "/expenses", icon: Wallet },
   { title: "Reports", url: "/reports", icon: Calculator },
   {
