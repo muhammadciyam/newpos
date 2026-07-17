@@ -15,6 +15,7 @@ import {
   ChevronDown,
   LifeBuoy,
   ChevronRight,
+  MessageCircle,
 } from "lucide-react";
 import {
   Sidebar,
@@ -35,7 +36,12 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { useRegister, formatOpenSince } from "@/lib/register-store";
 
 type NavLeaf = { title: string; url: string };
-type NavItem = { title: string; icon: React.ComponentType<{ className?: string }>; url?: string; children?: NavLeaf[] };
+type NavItem = {
+  title: string;
+  icon: React.ComponentType<{ className?: string }>;
+  url?: string;
+  children?: NavLeaf[];
+};
 
 const items: NavItem[] = [
   { title: "Home", url: "/", icon: Home },
@@ -61,7 +67,7 @@ const items: NavItem[] = [
       { title: "Stock Count", url: "/stock-count" },
     ],
   },
-  { title: "Supply", url: "/supply/home", icon: Store },
+  { title: "Wholesaler", url: "/supply/home", icon: Store },
   { title: "Expenses", url: "/expenses", icon: Wallet },
   { title: "Reports", url: "/reports", icon: Calculator },
   {
@@ -115,7 +121,9 @@ export function AppSidebar() {
           </div>
           {!collapsed && (
             <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold tracking-tight text-sidebar-foreground">Dhipos</span>
+              <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
+                Dhipos
+              </span>
               <span className="text-xs text-sidebar-foreground/60">/ v14.35</span>
             </div>
           )}
@@ -128,7 +136,9 @@ export function AppSidebar() {
             {register.register ? (
               <>
                 <p className="text-sm font-bold">{register.storeName}</p>
-                <p className="mt-1 text-[11px] uppercase tracking-wide text-primary-foreground/70">Register</p>
+                <p className="mt-1 text-[11px] uppercase tracking-wide text-primary-foreground/70">
+                  Register
+                </p>
                 <p className="text-sm font-semibold">{register.register}</p>
                 <p className="mt-1 text-[11px] uppercase tracking-wide text-primary-foreground/70">
                   Register Open Since
@@ -215,19 +225,32 @@ export function AppSidebar() {
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
-      <SidebarFooter className="border-t border-sidebar-border">
+      <SidebarFooter className="flex flex-col gap-1.5 border-t border-sidebar-border">
+        {!collapsed && (
+          <div className="flex items-center gap-2 px-1">
+            <LifeBuoy className="h-4 w-4 shrink-0 text-muted-foreground" />
+            <p className="text-sm font-medium text-sidebar-foreground">Need Help?</p>
+          </div>
+        )}
         <a
           href="https://wa.me/9607333555"
           target="_blank"
           rel="noopener noreferrer"
           className="flex items-center gap-2 rounded-lg border border-sidebar-border p-2.5 text-left transition hover:bg-sidebar-accent"
         >
-          <LifeBuoy className="h-5 w-5 shrink-0 text-muted-foreground" />
+          <MessageCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
           {!collapsed && (
-            <div className="flex-1">
-              <p className="text-sm font-medium text-sidebar-foreground">Need Help?</p>
-              <p className="text-xs font-medium text-emerald-600">Chat on WhatsApp</p>
-            </div>
+            <p className="flex-1 text-xs font-medium text-emerald-600">Chat on WhatsApp</p>
+          )}
+          {!collapsed && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
+        </a>
+        <a
+          href="viber://chat?number=%2B9607799190"
+          className="flex items-center gap-2 rounded-lg border border-sidebar-border p-2.5 text-left transition hover:bg-sidebar-accent"
+        >
+          <MessageCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+          {!collapsed && (
+            <p className="flex-1 text-xs font-medium text-purple-600">Chat on Viber</p>
           )}
           {!collapsed && <ChevronRight className="h-4 w-4 shrink-0 text-muted-foreground" />}
         </a>

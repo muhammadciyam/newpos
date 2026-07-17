@@ -1,6 +1,6 @@
-// Original wordmark for the "Dhipos Supply" wholesale-network feature — a simple "DS"
+// Original wordmark for the "Dhipos Wholesaler" wholesale-network feature — a simple "DW"
 // monogram rendered with currentColor so it follows whatever container/theme color wraps it.
-export function DhiposSupplyLogo({ className }: { className?: string }) {
+export function DhiposWholesalerLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 48 48" className={className} xmlns="http://www.w3.org/2000/svg">
       <text
@@ -13,7 +13,7 @@ export function DhiposSupplyLogo({ className }: { className?: string }) {
         letterSpacing="-1"
         fill="currentColor"
       >
-        DS
+        DW
       </text>
     </svg>
   );
