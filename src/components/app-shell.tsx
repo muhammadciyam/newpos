@@ -12,7 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Inbox, Store, LogOut } from "lucide-react";
+import { Inbox, Store, LogOut, UserCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useRegister } from "@/lib/register-store";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
@@ -175,6 +175,12 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                     <p className="text-xs font-normal text-muted-foreground">{user.email}</p>
                     <p className="text-xs font-normal text-muted-foreground">{user.role}</p>
                   </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/my-profile">
+                      <UserCircle className="mr-2 h-4 w-4" /> My Profile
+                    </Link>
+                  </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <div className="px-2 py-1.5">
                     <p className="mb-1.5 text-xs font-medium text-muted-foreground">Theme Color</p>

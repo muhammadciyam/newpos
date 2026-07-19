@@ -37,6 +37,7 @@ import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import { useHasPermission } from "@/lib/permissions";
 import { ProductImportDialog } from "@/components/product-import-dialog";
 import { useSettings } from "@/lib/settings-store";
+import { useCurrentUser } from "@/lib/auth-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
@@ -62,6 +63,12 @@ const emptyForm = {
 
 function ProductsPage() {
   const canManage = useHasPermission("products.manage");
+  // Editing/deleting an EXISTING product changes the shared catalog for every outlet at
+  // once, so — unlike adding a brand-new product, which only this outlet's stock starts
+  // at zero for — that's restricted to Super Admin (enforced again server-side in
+  // products-api.ts; this just keeps the buttons from being shown only to have them fail).
+  const isSuperAdmin = useCurrentUser()?.role === "Super Admin";
+  const canEditCatalog = canManage && isSuperAdmin;
   const products = useProducts();
   useProductsPolling();
   const categories = useCategories();
@@ -130,9 +137,7 @@ function ProductsPage() {
     // against any external registry.
     const barcode =
       form.barcode.trim() ||
-      (settings.product.barcodeAutoGenerate
-        ? String(Date.now()).slice(-12).padStart(12, "0")
-        : "");
+      (settings.product.barcodeAutoGenerate ? String(Date.now()).slice(-12).padStart(12, "0") : "");
 
     const basePayload = {
       name: form.name,
@@ -263,7 +268,7 @@ function ProductsPage() {
                 <TableHead>Stock</TableHead>
                 <TableHead>Countable</TableHead>
                 <TableHead>GST</TableHead>
-                {canManage && <TableHead className="text-right">Actions</TableHead>}
+                {canEditCatalog && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -323,7 +328,7 @@ function ProductsPage() {
                       {p.gstApplicable === false ? "Exempt" : "Yes"}
                     </Badge>
                   </TableCell>
-                  {canManage && (
+                  {canEditCatalog && (
                     <TableCell className="text-right">
                       <Button variant="ghost" size="icon" onClick={() => openEdit(p.id)}>
                         <Pencil className="h-4 w-4" />
@@ -338,7 +343,7 @@ function ProductsPage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={canManage ? 8 : 7}
+                    colSpan={canEditCatalog ? 8 : 7}
                     className="py-10 text-center text-muted-foreground"
                   >
                     No products match your search.

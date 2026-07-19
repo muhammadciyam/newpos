@@ -56,11 +56,13 @@ export const createUserOnServer = createServerFn({ method: "POST" })
         username: string;
         password: string;
         role: Role;
+        outletId: string | null;
       } & Partial<EmployeeProfile>,
     ) => data,
   )
   .handler(async ({ data }) => {
     if (data.role === "Super Admin") return { error: "Super Admin cannot be created" };
+    if (!data.outletId) return { error: "Outlet is required" };
     const email = normalize(data.email);
     const username = normalize(data.username);
     const users = await getServerUsers();
@@ -80,6 +82,7 @@ export const createUserOnServer = createServerFn({ method: "POST" })
       role: data.role,
       status: "Active",
       authorizedRegister: null,
+      outletId: data.outletId,
       createdAt: new Date().toISOString(),
       ...emptyProfile,
       photo: data.photo ?? null,
@@ -96,6 +99,40 @@ export const createUserOnServer = createServerFn({ method: "POST" })
       emergencyContactPhone: data.emergencyContactPhone ?? "",
       idCardPhoto: data.idCardPhoto ?? null,
       certificates: data.certificates ?? [],
+    };
+    await mutateServerUsers((us) => [...us, user]);
+    return { ok: true as const, user: scrub(user) };
+  });
+
+// Deliberately separate from createUserOnServer (which refuses role "Super Admin" outright)
+// — this is the one path allowed to mint additional Super Admins, gated client-side to
+// existing Super Admins only (see src/routes/admin.super-admin.tsx).
+export const createSuperAdminOnServer = createServerFn({ method: "POST" })
+  .validator((data: { name: string; email: string; username: string; password: string }) => data)
+  .handler(async ({ data }) => {
+    const email = normalize(data.email);
+    const username = normalize(data.username);
+    const users = await getServerUsers();
+    if (users.some((u) => u.email === email)) {
+      return { error: "A user with that email already exists" };
+    }
+    if (users.some((u) => u.username.toLowerCase() === username)) {
+      return { error: "That username is taken" };
+    }
+
+    const user: AppUser = {
+      id: `user-${Date.now()}`,
+      name: data.name,
+      email,
+      username: data.username.trim(),
+      password: data.password,
+      role: "Super Admin",
+      status: "Active",
+      authorizedRegister: null,
+      // Super Admin isn't scoped to one outlet — full access everywhere.
+      outletId: null,
+      createdAt: new Date().toISOString(),
+      ...emptyProfile,
     };
     await mutateServerUsers((us) => [...us, user]);
     return { ok: true as const, user: scrub(user) };
@@ -119,7 +156,9 @@ export const setRoleOnServer = createServerFn({ method: "POST" })
     if (!user || user.role === "Super Admin" || data.role === "Super Admin") {
       return { error: "Cannot change this user's role" };
     }
-    await mutateServerUsers((us) => us.map((u) => (u.id === data.id ? { ...u, role: data.role } : u)));
+    await mutateServerUsers((us) =>
+      us.map((u) => (u.id === data.id ? { ...u, role: data.role } : u)),
+    );
     return { ok: true as const, email: user.email };
   });
 
@@ -127,13 +166,19 @@ export const updateProfileOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: {
       id: string;
-      patch: Partial<EmployeeProfile> & { name?: string; authorizedRegister?: RegisterName | null };
+      patch: Partial<EmployeeProfile> & {
+        name?: string;
+        authorizedRegister?: RegisterName | null;
+        outletId?: string | null;
+      };
     }) => data,
   )
   .handler(async ({ data }) => {
     const user = (await getServerUsers()).find((u) => u.id === data.id);
     if (!user) return { error: "User not found" };
-    await mutateServerUsers((us) => us.map((u) => (u.id === data.id ? { ...u, ...data.patch } : u)));
+    await mutateServerUsers((us) =>
+      us.map((u) => (u.id === data.id ? { ...u, ...data.patch } : u)),
+    );
     return { ok: true as const, email: user.email };
   });
 

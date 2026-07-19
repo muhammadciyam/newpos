@@ -11,6 +11,7 @@ import {
   Calculator,
   BarChart3,
   Settings,
+  ShieldPlus,
   BookText,
   ChevronDown,
   LifeBuoy,
@@ -33,9 +34,17 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
-import { useRegister, formatOpenSince } from "@/lib/register-store";
+import { useRegister, formatOpenSince, registerDisplayName } from "@/lib/register-store";
+import { useCurrentUser } from "@/lib/auth-store";
+import { hasPermission, type Permission } from "@/lib/permissions";
+import { useCustomRoles } from "@/lib/custom-roles-store";
 
-type NavLeaf = { title: string; url: string };
+// Leaves with no `permission` are shown to everyone — that's only correct as long as the
+// page behind them truly has no access gate of its own (e.g. the still-inert Loyalty
+// Programs / Integrations / Notification placeholders). Any leaf whose page calls
+// useHasPermission(...) or checks role directly must list that same permission here, or
+// it'll show in the sidebar for users the page itself then blocks with RestrictedPage.
+type NavLeaf = { title: string; url: string; permission?: Permission };
 type NavItem = {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -78,21 +87,22 @@ const items: NavItem[] = [
       { title: "Inventory", url: "/analytics/inventory" },
     ],
   },
+  { title: "Super Admin", url: "/admin/super-admin", icon: ShieldPlus },
   {
     title: "Admin",
     icon: Settings,
     children: [
-      { title: "Billing", url: "/admin/billing" },
-      { title: "Settings", url: "/admin/settings" },
-      { title: "Users", url: "/admin/users" },
-      { title: "Employees", url: "/admin/employees" },
-      { title: "Locations", url: "/admin/locations" },
-      { title: "Taxes", url: "/admin/taxes" },
+      { title: "Billing", url: "/admin/billing", permission: "settings.manage" },
+      { title: "Settings", url: "/admin/settings", permission: "settings.manage" },
+      { title: "Users", url: "/admin/users", permission: "users.manage" },
+      { title: "Employees", url: "/admin/employees", permission: "users.manage" },
+      { title: "Locations", url: "/admin/locations", permission: "outlets.manage" },
+      { title: "Taxes", url: "/admin/taxes", permission: "settings.manage" },
       { title: "Loyalty Programs", url: "/admin/loyalty-programs" },
-      { title: "Print Templates", url: "/admin/print-templates" },
+      { title: "Print Templates", url: "/admin/print-templates", permission: "settings.manage" },
       { title: "Integrations", url: "/admin/integrations" },
       { title: "Notification", url: "/admin/notification" },
-      { title: "Audit Logs", url: "/admin/audit-logs" },
+      { title: "Audit Logs", url: "/admin/audit-logs", permission: "settings.manage" },
     ],
   },
 ];
@@ -103,6 +113,27 @@ export function AppSidebar() {
   const pathname = useRouterState({ select: (r) => r.location.pathname });
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
   const register = useRegister();
+  const currentUser = useCurrentUser();
+  // Warms/subscribes to the custom-roles cache that hasPermission() reads synchronously below.
+  useCustomRoles();
+
+  // "Super Admin" is hidden from everyone else via a direct role check (not a Permission —
+  // Super Admin sits outside the normal permission matrix). Every other top-level item is
+  // filtered by whether the user has each child leaf's required permission; a group whose
+  // children are all hidden is dropped entirely rather than showing an empty dropdown.
+  const visibleItems = items
+    .filter((item) => item.title !== "Super Admin" || currentUser?.role === "Super Admin")
+    .map((item) =>
+      item.children
+        ? {
+            ...item,
+            children: item.children.filter(
+              (c) => !c.permission || hasPermission(currentUser?.role, c.permission),
+            ),
+          }
+        : item,
+    )
+    .filter((item) => !item.children || item.children.length > 0);
 
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>(() => {
     const initial: Record<string, boolean> = {};
@@ -139,7 +170,9 @@ export function AppSidebar() {
                 <p className="mt-1 text-[11px] uppercase tracking-wide text-primary-foreground/70">
                   Register
                 </p>
-                <p className="text-sm font-semibold">{register.register}</p>
+                <p className="text-sm font-semibold">
+                  {registerDisplayName(register.registers, register.register)}
+                </p>
                 <p className="mt-1 text-[11px] uppercase tracking-wide text-primary-foreground/70">
                   Register Open Since
                 </p>
@@ -157,7 +190,7 @@ export function AppSidebar() {
         <SidebarGroup>
           <SidebarGroupContent>
             <SidebarMenu>
-              {items.map((item) => {
+              {visibleItems.map((item) => {
                 if (!item.children) {
                   return (
                     <SidebarMenuItem key={item.title}>

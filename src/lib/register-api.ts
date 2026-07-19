@@ -1,23 +1,29 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getServerRegisterState, mutateServerRegisterState } from "@/lib/register-server-store";
+import { registerKey } from "@/lib/register-key";
 
 export const fetchRegisters = createServerFn({ method: "GET" }).handler(async () => {
   return getServerRegisterState();
 });
 
 export const createRegisterOnServer = createServerFn({ method: "POST" })
-  .validator((data: { name: string }) => data)
+  .validator((data: { name: string; outletId: string }) => data)
   .handler(async ({ data }) => {
-    const name = data.name.trim();
-    if (!name) return { error: "Register name is required" };
-    if ((await getServerRegisterState()).registers[name]) {
-      return { error: "A register with that name already exists" };
+    const displayName = data.name.trim();
+    if (!displayName) return { error: "Register name is required" };
+    if (!data.outletId) return { error: "Outlet is required" };
+    // The same display name may be reused across different outlets — only within one
+    // outlet does it need to stay unique — so identity is this composite key, not the
+    // bare name. See src/lib/register-key.ts.
+    const key = registerKey(data.outletId, displayName);
+    if ((await getServerRegisterState()).registers[key]) {
+      return { error: "A register with that name already exists in this outlet" };
     }
     await mutateServerRegisterState((s) => ({
       ...s,
       registers: {
         ...s.registers,
-        [name]: {
+        [key]: {
           isOpen: false,
           openedAt: null,
           openedBy: null,
@@ -25,7 +31,28 @@ export const createRegisterOnServer = createServerFn({ method: "POST" })
           lastClosedAt: null,
           heldBill: null,
           opening: null,
+          outletId: data.outletId,
+          displayName,
         },
+      },
+    }));
+    return { ok: true as const };
+  });
+
+// Assigns/reassigns which outlet an existing register belongs to — needed for registers
+// created before per-outlet inventory existed (they have no outlet yet, shown as "—" in
+// the Super Admin Registers table) as well as correcting a mistaken assignment later.
+export const setRegisterOutletOnServer = createServerFn({ method: "POST" })
+  .validator((data: { name: string; outletId: string }) => data)
+  .handler(async ({ data }) => {
+    if (!data.outletId) return { error: "Outlet is required" };
+    const existing = (await getServerRegisterState()).registers[data.name];
+    if (!existing) return { error: "Register not found" };
+    await mutateServerRegisterState((s) => ({
+      ...s,
+      registers: {
+        ...s.registers,
+        [data.name]: { ...s.registers[data.name], outletId: data.outletId },
       },
     }));
     return { ok: true as const };
@@ -69,6 +96,8 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
           lastClosedAt: existing?.lastClosedAt ?? null,
           heldBill: existing?.heldBill ?? null,
           opening: data.opening,
+          outletId: existing?.outletId ?? null,
+          displayName: existing?.displayName ?? data.name,
         },
       },
     }));
@@ -93,6 +122,8 @@ export const closeRegisterOnServer = createServerFn({ method: "POST" })
           lastClosedAt: now,
           heldBill: existing.heldBill,
           opening: null,
+          outletId: existing.outletId,
+          displayName: existing.displayName,
         },
       },
     }));
@@ -124,6 +155,8 @@ export const forceCloseRegisterOnServer = createServerFn({ method: "POST" })
           lastClosedAt: now,
           heldBill: existing.heldBill,
           opening: null,
+          outletId: existing.outletId,
+          displayName: existing.displayName,
         },
       },
     }));
@@ -137,7 +170,8 @@ export const saveHeldBillOnServer = createServerFn({ method: "POST" })
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   .validator((data: { name: string; heldBill: any }) => data)
   .handler(async ({ data }) => {
-    if (!(await getServerRegisterState()).registers[data.name]) return { error: "Register not found" };
+    if (!(await getServerRegisterState()).registers[data.name])
+      return { error: "Register not found" };
     await mutateServerRegisterState((s) => ({
       ...s,
       registers: {

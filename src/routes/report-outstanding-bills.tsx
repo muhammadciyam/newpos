@@ -11,6 +11,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useBills, useBillsPolling } from "@/lib/bills-store";
+import { useRegister, registerDisplayName } from "@/lib/register-store";
 import { useSettings } from "@/lib/settings-store";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
@@ -29,6 +30,7 @@ function OutstandingBillsPage() {
   const { download } = Route.useSearch();
   const bills = useBills();
   useBillsPolling();
+  const { registers } = useRegister();
   const settings = useSettings();
   const [range, setRange] = useState<ReportRange>({ from: daysAgoIso(30), to: todayIso() });
 
@@ -92,7 +94,9 @@ function OutstandingBillsPage() {
               <TableRow key={b.number}>
                 <TableCell className="font-medium">{b.number}</TableCell>
                 <TableCell>{b.customer || "Walk-in Customer"}</TableCell>
-                <TableCell className="text-muted-foreground">{b.register}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  {registerDisplayName(registers, b.register)}
+                </TableCell>
                 <TableCell className="text-muted-foreground">{b.created}</TableCell>
                 <TableCell>
                   {currency} {b.total.toFixed(2)}

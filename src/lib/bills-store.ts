@@ -1,10 +1,11 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { type Bill, type BillLineItem } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { productsStore } from "@/lib/products-store";
 import { settingsStore } from "@/lib/settings-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
+import { useScopeOutletId } from "@/lib/outlet-scope";
 import {
   fetchBills,
   createBillOnServer,
@@ -61,6 +62,7 @@ export const billsStore = {
     customerId?: string | null;
     location: string;
     register: string;
+    outletId: string | null;
     items: BillLineItem[];
     subtotal: number;
     discount: number;
@@ -167,12 +169,19 @@ export const billsStore = {
 
 export function useBills(): Bill[] {
   useEffect(() => ensureInitialFetch(), []);
-  return useSyncExternalStore(
+  const allBills = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
     () => bills,
     () => bills,
+  );
+  // Restricted to the current user's own outlet everywhere (Bill History, every Report and
+  // Analytics page) — Super Admin sees every outlet's bills combined, unrestricted.
+  const scopeOutletId = useScopeOutletId();
+  return useMemo(
+    () => (scopeOutletId ? allBills.filter((b) => b.outletId === scopeOutletId) : allBills),
+    [allBills, scopeOutletId],
   );
 }

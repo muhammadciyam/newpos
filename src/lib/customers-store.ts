@@ -1,40 +1,101 @@
-import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { type Customer } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
+import { safeServerCall } from "@/lib/server-fn-helpers";
+import { useScopeOutletId } from "@/lib/outlet-scope";
+import {
+  fetchCustomers,
+  createCustomerOnServer,
+  updateCustomerOnServer,
+  removeCustomerOnServer,
+  addCustomerSpendOnServer,
+} from "@/lib/customers-api";
 
-const store = createPersistedStore<Customer[]>("dhipos-customers", []);
+function actor() {
+  return authStore.getCurrentUser()?.name ?? "System";
+}
+
+let customers: Customer[] = [];
+const listeners = new Set<() => void>();
+
+function setCustomers(next: Customer[]) {
+  customers = next;
+  listeners.forEach((l) => l());
+}
+
+async function refreshFromServer() {
+  const result = await safeServerCall(() => fetchCustomers());
+  if (!("networkError" in result)) setCustomers(result);
+}
+
+let initialFetchTriggered = false;
+function ensureInitialFetch() {
+  if (initialFetchTriggered) return;
+  initialFetchTriggered = true;
+  void refreshFromServer();
+}
 
 export const customersStore = {
-  subscribe: store.subscribe,
-  get: store.get,
-  hydrate: store.hydrate,
-  create(input: Omit<Customer, "id" | "outstanding" | "spent" | "loyalty">) {
-    const customer: Customer = {
-      ...input,
-      id: `${input.mobile || input.name}-${Date.now()}`,
-      outstanding: 0,
-      spent: 0,
-      loyalty: 0,
-    };
-    store.set((cs) => [customer, ...cs]);
-    logAudit(authStore.getCurrentUser()?.name ?? "System", "create", `Customer / ${customer.name}`);
-    return customer;
+  get: () => customers,
+
+  async create(
+    input: Omit<Customer, "id" | "outstanding" | "spent" | "loyalty" | "outletId">,
+  ): Promise<Customer | { error: string }> {
+    const outletId = authStore.getCurrentUser()?.outletId ?? null;
+    const result = await safeServerCall(() =>
+      createCustomerOnServer({ data: { ...input, outletId } }),
+    );
+    if ("networkError" in result) return { error: result.error };
+    setCustomers([result.customer, ...customers]);
+    logAudit(actor(), "create", `Customer / ${result.customer.name}`);
+    return result.customer;
   },
-  update(id: string, patch: Partial<Omit<Customer, "id" | "outstanding" | "spent" | "loyalty">>) {
-    store.set((cs) => cs.map((c) => (c.id === id ? { ...c, ...patch } : c)));
-    logAudit(authStore.getCurrentUser()?.name ?? "System", "update", `Customer / ${patch.name ?? id}`);
+
+  async update(
+    id: string,
+    patch: Partial<Omit<Customer, "id" | "outstanding" | "spent" | "loyalty" | "outletId">>,
+  ): Promise<{ ok: true } | { error: string }> {
+    const result = await safeServerCall(() => updateCustomerOnServer({ data: { id, patch } }));
+    if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
+    setCustomers(customers.map((c) => (c.id === id ? { ...c, ...patch } : c)));
+    logAudit(actor(), "update", `Customer / ${patch.name ?? id}`);
+    return { ok: true };
   },
-  remove(id: string) {
-    const existing = store.get().find((c) => c.id === id);
-    store.set((cs) => cs.filter((c) => c.id !== id));
-    logAudit(authStore.getCurrentUser()?.name ?? "System", "delete", `Customer / ${existing?.name ?? id}`);
+
+  async remove(id: string): Promise<{ ok: true } | { error: string }> {
+    const existing = customers.find((c) => c.id === id);
+    const result = await safeServerCall(() => removeCustomerOnServer({ data: { id } }));
+    if ("networkError" in result) return { error: result.error };
+    setCustomers(customers.filter((c) => c.id !== id));
+    logAudit(actor(), "delete", `Customer / ${existing?.name ?? id}`);
+    return { ok: true };
   },
-  addSpend(id: string, amount: number) {
-    store.set((cs) => cs.map((c) => (c.id === id ? { ...c, spent: c.spent + amount } : c)));
+
+  async addSpend(id: string, amount: number): Promise<void> {
+    const result = await safeServerCall(() => addCustomerSpendOnServer({ data: { id, amount } }));
+    if (!("networkError" in result)) {
+      setCustomers(customers.map((c) => (c.id === id ? { ...c, spent: c.spent + amount } : c)));
+    }
   },
 };
 
-export function useCustomers() {
-  return usePersistedStore(store);
+export function useCustomers(): Customer[] {
+  useEffect(() => ensureInitialFetch(), []);
+  const allCustomers = useSyncExternalStore(
+    (cb) => {
+      listeners.add(cb);
+      return () => listeners.delete(cb);
+    },
+    () => customers,
+    () => customers,
+  );
+  // Restricted to the current user's own outlet — Super Admin sees every outlet's
+  // customers combined, unrestricted. Matches useBills()/useProducts().
+  const scopeOutletId = useScopeOutletId();
+  return useMemo(
+    () => (scopeOutletId ? allCustomers.filter((c) => c.outletId === scopeOutletId) : allCustomers),
+    [allCustomers, scopeOutletId],
+  );
 }

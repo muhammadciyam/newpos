@@ -5,7 +5,13 @@ export type Product = {
   price: number;
   category: string;
   image: string;
+  // Total stock across every outlet — kept in sync automatically whenever stockByOutlet
+  // changes (see adjustStock in products-server-store.ts). Read this for a quick aggregate;
+  // read stockByOutlet (via stockAt()) for how much is actually available at one outlet.
   stock: number;
+  // Per-outlet quantity on hand, keyed by Outlet.id. Missing/legacy products (from before
+  // outlets existed) are backfilled on read — see products-server-store.ts.
+  stockByOutlet?: Record<string, number>;
   barcode?: string;
   sku?: string;
   // Last known unit cost, set from the most recently approved Purchase Invoice line for this product.
@@ -17,6 +23,14 @@ export type Product = {
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
 };
+
+// Stock actually available at a specific outlet — falls back to the aggregate `stock` when
+// no outlet is given (e.g. a report showing totals across every outlet) or when this
+// product hasn't been backfilled with a per-outlet breakdown yet.
+export function stockAt(product: Product, outletId: string | null | undefined): number {
+  if (!outletId) return product.stock;
+  return product.stockByOutlet?.[outletId] ?? 0;
+}
 
 export const categories: Category[] = [
   { id: "all", name: "All Items" },
@@ -43,6 +57,9 @@ export type Customer = {
   taxNumber?: string;
   note?: string;
   priceLevel?: "default" | "wholesale";
+  // Which outlet this customer was created at — null for customers created before outlets
+  // existed, or by a user with no outlet assigned. Only Super Admin sees those.
+  outletId: string | null;
 };
 
 // ---- Dashboard series ----
@@ -112,6 +129,7 @@ export type RegisterSessionClosing = {
 };
 
 export type RegisterSession = {
+  id: string;
   no: number;
   register: string;
   createdAt: string;
@@ -119,6 +137,9 @@ export type RegisterSession = {
   openDuration: string;
   by: string;
   closing?: RegisterSessionClosing;
+  // Which outlet this session's register belonged to at open time — null for a register
+  // with no outlet assigned (only Super Admin sees those).
+  outletId: string | null;
 };
 
 // ---- Bills ----
@@ -145,6 +166,10 @@ export type Bill = {
   customerId?: string | null;
   location: string;
   register: string;
+  // Which outlet's inventory this sale was deducted from — set from the selling register's
+  // outlet at sale time. Null for bills rung up before per-outlet inventory existed, or on a
+  // register that (unusually) has no outlet assigned.
+  outletId: string | null;
   status: "Sale" | "Void" | "Refunded" | "Partially Refunded";
   items: BillLineItem[];
   subtotal: number;

@@ -19,6 +19,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DhiposWholesalerLogo } from "@/components/dhipos-wholesaler-logo";
+import { WholesaleProductImportDialog } from "@/components/wholesale-product-import-dialog";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +79,7 @@ import {
 import { useCart, cartStore, type CartItem } from "@/lib/cart-store";
 import { useWholesaleOrders, wholesaleOrdersStore } from "@/lib/wholesale-orders-store";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
+import { findProductPhoto } from "@/lib/product-photo-search";
 import { logAudit } from "@/lib/audit-log-store";
 import { cn } from "@/lib/utils";
 
@@ -175,6 +177,8 @@ function WholesalerHomePage() {
   const [catalogueWholesalerId, setCatalogueWholesalerId] = useState<string | null>(null);
 
   const [productDialogOpen, setProductDialogOpen] = useState(false);
+  const [submittingProduct, setSubmittingProduct] = useState(false);
+  const [productImportOpen, setProductImportOpen] = useState(false);
   const [productWholesalerId, setProductWholesalerId] = useState("");
   const [productCategoryId, setProductCategoryId] = useState("");
   const [productName, setProductName] = useState("");
@@ -552,11 +556,14 @@ function WholesalerHomePage() {
       toast.error("Product name is required");
       return;
     }
+    const name = productName.trim();
+    setSubmittingProduct(true);
+    const imageUrl = productImageUrl || (await findProductPhoto(name));
     const newProduct: WholesalerProduct = {
       id: `prod-${Date.now()}`,
-      name: productName.trim(),
+      name,
       price: parseFloat(productPrice) || 0,
-      imageUrl: productImageUrl,
+      imageUrl,
       packingDetails: productPackingDetails.trim(),
       size: parseFloat(productSize) || 0,
       sizeUnit: productSizeUnit,
@@ -578,6 +585,7 @@ function WholesalerHomePage() {
           c.id === productCategoryId ? { ...c, products: [...c.products, newProduct] } : c,
         );
     const result = await wholesalersStore.update(productWholesaler.id, { categories });
+    setSubmittingProduct(false);
     if ("error" in result) {
       toast.error(result.error);
       return;
@@ -694,6 +702,13 @@ function WholesalerHomePage() {
                   onClick={openAddProduct}
                 >
                   <Plus className="h-4 w-4" /> Add Product
+                </Button>
+                <Button
+                  variant="secondary"
+                  className="gap-1.5 rounded-full font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
+                  onClick={() => setProductImportOpen(true)}
+                >
+                  <Upload className="h-4 w-4" /> Import Products
                 </Button>
                 <Button
                   variant="secondary"
@@ -1340,10 +1355,18 @@ function WholesalerHomePage() {
               <Button variant="outline" onClick={() => setProductDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={submitStandaloneProduct}>Add Product</Button>
+              <Button onClick={submitStandaloneProduct} disabled={submittingProduct}>
+                {submittingProduct ? "Adding..." : "Add Product"}
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <WholesaleProductImportDialog
+          open={productImportOpen}
+          onOpenChange={setProductImportOpen}
+          wholesalers={wholesalers}
+        />
 
         {/* Cart — session-only running list built while browsing catalogues */}
         <Dialog
@@ -1831,7 +1854,7 @@ function CatalogueSheet({
           side="right"
           className={cn(
             "w-full overflow-y-auto p-0",
-            fullScreen ? "max-w-none sm:max-w-none" : "sm:max-w-xl",
+            fullScreen ? "max-w-none sm:max-w-none" : "sm:max-w-3xl",
           )}
         >
           {wholesaler && (

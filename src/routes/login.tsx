@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { BookText } from "lucide-react";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
+import { useOutlets } from "@/lib/outlets-store";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -24,8 +25,10 @@ const errorMessages: Record<string, string> = {
 function LoginPage() {
   const navigate = useNavigate();
   const user = useCurrentUser();
+  const outlets = useOutlets();
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
+  const [outletName, setOutletName] = useState("");
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -43,14 +46,40 @@ function LoginPage() {
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
-    setSubmitting(true);
-    const result = await authStore.login(identifier, password);
-    setSubmitting(false);
-    if (!result.ok) {
-      setError(result.reason === "network" ? result.message : errorMessages[result.reason]);
+    setError("");
+    const matchedOutlet = outlets.find(
+      (o) => o.name.trim().toLowerCase() === outletName.trim().toLowerCase(),
+    );
+    // Only enforce matching an existing outlet once outlets have actually been set up
+    // (Admin > Locations / Super Admin). With none configured yet there's nothing valid
+    // to match against, so requiring one would just lock everyone out of logging in.
+    if (!matchedOutlet && outlets.length > 0) {
+      setError(`Outlet "${outletName.trim()}" not found — check the name and try again.`);
       return;
     }
-    logAudit(result.user.name, "login", "Session");
+    setSubmitting(true);
+    const result = await authStore.login(identifier, password, matchedOutlet?.id ?? null);
+    setSubmitting(false);
+    if (!result.ok) {
+      if (result.reason === "network") {
+        setError(result.message);
+      } else if (result.reason === "outlet-mismatch") {
+        const expectedName = outlets.find((o) => o.id === result.expectedOutletId)?.name;
+        setError(
+          expectedName
+            ? `This account is assigned to outlet "${expectedName}" — enter that outlet name to log in.`
+            : "This account is assigned to a different outlet — check the outlet name and try again.",
+        );
+      } else {
+        setError(errorMessages[result.reason]);
+      }
+      return;
+    }
+    logAudit(
+      result.user.name,
+      "login",
+      `Session (Outlet: ${matchedOutlet?.name ?? outletName.trim()})`,
+    );
     navigate({ to: "/" });
   }
 
@@ -65,6 +94,16 @@ function LoginPage() {
           <p className="text-sm text-muted-foreground">Log in to your account</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Outlet Name</Label>
+            <Input
+              value={outletName}
+              onChange={(e) => setOutletName(e.target.value)}
+              placeholder="e.g. Seven Mart"
+              autoComplete="off"
+              required
+            />
+          </div>
           <div className="space-y-1.5">
             <Label>Email or Username</Label>
             <Input

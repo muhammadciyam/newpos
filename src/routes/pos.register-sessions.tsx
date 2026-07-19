@@ -11,7 +11,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { useRegisterSessions } from "@/lib/register-store";
+import {
+  useRegisterSessions,
+  useRegisterSessionsPolling,
+  useRegister,
+  registerDisplayName,
+} from "@/lib/register-store";
 import { cashTypes } from "@/lib/pos-data";
 import type { RegisterSession } from "@/lib/pos-data";
 
@@ -24,6 +29,8 @@ export const Route = createFileRoute("/pos/register-sessions")({
 
 function RegisterSessionsPage() {
   const registerSessions = useRegisterSessions();
+  useRegisterSessionsPolling();
+  const { registers } = useRegister();
   const [detailFor, setDetailFor] = useState<RegisterSession | null>(null);
 
   return (
@@ -60,7 +67,7 @@ function RegisterSessionsPage() {
                 <TableRow key={s.no}>
                   <TableCell className="font-medium">{s.no}</TableCell>
                   <TableCell>
-                    {s.register}
+                    {registerDisplayName(registers, s.register)}
                     <span className="block text-xs text-muted-foreground">At Seven Mart</span>
                   </TableCell>
                   <TableCell>
@@ -99,7 +106,7 @@ function RegisterSessionsPage() {
         <DialogContent className="max-w-lg">
           <DialogHeader>
             <DialogTitle>
-              Session {detailFor?.no} — {detailFor?.register}
+              Session {detailFor?.no} — {registerDisplayName(registers, detailFor?.register)}
             </DialogTitle>
           </DialogHeader>
           {detailFor && (

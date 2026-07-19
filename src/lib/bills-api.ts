@@ -1,14 +1,27 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getServerBills, mutateServerBills, formatBillTimestamp } from "@/lib/bills-server-store";
 import { adjustStock, getServerProducts } from "@/lib/products-server-store";
+import { getOrCreateDefaultOutlet } from "@/lib/outlets-server-store";
 import type { Bill, BillLineItem } from "@/lib/pos-data";
 
 async function stockPatchesFor(productIds: Iterable<string>) {
   const products = await getServerProducts();
-  return [...productIds].map((productId) => ({
-    productId,
-    stock: products.find((p) => p.id === productId)?.stock ?? 0,
-  }));
+  return [...productIds].map((productId) => {
+    const product = products.find((p) => p.id === productId);
+    return {
+      productId,
+      stock: product?.stock ?? 0,
+      stockByOutlet: product?.stockByOutlet ?? {},
+    };
+  });
+}
+
+// Bills created before per-outlet inventory (or on a register with no outlet assigned)
+// have no outletId — fall back to the shop's default outlet so stock still moves somewhere
+// sensible instead of the adjustment silently going nowhere.
+async function resolveOutletId(outletId: string | null): Promise<string> {
+  if (outletId) return outletId;
+  return (await getOrCreateDefaultOutlet()).id;
 }
 
 export const fetchBills = createServerFn({ method: "GET" }).handler(async () => {
@@ -33,6 +46,7 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       customerId: string | null;
       location: string;
       register: string;
+      outletId: string | null;
       items: BillLineItem[];
       subtotal: number;
       discount: number;
@@ -64,12 +78,14 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       const seq = parseInt(b.number.split("/")[1] ?? "0", 10);
       return Number.isFinite(seq) ? Math.max(max, seq) : max;
     }, 0);
+    const outletId = await resolveOutletId(data.outletId);
     const bill: Bill = {
       number: `1/${maxSeq + 1}`,
       customer: data.customer,
       customerId: data.customerId ?? null,
       location: data.location,
       register: data.register,
+      outletId,
       status: "Sale",
       items: data.items,
       subtotal: data.subtotal,
@@ -99,7 +115,7 @@ export const createBillOnServer = createServerFn({ method: "POST" })
     await mutateServerBills((bs) => [bill, ...bs]);
     // Stock is decremented here, atomically with bill creation, in the same server
     // process — no separate client round trip that could partially fail.
-    for (const item of data.items) await adjustStock(item.productId, -item.qty);
+    for (const item of data.items) await adjustStock(item.productId, outletId, -item.qty);
     const updatedStock = await stockPatchesFor(new Set(data.items.map((i) => i.productId)));
     return { ok: true as const, bill, updatedStock };
   });
@@ -126,7 +142,8 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
         stockDeltas.set(productId, (stockDeltas.get(productId) ?? 0) + oldItem.qty);
       }
     }
-    for (const [productId, delta] of stockDeltas) await adjustStock(productId, delta);
+    const outletId = await resolveOutletId(bill.outletId);
+    for (const [productId, delta] of stockDeltas) await adjustStock(productId, outletId, delta);
 
     const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
     const gst = subtotal * (data.gstPercent / 100);
@@ -166,9 +183,10 @@ export const voidBillOnServer = createServerFn({ method: "POST" })
     if (bill.status !== "Sale" && bill.status !== "Partially Refunded") {
       return { error: `Bill is already ${bill.status}` };
     }
+    const outletId = await resolveOutletId(bill.outletId);
     for (const item of bill.items) {
       const qty = remainingQty(item);
-      if (qty > 0) await adjustStock(item.productId, qty);
+      if (qty > 0) await adjustStock(item.productId, outletId, qty);
     }
     await mutateServerBills((bs) =>
       bs.map((b) =>
@@ -222,7 +240,8 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
     if (refundItems.length === 0) return { error: "Nothing selected to refund" };
 
     const amount = refundItems.reduce((s, i) => s + i.price * i.qty, 0);
-    for (const ri of refundItems) await adjustStock(ri.productId, ri.qty);
+    const outletId = await resolveOutletId(bill.outletId);
+    for (const ri of refundItems) await adjustStock(ri.productId, outletId, ri.qty);
 
     const refund = {
       id: `refund-${Date.now()}`,

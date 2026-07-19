@@ -18,6 +18,7 @@ const seedAdmin: AppUser = {
   role: "Super Admin",
   status: "Active",
   authorizedRegister: null,
+  outletId: null,
   createdAt: new Date("2026-07-13T07:00:00").toISOString(),
   photo: null,
   phone: "",
@@ -41,7 +42,9 @@ async function ensureSeeded() {
   if (seeded) return;
   seeded = true;
   const supabase = getSupabase();
-  const { count, error } = await supabase.from("users").select("id", { count: "exact", head: true });
+  const { count, error } = await supabase
+    .from("users")
+    .select("id", { count: "exact", head: true });
   if (error) throw error;
   if (count === 0) {
     const { error: insertError } = await supabase.from("users").insert({
@@ -70,12 +73,10 @@ export async function mutateServerUsers(
   const supabase = getSupabase();
 
   if (next.length > 0) {
-    const { error } = await supabase
-      .from("users")
-      .upsert(
-        next.map((u) => ({ id: u.id, email: u.email, username: u.username, data: u })),
-        { onConflict: "id" },
-      );
+    const { error } = await supabase.from("users").upsert(
+      next.map((u) => ({ id: u.id, email: u.email, username: u.username, data: u })),
+      { onConflict: "id" },
+    );
     if (error) throw error;
   }
   const currentIds = new Set(current.map((u) => u.id));

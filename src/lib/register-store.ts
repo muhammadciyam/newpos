@@ -1,17 +1,25 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import type { RegisterSession, RegisterSessionClosing } from "@/lib/pos-data";
-import { authStore } from "@/lib/auth-store";
+import { authStore, useCurrentOutletId } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { getDeviceId } from "@/lib/device-id";
 import { safeServerCall } from "@/lib/server-fn-helpers";
+import { useOutlets } from "@/lib/outlets-store";
+import { useScopeOutletId } from "@/lib/outlet-scope";
 import {
   fetchRegisters,
   createRegisterOnServer,
+  setRegisterOutletOnServer,
   openRegisterOnServer,
   closeRegisterOnServer,
   forceCloseRegisterOnServer,
 } from "@/lib/register-api";
+import {
+  fetchRegisterSessions,
+  createRegisterSessionOnServer,
+  closeRegisterSessionOnServer,
+} from "@/lib/register-sessions-api";
 
 export type RegisterName = string;
 
@@ -30,7 +38,28 @@ export type RegisterRecord = {
   // Cash/card/bank amounts declared when this session was opened — used to compute the
   // Expected column at close time. Null once the register is closed.
   opening: Record<string, string> | null;
+  // Which outlet's inventory a sale on this register deducts from. Null only for registers
+  // created before per-outlet inventory existed and not yet reassigned.
+  outletId: string | null;
+  // Human-readable label to show in the UI — the Record key this register is stored under
+  // (RegisterName) is its internal identity and, for registers created after this field
+  // existed, is a composite of outlet + name (see src/lib/register-key.ts) so the same
+  // display name can be reused across different outlets. Always prefer this field over the
+  // raw key when rendering to the screen — use registerDisplayName() below.
+  displayName: string;
 };
+
+// Resolves a register's identity key (RegisterName) to its human-readable label for
+// display — e.g. on receipts, bill history, and session lists, where `bill.register` /
+// `session.register` store the raw key, not the label. Falls back to the key itself if
+// the register was since deleted (so old bills/sessions never show a blank).
+export function registerDisplayName(
+  registers: Record<RegisterName, RegisterRecord>,
+  key: string | null | undefined,
+): string {
+  if (!key) return "";
+  return registers[key]?.displayName ?? key;
+}
 
 // The public shape returned by useRegister() — `registers` is now server-authoritative
 // (shared across devices), everything else is local to this browser/session.
@@ -59,7 +88,6 @@ const initialLocalState: LocalRegisterState = {
 };
 
 const store = createPersistedStore<LocalRegisterState>("dhipos-register", initialLocalState);
-const sessionsStore = createPersistedStore<RegisterSession[]>("dhipos-register-sessions", []);
 
 // One-time fixup for browsers that already persisted the old default register name
 // ("Main" / "Main 2") as their active-register pointer before it was renamed/removed.
@@ -130,6 +158,41 @@ export function useRegisterPolling(intervalMs = 5000) {
   }, [intervalMs]);
 }
 
+// --- Shared (server-backed) register sessions snapshot ---
+
+let serverSessions: RegisterSession[] = [];
+const sessionListeners = new Set<() => void>();
+
+function setServerSessions(next: RegisterSession[]) {
+  serverSessions = next;
+  sessionListeners.forEach((l) => l());
+}
+
+async function refreshSessionsFromServer() {
+  try {
+    setServerSessions(await fetchRegisterSessions());
+  } catch {
+    // Network hiccup — keep the last known snapshot; individual actions surface their own errors.
+  }
+}
+
+let initialSessionsFetchTriggered = false;
+function ensureInitialSessionsFetch() {
+  if (initialSessionsFetchTriggered) return;
+  initialSessionsFetchTriggered = true;
+  void refreshSessionsFromServer();
+}
+
+// Actively refetches on mount and every `intervalMs` — call this from the Register
+// Sessions screen so sessions opened/closed on other devices show up without a refresh.
+export function useRegisterSessionsPolling(intervalMs = 5000) {
+  useEffect(() => {
+    void refreshSessionsFromServer();
+    const id = setInterval(() => void refreshSessionsFromServer(), intervalMs);
+    return () => clearInterval(id);
+  }, [intervalMs]);
+}
+
 function formatSessionTimestamp(ms: number) {
   const d = new Date(ms);
   const months = [
@@ -162,28 +225,38 @@ function formatShortDuration(ms: number) {
 }
 
 // Closes out the matching still-open session row for `name` — shared by close() and forceClose().
-function closeOutSession(name: RegisterName, now: number, closing?: RegisterSessionClosing) {
-  sessionsStore.set((sessions) => {
-    const idx = sessions.findIndex((r) => r.register === name && r.closedAt === null);
-    if (idx === -1) return sessions;
-    const updated = [...sessions];
-    const opened = updated[idx];
-    const openedMs = new Date(opened.createdAt.replace(/-(\w{3})-/, " $1 ")).getTime();
-    const durationMs = Number.isFinite(openedMs) ? now - openedMs : 0;
-    updated[idx] = {
-      ...opened,
-      closedAt: formatSessionTimestamp(now),
-      openDuration: formatShortDuration(durationMs),
-      closing,
-    };
-    return updated;
-  });
+async function closeOutSession(name: RegisterName, now: number, closing?: RegisterSessionClosing) {
+  const opened = serverSessions.find((r) => r.register === name && r.closedAt === null);
+  if (!opened) return;
+  const openedMs = new Date(opened.createdAt.replace(/-(\w{3})-/, " $1 ")).getTime();
+  const durationMs = Number.isFinite(openedMs) ? now - openedMs : 0;
+  const closedAt = formatSessionTimestamp(now);
+  const openDuration = formatShortDuration(durationMs);
+  setServerSessions(
+    serverSessions.map((s) => (s.id === opened.id ? { ...s, closedAt, openDuration, closing } : s)),
+  );
+  await safeServerCall(() =>
+    closeRegisterSessionOnServer({ data: { register: name, closedAt, openDuration, closing } }),
+  );
 }
 
 export const registerStore = {
-  async createRegister(name: string): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => createRegisterOnServer({ data: { name } }));
+  async createRegister(name: string, outletId: string): Promise<{ ok: true } | { error: string }> {
+    const result = await safeServerCall(() => createRegisterOnServer({ data: { name, outletId } }));
     if (!("error" in result)) await refreshRegistersFromServer();
+    return result;
+  },
+
+  // Assigns/reassigns which outlet a register belongs to — mainly for registers created
+  // before per-outlet inventory existed, which show "—" for Outlet until fixed up here.
+  async setOutlet(name: RegisterName, outletId: string): Promise<{ ok: true } | { error: string }> {
+    const result = await safeServerCall(() =>
+      setRegisterOutletOnServer({ data: { name, outletId } }),
+    );
+    if (!("error" in result)) {
+      patchServerRegister(name, { ...serverRegisters[name], outletId });
+      await refreshRegistersFromServer();
+    }
     return result;
   },
 
@@ -208,20 +281,23 @@ export const registerStore = {
       lastClosedAt: serverRegisters[name]?.lastClosedAt ?? null,
       heldBill: serverRegisters[name]?.heldBill ?? null,
       opening: opening ?? {},
+      outletId: serverRegisters[name]?.outletId ?? null,
+      displayName: serverRegisters[name]?.displayName ?? name,
     });
     store.set((s) => ({ ...s, register: name, openedAt: now, openedBy: actor }));
-    const nextNo = Math.max(0, ...sessionsStore.get().map((r) => r.no)) + 1;
-    sessionsStore.set((sessions) => [
-      {
-        no: nextNo,
-        register: name,
-        createdAt: formatSessionTimestamp(now),
-        closedAt: null,
-        openDuration: "Open a few seconds",
-        by: actor,
-      },
-      ...sessions,
-    ]);
+    const nextNo = Math.max(0, ...serverSessions.map((r) => r.no)) + 1;
+    const session: RegisterSession = {
+      id: `rs-${Date.now()}`,
+      no: nextNo,
+      register: name,
+      createdAt: formatSessionTimestamp(now),
+      closedAt: null,
+      openDuration: "Open a few seconds",
+      by: actor,
+      outletId: serverRegisters[name]?.outletId ?? null,
+    };
+    setServerSessions([session, ...serverSessions]);
+    void safeServerCall(() => createRegisterSessionOnServer({ data: session }));
     logAudit(actor, "create", `Register Session / ${name}`);
     await refreshRegistersFromServer();
     return { ok: true };
@@ -258,11 +334,13 @@ export const registerStore = {
       lastClosedAt: result.closedAt,
       heldBill: serverRegisters[name]?.heldBill ?? null,
       opening: null,
+      outletId: serverRegisters[name]?.outletId ?? null,
+      displayName: serverRegisters[name]?.displayName ?? name,
     });
     if (store.get().register === name) {
       store.set((s) => ({ ...s, register: null, openedAt: null }));
     }
-    closeOutSession(name, result.closedAt, closing);
+    await closeOutSession(name, result.closedAt, closing);
     logAudit(authStore.getCurrentUser()?.name ?? "Unknown", "update", `Register Session / ${name}`);
     await refreshRegistersFromServer();
     return { ok: true };
@@ -284,11 +362,13 @@ export const registerStore = {
       lastClosedAt: result.closedAt,
       heldBill: serverRegisters[name]?.heldBill ?? null,
       opening: null,
+      outletId: serverRegisters[name]?.outletId ?? null,
+      displayName: serverRegisters[name]?.displayName ?? name,
     });
     if (store.get().register === name) {
       store.set((s) => ({ ...s, register: null, openedAt: null }));
     }
-    closeOutSession(name, result.closedAt);
+    await closeOutSession(name, result.closedAt);
     logAudit(
       authStore.getCurrentUser()?.name ?? "Unknown",
       "update",
@@ -302,6 +382,24 @@ export const registerStore = {
 export function useRegister(): RegisterState {
   const local = usePersistedStore(store);
   const registers = useServerRegisters();
+  const currentOutletId = useCurrentOutletId();
+  const outlets = useOutlets();
+  // Reflects the outlet typed on the login form — falls back to the old flat constant for
+  // a session logged in before per-outlet login existed, or if that outlet was since removed.
+  const storeName = outlets.find((o) => o.id === currentOutletId)?.name ?? local.storeName;
+  // Restricted to the current user's own outlet — the register-selection screen, and every
+  // other reader of useRegister().registers, only ever sees registers that belong there.
+  // Super Admin sees every outlet's registers combined, unrestricted.
+  const scopeOutletId = useScopeOutletId();
+  const visibleRegisters = useMemo(
+    () =>
+      scopeOutletId
+        ? Object.fromEntries(
+            Object.entries(registers).filter(([, r]) => r.outletId === scopeOutletId),
+          )
+        : registers,
+    [registers, scopeOutletId],
+  );
 
   useEffect(() => {
     migrateLegacyRegisterNames();
@@ -309,7 +407,8 @@ export function useRegister(): RegisterState {
 
   // If this device thinks it has a register open but the server says it's actually
   // closed (closed or force-closed from elsewhere), drop the local pointer so this
-  // session falls back to the register-selection screen.
+  // session falls back to the register-selection screen. Uses the unfiltered `registers`
+  // (not `visibleRegisters`) so this still works correctly regardless of outlet scope.
   useEffect(() => {
     if (local.register && registers[local.register] && !registers[local.register].isOpen) {
       store.set((s) =>
@@ -319,16 +418,31 @@ export function useRegister(): RegisterState {
   }, [local.register, registers]);
 
   return {
-    storeName: local.storeName,
+    storeName,
     register: local.register,
     openedAt: local.openedAt,
     openedBy: local.openedBy,
-    registers,
+    registers: visibleRegisters,
   };
 }
 
-export function useRegisterSessions() {
-  return usePersistedStore(sessionsStore);
+export function useRegisterSessions(): RegisterSession[] {
+  useEffect(() => ensureInitialSessionsFetch(), []);
+  const allSessions = useSyncExternalStore(
+    (cb) => {
+      sessionListeners.add(cb);
+      return () => sessionListeners.delete(cb);
+    },
+    () => serverSessions,
+    () => serverSessions,
+  );
+  // Restricted to the current user's own outlet — Super Admin sees every outlet's
+  // register sessions combined, unrestricted. Matches useBills()/useRegister().
+  const scopeOutletId = useScopeOutletId();
+  return useMemo(
+    () => (scopeOutletId ? allSessions.filter((s) => s.outletId === scopeOutletId) : allSessions),
+    [allSessions, scopeOutletId],
+  );
 }
 
 export function formatDuration(ms: number) {

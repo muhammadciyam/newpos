@@ -44,7 +44,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { type Product, type Bill } from "@/lib/pos-data";
+import { type Product, type Bill, stockAt } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useCategories } from "@/lib/categories-store";
 import { billsStore } from "@/lib/bills-store";
@@ -77,13 +77,15 @@ function linePrice(i: CartLine) {
   return i.priceOverride ?? i.product.price;
 }
 
-
 function SellPage() {
   const products = useProducts();
   const categories = useCategories();
   useProductsPolling();
   const customers = useCustomers();
   const register = useRegister();
+  const currentOutletId = register.register
+    ? (register.registers[register.register]?.outletId ?? null)
+    : null;
   const currentUser = useCurrentUser();
   const settings = useSettings();
   // "Credit" is a sale-outcome (unsettled/AR), not a collectible payment method, so it's
@@ -183,7 +185,8 @@ function SellPage() {
   const balance = tab.payMethod === "Cash" ? Math.max(0, cashReceived - total) : 0;
   const outOfStock = tab.items.find((i) => {
     const live = products.find((p) => p.id === i.product.id);
-    return (live?.stock ?? i.product.stock) < i.qty;
+    const available = live ? stockAt(live, currentOutletId) : stockAt(i.product, currentOutletId);
+    return available < i.qty;
   });
 
   function updateTab(patch: Partial<SaleTab>) {
@@ -250,13 +253,17 @@ function SellPage() {
     reader.readAsDataURL(file);
   }
 
-  function createCustomer() {
+  async function createCustomer() {
     if (!newCustomerName.trim()) return;
-    const customer = customersStore.create({
+    const customer = await customersStore.create({
       name: newCustomerName.trim(),
       mobile: newCustomerMobile.trim(),
       limit: 0,
     });
+    if ("error" in customer) {
+      toast.error(customer.error);
+      return;
+    }
     selectCustomer(customer.id, customer.name);
     setNewCustomerName("");
     setNewCustomerMobile("");
@@ -277,12 +284,16 @@ function SellPage() {
 
   function toggleFoc() {
     updateTab({ foc: !tab.foc });
-    toast.success(tab.foc ? "FOC removed — bill will be charged normally" : "Marked as Free of Charge");
+    toast.success(
+      tab.foc ? "FOC removed — bill will be charged normally" : "Marked as Free of Charge",
+    );
   }
 
   function toggleNoDelivery() {
     updateTab({ noDelivery: !tab.noDelivery });
-    toast.success(tab.noDelivery ? "Delivery re-enabled for this bill" : "Delivery disabled for this bill");
+    toast.success(
+      tab.noDelivery ? "Delivery re-enabled for this bill" : "Delivery disabled for this bill",
+    );
   }
 
   function addTag() {
@@ -343,6 +354,7 @@ function SellPage() {
       customerId: tab.customerId,
       location: register.storeName,
       register: register.register,
+      outletId: currentOutletId,
       items: tab.items.map((i) => ({
         productId: i.product.id,
         name: i.product.name,
@@ -421,7 +433,9 @@ function SellPage() {
         <div className="flex items-center gap-6 overflow-x-auto border-b border-border bg-background px-4">
           {tabs.map((t) => {
             const tSubtotal = t.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
-            const tBagCharge = t.bagEnabled ? (parseInt(t.bagQty, 10) || 0) * settings.tax.bagFeeRate : 0;
+            const tBagCharge = t.bagEnabled
+              ? (parseInt(t.bagQty, 10) || 0) * settings.tax.bagFeeRate
+              : 0;
             const tTotal = tSubtotal * (1 + settings.tax.gstPercent / 100) + tBagCharge;
             return (
               <button
@@ -484,7 +498,7 @@ function SellPage() {
                           <span className="font-medium text-foreground">{p.name}</span>
                         </span>
                         <span className="flex items-center gap-2 text-muted-foreground">
-                          <span>{p.stock} in stock</span>
+                          <span>{stockAt(p, currentOutletId)} in stock</span>
                           <span className="font-semibold text-primary">${p.price.toFixed(2)}</span>
                         </span>
                       </button>
@@ -510,8 +524,8 @@ function SellPage() {
                 </TableHeader>
                 <TableBody>
                   {tab.items.map((i) => {
-                    const liveStock =
-                      products.find((p) => p.id === i.product.id)?.stock ?? i.product.stock;
+                    const liveProduct = products.find((p) => p.id === i.product.id);
+                    const liveStock = stockAt(liveProduct ?? i.product, currentOutletId);
                     return (
                       <TableRow key={i.product.id}>
                         <TableCell>
@@ -1035,7 +1049,10 @@ function SellPage() {
           <div className="space-y-4">
             <div className="space-y-1.5">
               <Label>Currency</Label>
-              <Select value={tab.currency ?? "none"} onValueChange={(v) => selectCurrency(v === "none" ? null : v)}>
+              <Select
+                value={tab.currency ?? "none"}
+                onValueChange={(v) => selectCurrency(v === "none" ? null : v)}
+              >
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
@@ -1067,7 +1084,9 @@ function SellPage() {
                 </div>
                 {currencyTotal !== null && (
                   <div className="rounded-lg border border-border p-3 text-sm">
-                    <p className="text-xs uppercase text-muted-foreground">Total in {tab.currency}</p>
+                    <p className="text-xs uppercase text-muted-foreground">
+                      Total in {tab.currency}
+                    </p>
                     <p className="text-lg font-semibold text-foreground">
                       {currencyTotal.toFixed(2)}
                     </p>

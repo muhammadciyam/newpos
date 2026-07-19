@@ -19,7 +19,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { Plus, Inbox } from "lucide-react";
 import { toast } from "sonner";
 import { useQuotations, quotationsStore } from "@/lib/quotations-store";
@@ -49,13 +56,17 @@ function QuotationsPage() {
     setLocation("");
   }
 
-  function createNewCustomer() {
+  async function createNewCustomer() {
     if (!newCustomerName.trim()) return;
-    const created = customersStore.create({
+    const created = await customersStore.create({
       name: newCustomerName.trim(),
       mobile: newCustomerMobile.trim(),
       limit: 0,
     });
+    if ("error" in created) {
+      toast.error(created.error);
+      return;
+    }
     setCustomer(created.name);
     toast.success(`Customer "${created.name}" created`);
     setNewCustomerName("");
@@ -111,7 +122,13 @@ function QuotationsPage() {
                     <TableCell>{q.total.toFixed(2)}</TableCell>
                     <TableCell>{q.created}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => toast(`Quotation ${q.number} for ${q.customer || "walk-in"}`)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          toast(`Quotation ${q.number} for ${q.customer || "walk-in"}`)
+                        }
+                      >
                         Details
                       </Button>
                     </TableCell>

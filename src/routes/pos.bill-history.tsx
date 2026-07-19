@@ -48,6 +48,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useBills, useBillsPolling, billsStore } from "@/lib/bills-store";
+import { useRegister, registerDisplayName } from "@/lib/register-store";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useHasPermission } from "@/lib/permissions";
 import { useProducts } from "@/lib/products-store";
@@ -74,6 +75,7 @@ const statusColor: Record<Bill["status"], string> = {
 function BillHistoryPage() {
   const allBills = useBills();
   useBillsPolling();
+  const { registers } = useRegister();
   const customers = useCustomers();
   const currentUser = useCurrentUser();
   const currency = useSettings().general.currency;
@@ -100,7 +102,9 @@ function BillHistoryPage() {
   const voidBill = scopedBills.find((b) => b.number === voidNumber) ?? null;
   const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
 
-  const pendingBills = scopedBills.filter((b) => b.paymentStatus === "Pending" && b.status === "Sale");
+  const pendingBills = scopedBills.filter(
+    (b) => b.paymentStatus === "Pending" && b.status === "Sale",
+  );
   const pendingTotal = pendingBills.reduce((s, b) => s + b.total, 0);
 
   async function settlePayment(bill: Bill) {
@@ -184,7 +188,9 @@ function BillHistoryPage() {
                   </TableCell>
                   <TableCell>
                     {b.location}
-                    <span className="block text-xs text-muted-foreground">{b.register}</span>
+                    <span className="block text-xs text-muted-foreground">
+                      {registerDisplayName(registers, b.register)}
+                    </span>
                   </TableCell>
                   <TableCell>
                     <Badge className={statusColor[b.status]}>{b.status}</Badge>

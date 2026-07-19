@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,9 +23,12 @@ import {
 import { ClipboardList, Check, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
+import { stockAt } from "@/lib/pos-data";
 import { useSettings } from "@/lib/settings-store";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
+import { useOutlets } from "@/lib/outlets-store";
+import { useScopeOutletId } from "@/lib/outlet-scope";
 
 export const Route = createFileRoute("/stock-count")({
   head: () => ({ meta: [{ title: "Stock Count - Dhipos" }] }),
@@ -39,10 +42,25 @@ function StockCountPage() {
   const products = useProducts();
   useProductsPolling();
   const settings = useSettings();
+  const outlets = useOutlets();
+  // Restricted to the viewer's own outlet — the same rule as every other outlet-scoped
+  // screen (registers, bills, reports). Super Admin (scopeOutletId === null) can still pick
+  // any outlet.
+  const scopeOutletId = useScopeOutletId();
+  const selectableOutlets = scopeOutletId ? outlets.filter((o) => o.id === scopeOutletId) : outlets;
 
   const [search, setSearch] = useState("");
   const [drafts, setDrafts] = useState<Record<string, DraftRow>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [outletId, setOutletId] = useState("");
+
+  useEffect(() => {
+    if (scopeOutletId) {
+      if (outletId !== scopeOutletId) setOutletId(scopeOutletId);
+      return;
+    }
+    if (!outletId && outlets.length > 0) setOutletId(outlets[0].id);
+  }, [outletId, outlets, scopeOutletId]);
 
   if (!canAccess) return <RestrictedPage />;
 
@@ -63,11 +81,14 @@ function StockCountPage() {
   }
 
   function setDraft(id: string, stock: number, patch: Partial<DraftRow>) {
-    setDrafts((d) => ({ ...d, [id]: { ...(d[id] ?? { qty: String(stock), reason: "" }), ...patch } }));
+    setDrafts((d) => ({
+      ...d,
+      [id]: { ...(d[id] ?? { qty: String(stock), reason: "" }), ...patch },
+    }));
   }
 
   async function toggleCountable(id: string, name: string, next: boolean) {
-    const result = await productsStore.update(id, { countable: next });
+    const result = await productsStore.setCountable(id, next);
     if ("error" in result) {
       toast.error(result.error);
       return;
@@ -76,11 +97,12 @@ function StockCountPage() {
   }
 
   async function saveCount(id: string, name: string, currentStock: number) {
+    if (!outletId) return;
     const draft = draftFor(id, currentStock);
     const newQty = parseInt(draft.qty, 10);
     if (!Number.isFinite(newQty) || newQty < 0 || !draft.reason) return;
     setSavingId(id);
-    const result = await productsStore.setStockCount(id, newQty, draft.reason);
+    const result = await productsStore.setStockCount(id, outletId, newQty, draft.reason);
     setSavingId(null);
     if ("error" in result) {
       toast.error(result.error);
@@ -101,14 +123,26 @@ function StockCountPage() {
           <div>
             <h1 className="text-2xl font-bold text-foreground">Stock Count</h1>
             <p className="text-sm text-muted-foreground">
-              Mark which products are countable, then record physical counts directly in the
-              table — each change is saved with a reason.
+              Mark which products are countable, then record physical counts directly in the table —
+              each change is saved with a reason.
             </p>
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="bg-emerald-100 text-emerald-700">
               {countableCount} of {products.length} countable
             </Badge>
+            <Select value={outletId} onValueChange={setOutletId} disabled={!!scopeOutletId}>
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Select an outlet" />
+              </SelectTrigger>
+              <SelectContent>
+                {selectableOutlets.map((o) => (
+                  <SelectItem key={o.id} value={o.id}>
+                    {o.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
@@ -154,9 +188,9 @@ function StockCountPage() {
               )}
               {filtered.map((p) => {
                 const countable = p.countable !== false;
-                const draft = draftFor(p.id, p.stock);
+                const draft = draftFor(p.id, stockAt(p, outletId));
                 const parsedQty = parseInt(draft.qty, 10);
-                const delta = Number.isFinite(parsedQty) ? parsedQty - p.stock : null;
+                const delta = Number.isFinite(parsedQty) ? parsedQty - stockAt(p, outletId) : null;
                 const canSave =
                   countable &&
                   Number.isFinite(parsedQty) &&
@@ -185,12 +219,12 @@ function StockCountPage() {
                       <Badge
                         variant="outline"
                         className={
-                          p.stock === 0
+                          stockAt(p, outletId) === 0
                             ? "bg-destructive/10 text-destructive"
                             : "bg-emerald-100 text-emerald-700"
                         }
                       >
-                        {p.stock}
+                        {stockAt(p, outletId)}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -200,7 +234,9 @@ function StockCountPage() {
                             type="number"
                             min="0"
                             value={draft.qty}
-                            onChange={(e) => setDraft(p.id, p.stock, { qty: e.target.value })}
+                            onChange={(e) =>
+                              setDraft(p.id, stockAt(p, outletId), { qty: e.target.value })
+                            }
                             className="w-24"
                           />
                           {delta !== null && delta !== 0 && (
@@ -223,7 +259,7 @@ function StockCountPage() {
                       {countable && (
                         <Select
                           value={draft.reason}
-                          onValueChange={(v) => setDraft(p.id, p.stock, { reason: v })}
+                          onValueChange={(v) => setDraft(p.id, stockAt(p, outletId), { reason: v })}
                         >
                           <SelectTrigger className="w-40">
                             <SelectValue placeholder="Select reason" />
@@ -243,7 +279,7 @@ function StockCountPage() {
                         <Button
                           size="sm"
                           disabled={!canSave}
-                          onClick={() => saveCount(p.id, p.name, p.stock)}
+                          onClick={() => saveCount(p.id, p.name, stockAt(p, outletId))}
                           className="gap-1.5"
                         >
                           <Check className="h-3.5 w-3.5" />

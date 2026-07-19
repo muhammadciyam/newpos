@@ -4,12 +4,38 @@ import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stat-card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { CalendarDays } from "lucide-react";
-import { Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis, CartesianGrid } from "recharts";
+import {
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+} from "recharts";
 import { toast } from "sonner";
-import { netSalesSeries, salesCountSeries, dashboardStats, topSellingProducts } from "@/lib/pos-data";
+import {
+  netSalesSeries,
+  salesCountSeries,
+  dashboardStats,
+  topSellingProducts,
+} from "@/lib/pos-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -21,7 +47,14 @@ export const Route = createFileRoute("/")({
   component: DashboardPage,
 });
 
-function ChartTooltip({ active, payload, label, prefix }: any) {
+type ChartTooltipProps = {
+  active?: boolean;
+  payload?: { value: number }[];
+  label?: string;
+  prefix?: string;
+};
+
+function ChartTooltip({ active, payload, label, prefix }: ChartTooltipProps) {
   if (!active || !payload?.length) return null;
   const value = payload[0].value as number;
   return (
@@ -35,7 +68,15 @@ function ChartTooltip({ active, payload, label, prefix }: any) {
   );
 }
 
-function DashboardChart({ title, data, prefix = "" }: { title: string; data: typeof netSalesSeries; prefix?: string }) {
+function DashboardChart({
+  title,
+  data,
+  prefix = "",
+}: {
+  title: string;
+  data: typeof netSalesSeries;
+  prefix?: string;
+}) {
   return (
     <Card className="p-4">
       <p className="text-xs font-bold uppercase tracking-wider text-primary">{title}</p>
@@ -90,7 +131,12 @@ function DashboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-foreground">Sales Dashboard</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <Select defaultValue="all" onValueChange={(v) => toast.success(`Showing ${v === "all" ? "All Outlets" : "Seven Mart"}`)}>
+            <Select
+              defaultValue="all"
+              onValueChange={(v) =>
+                toast.success(`Showing ${v === "all" ? "All Outlets" : "Seven Mart"}`)
+              }
+            >
               <SelectTrigger className="w-40">
                 <SelectValue placeholder="All Outlets" />
               </SelectTrigger>
@@ -120,8 +166,8 @@ function DashboardPage() {
             <div>
               <p className="font-semibold text-foreground">Dhipos in your Pocket!</p>
               <p className="text-sm text-muted-foreground">
-                Our brand new Dhipos mobile app is now available on Android and iOS app stores! Download now to
-                manage your business on the go.
+                Our brand new Dhipos mobile app is now available on Android and iOS app stores!
+                Download now to manage your business on the go.
               </p>
               <button
                 onClick={() => setShowPromo(false)}
@@ -148,15 +194,66 @@ function DashboardPage() {
         )}
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-          <StatCard label="Today's Total Sales" value={s.todayTotalSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.todayTotalSalesChange} />
-          <StatCard label="Today's Net Sales" value={s.todayNetSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.todayNetSalesChange} />
-          <StatCard label="Today's Credit Sales" value={s.todayCreditSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} neutral />
-          <StatCard label="Yesterday's Net Sales" value={s.yesterdayNetSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.yesterdayNetSalesChange} />
-          <StatCard label="This month Net sales" value={s.monthNetSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} change={s.monthNetSalesChange} />
-          <StatCard label="Customers this month" value={String(s.customersThisMonth)} change={s.customersThisMonthChange} />
-          <StatCard label="Products sold this month" value={String(s.productsSoldThisMonth)} change={s.productsSoldThisMonthChange} />
-          <StatCard label="Refunds this month" value={String(s.refundsThisMonth)} change={s.refundsThisMonthChange} />
-          <StatCard label="Voids This month" value={String(s.voidsThisMonth)} change={s.voidsThisMonthChange} />
+          <StatCard
+            label="Today's Total Sales"
+            value={s.todayTotalSales.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            change={s.todayTotalSalesChange}
+          />
+          <StatCard
+            label="Today's Net Sales"
+            value={s.todayNetSales.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            change={s.todayNetSalesChange}
+          />
+          <StatCard
+            label="Today's Credit Sales"
+            value={s.todayCreditSales.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            neutral
+          />
+          <StatCard
+            label="Yesterday's Net Sales"
+            value={s.yesterdayNetSales.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            change={s.yesterdayNetSalesChange}
+          />
+          <StatCard
+            label="This month Net sales"
+            value={s.monthNetSales.toLocaleString(undefined, {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}
+            change={s.monthNetSalesChange}
+          />
+          <StatCard
+            label="Customers this month"
+            value={String(s.customersThisMonth)}
+            change={s.customersThisMonthChange}
+          />
+          <StatCard
+            label="Products sold this month"
+            value={String(s.productsSoldThisMonth)}
+            change={s.productsSoldThisMonthChange}
+          />
+          <StatCard
+            label="Refunds this month"
+            value={String(s.refundsThisMonth)}
+            change={s.refundsThisMonthChange}
+          />
+          <StatCard
+            label="Voids This month"
+            value={String(s.voidsThisMonth)}
+            change={s.voidsThisMonthChange}
+          />
         </div>
 
         <Card className="overflow-hidden p-5">
@@ -183,10 +280,23 @@ function DashboardPage() {
                 {topSellingProducts.map((p) => (
                   <TableRow key={p.name}>
                     <TableCell className="font-medium">{p.name}</TableCell>
-                    <TableCell>{p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</TableCell>
+                    <TableCell>
+                      {p.revenue.toLocaleString(undefined, {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2,
+                      })}
+                    </TableCell>
                     <TableCell>{p.sold.toLocaleString()}</TableCell>
                     <TableCell>
-                      <Button variant="outline" size="sm" onClick={() => toast(`${p.name}: ${p.sold.toLocaleString()} sold, ${p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} revenue`)}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() =>
+                          toast(
+                            `${p.name}: ${p.sold.toLocaleString()} sold, ${p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} revenue`,
+                          )
+                        }
+                      >
                         Details
                       </Button>
                     </TableCell>

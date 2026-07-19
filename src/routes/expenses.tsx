@@ -6,7 +6,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +44,12 @@ export const Route = createFileRoute("/expenses")({
 
 const months = ["Feb", "Mar", "Apr", "May", "Jun", "Jul"];
 
-const emptyForm = { description: "", category: "", amount: "", date: new Date().toISOString().slice(0, 10) };
+const emptyForm = {
+  description: "",
+  category: "",
+  amount: "",
+  date: new Date().toISOString().slice(0, 10),
+};
 
 function ExpensesPage() {
   const expenses = useExpenses();
@@ -56,9 +68,18 @@ function ExpensesPage() {
         e.category.toLowerCase().includes(search.toLowerCase())),
   );
 
-  function addExpense() {
+  async function addExpense() {
     const amount = parseFloat(form.amount) || 0;
-    expensesStore.create({ description: form.description, category: form.category || "Uncategorised", amount, date: form.date });
+    const result = await expensesStore.create({
+      description: form.description,
+      category: form.category || "Uncategorised",
+      amount,
+      date: form.date,
+    });
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast.success(`Expense "${form.description}" added`);
     setForm(emptyForm);
     setOpen(false);
@@ -80,7 +101,9 @@ function ExpensesPage() {
             <div className="flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="text-2xl font-bold text-foreground">Expenses</h1>
-                <p className="text-sm text-muted-foreground">Track all your expenses in one place.</p>
+                <p className="text-sm text-muted-foreground">
+                  Track all your expenses in one place.
+                </p>
               </div>
               <Button className="gap-1.5" onClick={() => setOpen(true)}>
                 <Plus className="h-4 w-4" /> Add Expense
@@ -89,22 +112,32 @@ function ExpensesPage() {
 
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
               <Card className="p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Total</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Total
+                </p>
                 <p className="mt-2 text-2xl font-bold text-foreground">{total.toFixed(2)}</p>
                 <p className="text-xs text-muted-foreground">vs 0.00 previous period</p>
               </Card>
               <Card className="p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Entries</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Entries
+                </p>
                 <p className="mt-2 text-2xl font-bold text-foreground">{expenses.length}</p>
-                <p className="text-xs text-muted-foreground">{expenses.length ? "in this period" : "no entries yet"}</p>
+                <p className="text-xs text-muted-foreground">
+                  {expenses.length ? "in this period" : "no entries yet"}
+                </p>
               </Card>
               <Card className="p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Avg Per Month</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Avg Per Month
+                </p>
                 <p className="mt-2 text-2xl font-bold text-foreground">{total.toFixed(2)}</p>
                 <p className="text-xs text-muted-foreground">trailing 6 months</p>
               </Card>
               <Card className="p-5">
-                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Outstanding</p>
+                <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                  Outstanding
+                </p>
                 <p className="mt-2 text-2xl font-bold text-foreground">0.00</p>
                 <p className="text-xs text-muted-foreground">nothing outstanding this period</p>
               </Card>
@@ -115,15 +148,20 @@ function ExpensesPage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-semibold text-foreground">Monthly total - by category</p>
-                    <p className="text-sm text-muted-foreground">Last 6 months - current month highlighted</p>
+                    <p className="text-sm text-muted-foreground">
+                      Last 6 months - current month highlighted
+                    </p>
                   </div>
                   <p className="text-sm text-muted-foreground">
-                    Jul 2026 <span className="font-semibold text-foreground">MVR{total.toFixed(2)}</span>
+                    Jul 2026{" "}
+                    <span className="font-semibold text-foreground">MVR{total.toFixed(2)}</span>
                   </p>
                 </div>
                 <div className="mt-6 flex h-40 flex-col items-center justify-center gap-1 border-t border-border pt-4 text-sm text-muted-foreground">
                   <p>{expenses.length ? "Trend chart coming soon" : "No data yet"}</p>
-                  <p className="text-xs">{expenses.length ? "" : "Log an expense to start the trend"}</p>
+                  <p className="text-xs">
+                    {expenses.length ? "" : "Log an expense to start the trend"}
+                  </p>
                 </div>
                 <div className="mt-2 flex justify-between text-xs text-muted-foreground">
                   {months.map((m) => (
@@ -139,9 +177,13 @@ function ExpensesPage() {
                     <Tag className="h-4 w-4" />
                   </span>
                   <p className="font-medium text-foreground">
-                    {expenses.length ? `${new Set(expenses.map((e) => e.category)).size} categories logged` : "Nothing logged this month"}
+                    {expenses.length
+                      ? `${new Set(expenses.map((e) => e.category)).size} categories logged`
+                      : "Nothing logged this month"}
                   </p>
-                  <p className="text-center text-xs">Add an expense to start the category breakdown.</p>
+                  <p className="text-center text-xs">
+                    Add an expense to start the category breakdown.
+                  </p>
                 </div>
               </Card>
             </div>
@@ -186,8 +228,8 @@ function ExpensesPage() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filtered.map((e, i) => (
-                      <TableRow key={i}>
+                    {filtered.map((e) => (
+                      <TableRow key={e.id}>
                         <TableCell className="font-medium">{e.description}</TableCell>
                         <TableCell>{e.category}</TableCell>
                         <TableCell>{e.amount.toFixed(2)}</TableCell>
@@ -208,10 +250,14 @@ function ExpensesPage() {
           </TabsContent>
 
           <TabsContent value="categories" className="mt-4">
-            <Card className="p-10 text-center text-sm text-muted-foreground">No categories created yet.</Card>
+            <Card className="p-10 text-center text-sm text-muted-foreground">
+              No categories created yet.
+            </Card>
           </TabsContent>
           <TabsContent value="vendors" className="mt-4">
-            <Card className="p-10 text-center text-sm text-muted-foreground">No vendors added yet.</Card>
+            <Card className="p-10 text-center text-sm text-muted-foreground">
+              No vendors added yet.
+            </Card>
           </TabsContent>
         </Tabs>
       </div>
@@ -224,20 +270,36 @@ function ExpensesPage() {
           <div className="space-y-3">
             <div className="space-y-1.5">
               <Label>Description</Label>
-              <Input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="e.g. Electricity bill" />
+              <Input
+                value={form.description}
+                onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                placeholder="e.g. Electricity bill"
+              />
             </div>
             <div className="space-y-1.5">
               <Label>Category</Label>
-              <Input value={form.category} onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))} placeholder="e.g. Utilities" />
+              <Input
+                value={form.category}
+                onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                placeholder="e.g. Utilities"
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Amount</Label>
-                <Input value={form.amount} onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))} placeholder="0.00" />
+                <Input
+                  value={form.amount}
+                  onChange={(e) => setForm((f) => ({ ...f, amount: e.target.value }))}
+                  placeholder="0.00"
+                />
               </div>
               <div className="space-y-1.5">
                 <Label>Date</Label>
-                <Input type="date" value={form.date} onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))} />
+                <Input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) => setForm((f) => ({ ...f, date: e.target.value }))}
+                />
               </div>
             </div>
           </div>

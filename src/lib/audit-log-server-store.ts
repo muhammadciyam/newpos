@@ -12,6 +12,7 @@ export type ServerAuditLog = {
   action: "create" | "update" | "delete" | "login" | "logout" | "view";
   object: string;
   at: string;
+  outletId: string | null;
 };
 
 export async function getServerAuditLog(): Promise<ServerAuditLog[]> {

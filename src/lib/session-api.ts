@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getServerSessionState, mutateServerSessionState } from "@/lib/session-server-store";
+import { getServerUsers } from "@/lib/users-server-store";
 
 export const fetchSessionsOnServer = createServerFn({ method: "GET" }).handler(async () => {
   return getServerSessionState();
@@ -51,6 +52,15 @@ export const forceLogoutOnServer = createServerFn({ method: "POST" })
     // model (src/lib/permissions.ts), not a real security boundary against a malicious client.
     if (data.role !== "Admin" && data.role !== "Super Admin") {
       return { error: "Only an Admin can force-logout a user" };
+    }
+    // Super Admin can never be force-logged-out by a regular Admin — matches the singleton
+    // owner-account protections in users-api.ts (can't be created/edited/suspended/removed
+    // by anyone but itself).
+    if (data.role !== "Super Admin") {
+      const target = (await getServerUsers()).find((u) => u.email === data.email);
+      if (target?.role === "Super Admin") {
+        return { error: "Cannot force-logout the Super Admin account" };
+      }
     }
     await mutateServerSessionState((s) => {
       const next = { ...s };

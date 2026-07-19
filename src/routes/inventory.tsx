@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -52,6 +52,8 @@ import {
 import { useHasPermission } from "@/lib/permissions";
 import { useCurrentUser } from "@/lib/auth-store";
 import { RestrictedPage } from "@/components/restricted-page";
+import { useOutlets } from "@/lib/outlets-store";
+import { useScopeOutletId } from "@/lib/outlet-scope";
 
 export const Route = createFileRoute("/inventory")({
   head: () => ({ meta: [{ title: "Inventory - Dhipos" }] }),
@@ -71,13 +73,18 @@ function InventoryPage() {
   const currentUser = useCurrentUser();
   // Deliberately stricter than the usual inventory.approve permission (which Manager also
   // has) — clearing wipes every invoice record outright, so it's Admin/Super Admin only.
-  const canClearInventory =
-    currentUser?.role === "Admin" || currentUser?.role === "Super Admin";
+  const canClearInventory = currentUser?.role === "Admin" || currentUser?.role === "Super Admin";
   const invoices = usePurchaseInvoices();
   const products = useProducts();
   useProductsPolling();
+  const outlets = useOutlets();
+  // Restricted to the viewer's own outlet — the same rule as Stock Count. Super Admin
+  // (scopeOutletId === null) can still pick any outlet to receive stock into.
+  const scopeOutletId = useScopeOutletId();
+  const selectableOutlets = scopeOutletId ? outlets.filter((o) => o.id === scopeOutletId) : outlets;
 
   const [open, setOpen] = useState(false);
+  const [outletId, setOutletId] = useState("");
   const [supplierName, setSupplierName] = useState("");
   const [supplierGstNumber, setSupplierGstNumber] = useState("");
   const [supplierPhone, setSupplierPhone] = useState("");
@@ -92,6 +99,10 @@ function InventoryPage() {
   const [gstPercent, setGstPercent] = useState("");
   const [gstAmount, setGstAmount] = useState("");
   const [detailsId, setDetailsId] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open && scopeOutletId) setOutletId(scopeOutletId);
+  }, [open, scopeOutletId]);
 
   if (!canAccess) return <RestrictedPage />;
 
@@ -158,9 +169,10 @@ function InventoryPage() {
     gstAmountOverride: gstMode === "amount" ? parseFloat(gstAmount) || 0 : null,
   });
 
-  function submit() {
-    if (!lines.length || !supplierName.trim()) return;
-    const invoice = purchaseInvoicesStore.create({
+  async function submit() {
+    if (!lines.length || !supplierName.trim() || !outletId) return;
+    const result = await purchaseInvoicesStore.create({
+      outletId,
       supplierName: supplierName.trim(),
       supplierGstNumber: supplierGstNumber.trim(),
       supplierPhone: supplierPhone.trim(),
@@ -169,8 +181,13 @@ function InventoryPage() {
       gstPercent: parseFloat(gstPercent) || 0,
       gstAmountOverride: gstMode === "amount" ? parseFloat(gstAmount) || 0 : null,
     });
-    toast.success(`Purchase Invoice ${invoice.number} submitted for review`);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`Purchase Invoice ${result.number} submitted for review`);
     setLines([]);
+    setOutletId("");
     setSupplierName("");
     setSupplierGstNumber("");
     setSupplierPhone("");
@@ -181,18 +198,30 @@ function InventoryPage() {
     setOpen(false);
   }
 
-  function markReceived(id: string, number: string) {
-    purchaseInvoicesStore.markReceived(id);
+  async function markReceived(id: string, number: string) {
+    const result = await purchaseInvoicesStore.markReceived(id);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast.success(`Purchase Invoice ${number} marked as received`);
   }
 
   async function approve(id: string, number: string) {
-    await purchaseInvoicesStore.approve(id);
+    const result = await purchaseInvoicesStore.approve(id);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast.success(`Purchase Invoice ${number} approved — stock updated`);
   }
 
-  function reject(id: string, number: string) {
-    purchaseInvoicesStore.reject(id);
+  async function reject(id: string, number: string) {
+    const result = await purchaseInvoicesStore.reject(id);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
     toast(`Purchase Invoice ${number} rejected`);
   }
 
@@ -226,20 +255,29 @@ function InventoryPage() {
                 </AlertDialogTrigger>
                 <AlertDialogContent>
                   <AlertDialogHeader>
-                    <AlertDialogTitle>Delete all {invoices.length} Purchase Invoices?</AlertDialogTitle>
+                    <AlertDialogTitle>
+                      Delete all {invoices.length} Purchase Invoices?
+                    </AlertDialogTitle>
                     <AlertDialogDescription>
-                      This permanently deletes every purchase invoice record on this device —
-                      pending, received, approved, and rejected. It does not reverse stock that
-                      an already-approved invoice has already added; only the invoice records
+                      This permanently deletes every purchase invoice record{" "}
+                      {scopeOutletId ? "for this outlet" : "across every outlet"} — pending,
+                      received, approved, and rejected. It does not reverse stock that an
+                      already-approved invoice has already added; only the invoice records
                       themselves are removed. This can't be undone.
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                     <AlertDialogAction
-                      onClick={() => {
-                        purchaseInvoicesStore.clearAll();
-                        toast.success("All Purchase Invoices deleted");
+                      onClick={async () => {
+                        const result = await purchaseInvoicesStore.clearAll(
+                          invoices.map((i) => i.id),
+                        );
+                        if ("error" in result) {
+                          toast.error(result.error);
+                          return;
+                        }
+                        toast.success("Purchase Invoices deleted");
                       }}
                     >
                       Delete All
@@ -256,6 +294,7 @@ function InventoryPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Number</TableHead>
+                <TableHead>Outlet</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead>Items</TableHead>
                 <TableHead>Total</TableHead>
@@ -266,7 +305,7 @@ function InventoryPage() {
             <TableBody>
               {invoices.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6}>
+                  <TableCell colSpan={7}>
                     <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
                       <Database className="h-10 w-10" />
                       <p>No purchase invoices yet.</p>
@@ -276,7 +315,7 @@ function InventoryPage() {
               )}
               {invoices.length > 0 && filteredInvoices.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center text-muted-foreground">
+                  <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     No purchase invoices match your search.
                   </TableCell>
                 </TableRow>
@@ -290,6 +329,11 @@ function InventoryPage() {
                       <span className="block text-xs text-muted-foreground">
                         By {inv.createdBy}
                       </span>
+                    </TableCell>
+                    <TableCell>
+                      {outlets.find((o) => o.id === inv.outletId)?.name ?? (
+                        <span className="text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       {inv.supplierName || <span className="text-muted-foreground">—</span>}
@@ -359,6 +403,23 @@ function InventoryPage() {
             <DialogTitle>New Purchase Invoice</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>
+                <span className="text-destructive">*</span> Receiving Outlet
+              </Label>
+              <Select value={outletId} onValueChange={setOutletId} disabled={!!scopeOutletId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select an outlet" />
+                </SelectTrigger>
+                <SelectContent>
+                  {selectableOutlets.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>
@@ -547,7 +608,7 @@ function InventoryPage() {
             <Button variant="outline" onClick={() => setOpen(false)}>
               Cancel
             </Button>
-            <Button disabled={!lines.length || !supplierName.trim()} onClick={submit}>
+            <Button disabled={!lines.length || !supplierName.trim() || !outletId} onClick={submit}>
               Submit for Review
             </Button>
           </DialogFooter>

@@ -12,6 +12,8 @@ import {
 } from "@/components/ui/table";
 import { useAuditLogs, useAuditLogPolling } from "@/lib/audit-log-store";
 import { useHasPermission } from "@/lib/permissions";
+import { useOutlets } from "@/lib/outlets-store";
+import { useScopeOutletId } from "@/lib/outlet-scope";
 
 export const Route = createFileRoute("/admin/audit-logs")({
   head: () => ({
@@ -33,6 +35,12 @@ function AuditLogsPage() {
   const canViewAuditLogs = useHasPermission("settings.manage");
   const auditLogs = useAuditLogs();
   useAuditLogPolling();
+  const outlets = useOutlets();
+  // Only meaningful once more than one outlet's activity shows together (Super Admin, who
+  // sees every outlet combined) — everyone else's log is already restricted to their own
+  // outlet, so an Outlet column would be redundant for them.
+  const scopeOutletId = useScopeOutletId();
+  const showOutletColumn = !scopeOutletId;
 
   if (!canViewAuditLogs) return <RestrictedPage />;
 
@@ -47,13 +55,17 @@ function AuditLogsPage() {
                 <TableHead>Company / User</TableHead>
                 <TableHead>Action</TableHead>
                 <TableHead>Object</TableHead>
+                {showOutletColumn && <TableHead>Outlet</TableHead>}
                 <TableHead>At</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {auditLogs.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={4} className="py-10 text-center text-muted-foreground">
+                  <TableCell
+                    colSpan={showOutletColumn ? 5 : 4}
+                    className="py-10 text-center text-muted-foreground"
+                  >
                     No activity recorded yet.
                   </TableCell>
                 </TableRow>
@@ -67,6 +79,11 @@ function AuditLogsPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>{log.object}</TableCell>
+                  {showOutletColumn && (
+                    <TableCell className="text-muted-foreground">
+                      {outlets.find((o) => o.id === log.outletId)?.name ?? "—"}
+                    </TableCell>
+                  )}
                   <TableCell className="text-muted-foreground">{log.at}</TableCell>
                 </TableRow>
               ))}

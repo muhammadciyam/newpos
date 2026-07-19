@@ -11,12 +11,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useBills, useBillsPolling } from "@/lib/bills-store";
-import { useRegisterSessions } from "@/lib/register-store";
+import { useRegisterSessions, useRegister, registerDisplayName } from "@/lib/register-store";
 import { useSettings } from "@/lib/settings-store";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
 import { toIsoDate, todayIso } from "@/lib/report-utils";
-import { ReportPageShell, StatCard, SummaryRow, downloadSearchSchema } from "@/components/report-page-shell";
+import {
+  ReportPageShell,
+  StatCard,
+  SummaryRow,
+  downloadSearchSchema,
+} from "@/components/report-page-shell";
 import { ReportDateRangeControl, type ReportRange } from "@/components/report-date-range";
 import type { Bill } from "@/lib/pos-data";
 
@@ -34,6 +39,7 @@ function DaySummaryPage() {
   const bills = useBills();
   useBillsPolling();
   const sessions = useRegisterSessions();
+  const { registers } = useRegister();
   const settings = useSettings();
   const [range, setRange] = useState<ReportRange>(() => {
     const d = todayIso();
@@ -174,7 +180,9 @@ function DaySummaryPage() {
             )}
             {daySessions.map((s) => (
               <TableRow key={s.no}>
-                <TableCell className="font-medium">{s.register}</TableCell>
+                <TableCell className="font-medium">
+                  {registerDisplayName(registers, s.register)}
+                </TableCell>
                 <TableCell>{s.by}</TableCell>
                 <TableCell className="text-muted-foreground">{s.createdAt}</TableCell>
                 <TableCell className="text-muted-foreground">{s.closedAt ?? "—"}</TableCell>

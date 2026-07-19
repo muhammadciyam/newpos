@@ -142,7 +142,7 @@ function CustomersPage() {
     setOpen(true);
   }
 
-  function saveCustomer() {
+  async function saveCustomer() {
     if (settings.customer.requireMobileOnCreate && !form.mobile.trim()) {
       toast.error("Mobile number is required (Settings > Customer).");
       return;
@@ -160,10 +160,18 @@ function CustomersPage() {
       limit,
     };
     if (editingId) {
-      customersStore.update(editingId, payload);
+      const result = await customersStore.update(editingId, payload);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(`Customer "${form.name}" updated`);
     } else {
-      customersStore.create(payload);
+      const result = await customersStore.create(payload);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
       toast.success(`Customer "${form.name}" created`);
     }
     setOpen(false);
@@ -199,7 +207,10 @@ function CustomersPage() {
               placeholder="Enter Name, Mobile numb..."
               className="w-56"
             />
-            <Select value={balanceFilter} onValueChange={(v) => setBalanceFilter(v as typeof balanceFilter)}>
+            <Select
+              value={balanceFilter}
+              onValueChange={(v) => setBalanceFilter(v as typeof balanceFilter)}
+            >
               <SelectTrigger className="w-40">
                 <SelectValue />
               </SelectTrigger>
@@ -296,8 +307,12 @@ function CustomersPage() {
                               <AlertDialogFooter>
                                 <AlertDialogCancel>Cancel</AlertDialogCancel>
                                 <AlertDialogAction
-                                  onClick={() => {
-                                    customersStore.remove(c.id);
+                                  onClick={async () => {
+                                    const result = await customersStore.remove(c.id);
+                                    if ("error" in result) {
+                                      toast.error(result.error);
+                                      return;
+                                    }
                                     toast.success(`"${c.name}" deleted`);
                                   }}
                                 >
@@ -390,7 +405,9 @@ function CustomersPage() {
               <Label>Default Price Level</Label>
               <Select
                 value={form.priceLevel}
-                onValueChange={(v) => setForm((f) => ({ ...f, priceLevel: v as "default" | "wholesale" }))}
+                onValueChange={(v) =>
+                  setForm((f) => ({ ...f, priceLevel: v as "default" | "wholesale" }))
+                }
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select a level" />

@@ -1,12 +1,18 @@
-import { useEffect, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { fetchAuditLog, addAuditLogOnServer } from "@/lib/audit-log-api";
 import { safeServerCall } from "@/lib/server-fn-helpers";
+import { authStore } from "@/lib/auth-store";
+import { useScopeOutletId } from "@/lib/outlet-scope";
 
 export type AuditLog = {
   user: string;
   action: "create" | "update" | "delete" | "login" | "logout" | "view";
   object: string;
   at: string;
+  // Which outlet the acting user belonged to at the time — null for Super Admin (who isn't
+  // tied to one outlet) or a user with no outlet assigned. Computed here, not passed in by
+  // callers, so none of logAudit's ~9 call sites across the app need to change.
+  outletId: string | null;
 };
 
 function formatNow() {
@@ -40,7 +46,8 @@ function ensureInitialFetch() {
 // of them need to change. Optimistically prepends locally for instant feedback, then
 // persists to the server in the background.
 export function logAudit(user: string, action: AuditLog["action"], object: string) {
-  const entry: AuditLog = { user, action, object, at: formatNow() };
+  const outletId = authStore.getCurrentUser()?.outletId ?? null;
+  const entry: AuditLog = { user, action, object, at: formatNow(), outletId };
   setLogs([entry, ...logs].slice(0, 500));
   void safeServerCall(() => addAuditLogOnServer({ data: entry }));
 }
@@ -57,12 +64,19 @@ export function useAuditLogPolling(intervalMs = 5000) {
 
 export function useAuditLogs(): AuditLog[] {
   useEffect(() => ensureInitialFetch(), []);
-  return useSyncExternalStore(
+  const allLogs = useSyncExternalStore(
     (cb) => {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
     () => logs,
     () => logs,
+  );
+  // Restricted to the current user's own outlet — Super Admin sees every outlet's
+  // activity combined, unrestricted. Matches useBills()/useProducts()/useCustomers().
+  const scopeOutletId = useScopeOutletId();
+  return useMemo(
+    () => (scopeOutletId ? allLogs.filter((l) => l.outletId === scopeOutletId) : allLogs),
+    [allLogs, scopeOutletId],
   );
 }

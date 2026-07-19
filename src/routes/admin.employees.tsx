@@ -29,19 +29,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Pencil, Upload, FileText, IdCard, Trash2 } from "lucide-react";
+import { Plus, Pencil, Upload, FileText, IdCard, Trash2, Lock } from "lucide-react";
 import { toast } from "sonner";
 import {
   authStore,
   useUsers,
   useUsersPolling,
+  useCurrentUser,
   type AppUser,
+  type EmployeeProfile,
   type Role,
   type PayType,
   type EmploymentStatus,
   type Certificate,
 } from "@/lib/auth-store";
-import { useHasPermission } from "@/lib/permissions";
+import { useHasPermission, canViewSensitiveEmployeeInfo } from "@/lib/permissions";
+import { useCustomRoles } from "@/lib/custom-roles-store";
+import { useOutlets } from "@/lib/outlets-store";
 
 export const Route = createFileRoute("/admin/employees")({
   head: () => ({ meta: [{ title: "Employees — Dhipos" }] }),
@@ -61,6 +65,7 @@ const emptyCreateForm = {
   username: "",
   password: "",
   role: "Cashier" as Role,
+  outletId: "",
   photo: "",
   phone: "",
   jobTitle: "",
@@ -117,6 +122,10 @@ function EmployeesPage() {
   const canManageUsers = useHasPermission("users.manage");
   useUsersPolling();
   const users = useUsers();
+  const currentUser = useCurrentUser();
+  const customRoles = useCustomRoles();
+  const allRoles = [...roles, ...customRoles.map((r) => r.name)];
+  const outlets = useOutlets();
 
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyCreateForm);
@@ -142,6 +151,10 @@ function EmployeesPage() {
 
   async function createEmployee() {
     setError("");
+    if (!form.outletId) {
+      setError("Outlet is required");
+      return;
+    }
     const result = await authStore.createUser({
       ...form,
       salary: form.salary.trim() ? parseFloat(form.salary) : null,
@@ -158,29 +171,42 @@ function EmployeesPage() {
     setOpen(false);
   }
 
+  const editingUser = users.find((u) => u.id === editingId) ?? null;
+  // Pay, national ID, address, emergency contact, and ID photo are hidden from a regular
+  // Admin viewing another Admin's (or Super Admin's) profile — see canViewSensitiveEmployeeInfo.
+  const canViewPrivate = editingUser
+    ? canViewSensitiveEmployeeInfo(currentUser, editingUser)
+    : true;
+
   function openEdit(user: AppUser) {
     setEditingId(user.id);
     setEditForm(toEditForm(user));
   }
 
   async function saveEdit() {
-    if (!editingId || !editForm) return;
-    const result = await authStore.updateProfile(editingId, {
+    if (!editingId || !editForm || !editingUser) return;
+    const patch: Partial<EmployeeProfile> = {
       photo: editForm.photo || null,
       phone: editForm.phone,
       jobTitle: editForm.jobTitle,
       department: editForm.department,
       hireDate: editForm.hireDate,
       employmentStatus: editForm.employmentStatus,
-      salary: editForm.salary.trim() ? parseFloat(editForm.salary) : null,
-      payType: editForm.payType,
-      nationalId: editForm.nationalId,
-      address: editForm.address,
-      emergencyContactName: editForm.emergencyContactName,
-      emergencyContactPhone: editForm.emergencyContactPhone,
-      idCardPhoto: editForm.idCardPhoto || null,
       certificates: editForm.certificates,
-    });
+    };
+    // Only include the private fields in the patch when the editor was actually shown them —
+    // the form never received real values for a target it can't view, so sending them
+    // unconditionally would silently wipe out the real (hidden) data with blanks.
+    if (canViewPrivate) {
+      patch.salary = editForm.salary.trim() ? parseFloat(editForm.salary) : null;
+      patch.payType = editForm.payType;
+      patch.nationalId = editForm.nationalId;
+      patch.address = editForm.address;
+      patch.emergencyContactName = editForm.emergencyContactName;
+      patch.emergencyContactPhone = editForm.emergencyContactPhone;
+      patch.idCardPhoto = editForm.idCardPhoto || null;
+    }
+    const result = await authStore.updateProfile(editingId, patch);
     if ("error" in result) {
       toast.error(result.error);
       return;
@@ -245,7 +271,11 @@ function EmployeesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {u.salary != null ? (
+                    {!canViewSensitiveEmployeeInfo(currentUser, u) ? (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Lock className="h-3 w-3" /> Restricted
+                      </span>
+                    ) : u.salary != null ? (
                       <>
                         {u.salary.toFixed(2)}
                         <span className="block text-xs text-muted-foreground">{u.payType}</span>
@@ -255,12 +285,18 @@ function EmployeesPage() {
                     )}
                   </TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                      <IdCard
-                        className={`h-3.5 w-3.5 ${u.idCardPhoto ? "text-emerald-600" : ""}`}
-                      />
-                      {u.idCardPhoto ? "ID on file" : "No ID"}
-                    </div>
+                    {!canViewSensitiveEmployeeInfo(currentUser, u) ? (
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Lock className="h-3 w-3" /> ID Restricted
+                      </span>
+                    ) : (
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                        <IdCard
+                          className={`h-3.5 w-3.5 ${u.idCardPhoto ? "text-emerald-600" : ""}`}
+                        />
+                        {u.idCardPhoto ? "ID on file" : "No ID"}
+                      </div>
+                    )}
                     <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                       <FileText className="h-3.5 w-3.5" />
                       {u.certificates.length} certificate{u.certificates.length === 1 ? "" : "s"}
@@ -374,9 +410,29 @@ function EmployeesPage() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {roles.map((r) => (
+                    {allRoles.map((r) => (
                       <SelectItem key={r} value={r}>
                         {r}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1.5">
+                <Label>
+                  <span className="text-destructive">*</span> Outlet
+                </Label>
+                <Select
+                  value={form.outletId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, outletId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an outlet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {outlets.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -639,7 +695,11 @@ function EmployeesPage() {
             </Button>
             <Button
               disabled={
-                !form.name.trim() || !form.email.trim() || !form.username.trim() || !form.password
+                !form.name.trim() ||
+                !form.email.trim() ||
+                !form.username.trim() ||
+                !form.password ||
+                !form.outletId
               }
               onClick={createEmployee}
             >
@@ -749,128 +809,147 @@ function EmployeesPage() {
                 </div>
               </section>
 
-              <section className="space-y-3 border-t border-border pt-4">
-                <p className="text-sm font-semibold text-foreground">Pay Info</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Salary / Wage</Label>
-                    <Input
-                      value={editForm.salary}
-                      onChange={(e) => setEditForm((f) => f && { ...f, salary: e.target.value })}
-                      placeholder="0.00"
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Pay Type</Label>
-                    <Select
-                      value={editForm.payType}
-                      onValueChange={(v) =>
-                        setEditForm((f) => f && { ...f, payType: v as PayType })
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="Hourly">Hourly</SelectItem>
-                        <SelectItem value="Monthly">Monthly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-              </section>
-
-              <section className="space-y-3 border-t border-border pt-4">
-                <p className="text-sm font-semibold text-foreground">ID &amp; Emergency Contact</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>National ID / Passport</Label>
-                    <Input
-                      value={editForm.nationalId}
-                      onChange={(e) =>
-                        setEditForm((f) => f && { ...f, nationalId: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Address</Label>
-                    <Input
-                      value={editForm.address}
-                      onChange={(e) => setEditForm((f) => f && { ...f, address: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <Label>Emergency Contact Name</Label>
-                    <Input
-                      value={editForm.emergencyContactName}
-                      onChange={(e) =>
-                        setEditForm((f) => f && { ...f, emergencyContactName: e.target.value })
-                      }
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label>Emergency Contact Phone</Label>
-                    <Input
-                      value={editForm.emergencyContactPhone}
-                      onChange={(e) =>
-                        setEditForm((f) => f && { ...f, emergencyContactPhone: e.target.value })
-                      }
-                    />
-                  </div>
-                </div>
-              </section>
-
-              <section className="space-y-3 border-t border-border pt-4">
-                <p className="text-sm font-semibold text-foreground">Documents</p>
-                <div className="space-y-1.5">
-                  <Label>ID Card Photo</Label>
-                  <div className="flex items-center gap-3">
-                    {editForm.idCardPhoto ? (
-                      <img
-                        src={editForm.idCardPhoto}
-                        alt="ID card"
-                        className="h-16 w-24 rounded border border-border object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-24 items-center justify-center rounded border border-dashed border-border text-xs text-muted-foreground">
-                        No image
+              {canViewPrivate ? (
+                <>
+                  <section className="space-y-3 border-t border-border pt-4">
+                    <p className="text-sm font-semibold text-foreground">Pay Info</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Salary / Wage</Label>
+                        <Input
+                          value={editForm.salary}
+                          onChange={(e) =>
+                            setEditForm((f) => f && { ...f, salary: e.target.value })
+                          }
+                          placeholder="0.00"
+                        />
                       </div>
-                    )}
-                    <input
-                      ref={editIdCardInput}
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) =>
-                        readFile(e.target.files?.[0], (url) =>
-                          setEditForm((f) => f && { ...f, idCardPhoto: url }),
-                        )
-                      }
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="gap-1.5"
-                      onClick={() => editIdCardInput.current?.click()}
-                    >
-                      <Upload className="h-3.5 w-3.5" />{" "}
-                      {editForm.idCardPhoto ? "Replace" : "Upload"} ID Card
-                    </Button>
-                    {editForm.idCardPhoto && (
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setEditForm((f) => f && { ...f, idCardPhoto: "" })}
-                      >
-                        Remove
-                      </Button>
-                    )}
-                  </div>
-                </div>
+                      <div className="space-y-1.5">
+                        <Label>Pay Type</Label>
+                        <Select
+                          value={editForm.payType}
+                          onValueChange={(v) =>
+                            setEditForm((f) => f && { ...f, payType: v as PayType })
+                          }
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="Hourly">Hourly</SelectItem>
+                            <SelectItem value="Monthly">Monthly</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-3 border-t border-border pt-4">
+                    <p className="text-sm font-semibold text-foreground">
+                      ID &amp; Emergency Contact
+                    </p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>National ID / Passport</Label>
+                        <Input
+                          value={editForm.nationalId}
+                          onChange={(e) =>
+                            setEditForm((f) => f && { ...f, nationalId: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Address</Label>
+                        <Input
+                          value={editForm.address}
+                          onChange={(e) =>
+                            setEditForm((f) => f && { ...f, address: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label>Emergency Contact Name</Label>
+                        <Input
+                          value={editForm.emergencyContactName}
+                          onChange={(e) =>
+                            setEditForm((f) => f && { ...f, emergencyContactName: e.target.value })
+                          }
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label>Emergency Contact Phone</Label>
+                        <Input
+                          value={editForm.emergencyContactPhone}
+                          onChange={(e) =>
+                            setEditForm((f) => f && { ...f, emergencyContactPhone: e.target.value })
+                          }
+                        />
+                      </div>
+                    </div>
+                  </section>
+
+                  <section className="space-y-3 border-t border-border pt-4">
+                    <p className="text-sm font-semibold text-foreground">ID Card</p>
+                    <div className="space-y-1.5">
+                      <Label>ID Card Photo</Label>
+                      <div className="flex items-center gap-3">
+                        {editForm.idCardPhoto ? (
+                          <img
+                            src={editForm.idCardPhoto}
+                            alt="ID card"
+                            className="h-16 w-24 rounded border border-border object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-16 w-24 items-center justify-center rounded border border-dashed border-border text-xs text-muted-foreground">
+                            No image
+                          </div>
+                        )}
+                        <input
+                          ref={editIdCardInput}
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) =>
+                            readFile(e.target.files?.[0], (url) =>
+                              setEditForm((f) => f && { ...f, idCardPhoto: url }),
+                            )
+                          }
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="gap-1.5"
+                          onClick={() => editIdCardInput.current?.click()}
+                        >
+                          <Upload className="h-3.5 w-3.5" />{" "}
+                          {editForm.idCardPhoto ? "Replace" : "Upload"} ID Card
+                        </Button>
+                        {editForm.idCardPhoto && (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditForm((f) => f && { ...f, idCardPhoto: "" })}
+                          >
+                            Remove
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </section>
+                </>
+              ) : (
+                <p className="flex items-center gap-1.5 rounded-lg border border-border bg-muted/50 p-3 text-sm text-muted-foreground">
+                  <Lock className="h-3.5 w-3.5 shrink-0" /> Pay, ID, and emergency contact info are
+                  private to this account and Super Admin.
+                </p>
+              )}
+
+              <section className="space-y-3 border-t border-border pt-4">
+                <p className="text-sm font-semibold text-foreground">Certificates</p>
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between">
                     <Label>Certificates</Label>

@@ -23,6 +23,7 @@ import { Route as ReportFocBillsRouteImport } from './routes/report-foc-bills'
 import { Route as ReportDaySummaryRouteImport } from './routes/report-day-summary'
 import { Route as ReportCustomerSalesRouteImport } from './routes/report-customer-sales'
 import { Route as ProductsRouteImport } from './routes/products'
+import { Route as MyProfileRouteImport } from './routes/my-profile'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ExpensesRouteImport } from './routes/expenses'
@@ -40,6 +41,7 @@ import { Route as AnalyticsSalesRouteImport } from './routes/analytics.sales'
 import { Route as AnalyticsInventoryRouteImport } from './routes/analytics.inventory'
 import { Route as AdminUsersRouteImport } from './routes/admin.users'
 import { Route as AdminTaxesRouteImport } from './routes/admin.taxes'
+import { Route as AdminSuperAdminRouteImport } from './routes/admin.super-admin'
 import { Route as AdminSettingsRouteImport } from './routes/admin.settings'
 import { Route as AdminPrintTemplatesRouteImport } from './routes/admin.print-templates'
 import { Route as AdminNotificationRouteImport } from './routes/admin.notification'
@@ -118,6 +120,11 @@ const ReportCustomerSalesRoute = ReportCustomerSalesRouteImport.update({
 const ProductsRoute = ProductsRouteImport.update({
   id: '/products',
   path: '/products',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MyProfileRoute = MyProfileRouteImport.update({
+  id: '/my-profile',
+  path: '/my-profile',
   getParentRoute: () => rootRouteImport,
 } as any)
 const LoginRoute = LoginRouteImport.update({
@@ -205,6 +212,11 @@ const AdminTaxesRoute = AdminTaxesRouteImport.update({
   path: '/admin/taxes',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminSuperAdminRoute = AdminSuperAdminRouteImport.update({
+  id: '/admin/super-admin',
+  path: '/admin/super-admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AdminSettingsRoute = AdminSettingsRouteImport.update({
   id: '/admin/settings',
   path: '/admin/settings',
@@ -257,6 +269,7 @@ export interface FileRoutesByFullPath {
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
+  '/my-profile': typeof MyProfileRoute
   '/products': typeof ProductsRoute
   '/report-customer-sales': typeof ReportCustomerSalesRoute
   '/report-day-summary': typeof ReportDaySummaryRoute
@@ -280,6 +293,7 @@ export interface FileRoutesByFullPath {
   '/admin/notification': typeof AdminNotificationRoute
   '/admin/print-templates': typeof AdminPrintTemplatesRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/super-admin': typeof AdminSuperAdminRoute
   '/admin/taxes': typeof AdminTaxesRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/inventory': typeof AnalyticsInventoryRoute
@@ -299,6 +313,7 @@ export interface FileRoutesByTo {
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
+  '/my-profile': typeof MyProfileRoute
   '/products': typeof ProductsRoute
   '/report-customer-sales': typeof ReportCustomerSalesRoute
   '/report-day-summary': typeof ReportDaySummaryRoute
@@ -322,6 +337,7 @@ export interface FileRoutesByTo {
   '/admin/notification': typeof AdminNotificationRoute
   '/admin/print-templates': typeof AdminPrintTemplatesRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/super-admin': typeof AdminSuperAdminRoute
   '/admin/taxes': typeof AdminTaxesRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/inventory': typeof AnalyticsInventoryRoute
@@ -342,6 +358,7 @@ export interface FileRoutesById {
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
   '/login': typeof LoginRoute
+  '/my-profile': typeof MyProfileRoute
   '/products': typeof ProductsRoute
   '/report-customer-sales': typeof ReportCustomerSalesRoute
   '/report-day-summary': typeof ReportDaySummaryRoute
@@ -365,6 +382,7 @@ export interface FileRoutesById {
   '/admin/notification': typeof AdminNotificationRoute
   '/admin/print-templates': typeof AdminPrintTemplatesRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/super-admin': typeof AdminSuperAdminRoute
   '/admin/taxes': typeof AdminTaxesRoute
   '/admin/users': typeof AdminUsersRoute
   '/analytics/inventory': typeof AnalyticsInventoryRoute
@@ -386,6 +404,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/inventory'
     | '/login'
+    | '/my-profile'
     | '/products'
     | '/report-customer-sales'
     | '/report-day-summary'
@@ -409,6 +428,7 @@ export interface FileRouteTypes {
     | '/admin/notification'
     | '/admin/print-templates'
     | '/admin/settings'
+    | '/admin/super-admin'
     | '/admin/taxes'
     | '/admin/users'
     | '/analytics/inventory'
@@ -428,6 +448,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/inventory'
     | '/login'
+    | '/my-profile'
     | '/products'
     | '/report-customer-sales'
     | '/report-day-summary'
@@ -451,6 +472,7 @@ export interface FileRouteTypes {
     | '/admin/notification'
     | '/admin/print-templates'
     | '/admin/settings'
+    | '/admin/super-admin'
     | '/admin/taxes'
     | '/admin/users'
     | '/analytics/inventory'
@@ -470,6 +492,7 @@ export interface FileRouteTypes {
     | '/expenses'
     | '/inventory'
     | '/login'
+    | '/my-profile'
     | '/products'
     | '/report-customer-sales'
     | '/report-day-summary'
@@ -493,6 +516,7 @@ export interface FileRouteTypes {
     | '/admin/notification'
     | '/admin/print-templates'
     | '/admin/settings'
+    | '/admin/super-admin'
     | '/admin/taxes'
     | '/admin/users'
     | '/analytics/inventory'
@@ -513,6 +537,7 @@ export interface RootRouteChildren {
   ExpensesRoute: typeof ExpensesRoute
   InventoryRoute: typeof InventoryRoute
   LoginRoute: typeof LoginRoute
+  MyProfileRoute: typeof MyProfileRoute
   ProductsRoute: typeof ProductsRoute
   ReportCustomerSalesRoute: typeof ReportCustomerSalesRoute
   ReportDaySummaryRoute: typeof ReportDaySummaryRoute
@@ -536,6 +561,7 @@ export interface RootRouteChildren {
   AdminNotificationRoute: typeof AdminNotificationRoute
   AdminPrintTemplatesRoute: typeof AdminPrintTemplatesRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminSuperAdminRoute: typeof AdminSuperAdminRoute
   AdminTaxesRoute: typeof AdminTaxesRoute
   AdminUsersRoute: typeof AdminUsersRoute
   AnalyticsInventoryRoute: typeof AnalyticsInventoryRoute
@@ -648,6 +674,13 @@ declare module '@tanstack/react-router' {
       path: '/products'
       fullPath: '/products'
       preLoaderRoute: typeof ProductsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/my-profile': {
+      id: '/my-profile'
+      path: '/my-profile'
+      fullPath: '/my-profile'
+      preLoaderRoute: typeof MyProfileRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/login': {
@@ -769,6 +802,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminTaxesRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin/super-admin': {
+      id: '/admin/super-admin'
+      path: '/admin/super-admin'
+      fullPath: '/admin/super-admin'
+      preLoaderRoute: typeof AdminSuperAdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/admin/settings': {
       id: '/admin/settings'
       path: '/admin/settings'
@@ -841,6 +881,7 @@ const rootRouteChildren: RootRouteChildren = {
   ExpensesRoute: ExpensesRoute,
   InventoryRoute: InventoryRoute,
   LoginRoute: LoginRoute,
+  MyProfileRoute: MyProfileRoute,
   ProductsRoute: ProductsRoute,
   ReportCustomerSalesRoute: ReportCustomerSalesRoute,
   ReportDaySummaryRoute: ReportDaySummaryRoute,
@@ -864,6 +905,7 @@ const rootRouteChildren: RootRouteChildren = {
   AdminNotificationRoute: AdminNotificationRoute,
   AdminPrintTemplatesRoute: AdminPrintTemplatesRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminSuperAdminRoute: AdminSuperAdminRoute,
   AdminTaxesRoute: AdminTaxesRoute,
   AdminUsersRoute: AdminUsersRoute,
   AnalyticsInventoryRoute: AnalyticsInventoryRoute,

@@ -2,6 +2,7 @@ import { QRCodeSVG } from "qrcode.react";
 import { type Bill } from "@/lib/pos-data";
 import { type PrintTemplate } from "@/lib/print-templates-store";
 import { useSettings } from "@/lib/settings-store";
+import { useRegister, registerDisplayName } from "@/lib/register-store";
 
 // Same-origin so it resolves correctly whether this is opened on localhost during
 // development or on whatever host the app is actually deployed to.
@@ -20,6 +21,7 @@ export function Receipt({
   storeName: string;
 }) {
   const settings = useSettings();
+  const { registers } = useRegister();
   const showQr = template.showQrCode && settings.myDhipos.eBillQrEnabled;
   const currency = settings.general.currency;
   const gstPercent = settings.tax.gstPercent;
@@ -46,7 +48,7 @@ export function Receipt({
       </div>
       <div className="flex justify-between text-xs">
         <span>Cashier: {bill.by}</span>
-        <span>{bill.register}</span>
+        <span>{registerDisplayName(registers, bill.register)}</span>
       </div>
       {bill.customer && <p className="text-xs">Customer: {bill.customer}</p>}
 

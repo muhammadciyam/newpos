@@ -1,4 +1,5 @@
 import { getSupabase } from "@/lib/supabase-client";
+import { getOrCreateDefaultOutlet } from "@/lib/outlets-server-store";
 
 // Server-only. Never import this from a client component or from register-store.ts's
 // client-facing exports — it must stay out of the client bundle. Only register-api.ts
@@ -23,6 +24,15 @@ export type ServerRegisterRecord = {
   // dialog's fields: mvr/usd/usd1/usd20/card/bank) — used to compute the Expected column
   // at close time. Cleared back to null once the register is closed.
   opening: Record<string, string> | null;
+  // Which outlet's inventory a sale on this register deducts from. Null only for registers
+  // created before per-outlet inventory existed and not yet reassigned.
+  outletId: string | null;
+  // Human-readable label shown everywhere in the UI. The `name` column (this record's key
+  // in ServerRegisterState.registers) is the internal identity — for registers created
+  // before this field existed, it's also the plain name; for registers created afterwards,
+  // it's a composite `${outletId}::${displayName}` (see src/lib/register-key.ts) so two
+  // outlets can each have their own "Counter 1" without colliding.
+  displayName: string;
 };
 
 export type ServerRegisterState = {
@@ -36,6 +46,24 @@ const STORE_NAME = "Seven Mart";
 
 let seeded = false;
 
+// Set once an upsert/insert actually fails because a given optional column doesn't exist
+// yet (the shop hasn't run the matching migration) — from then on, this process stops
+// trying to write that column at all, so a pending migration never breaks a core,
+// everyday operation like opening/closing a register.
+const columnKnownMissing: Record<"outlet_id" | "display_name", boolean> = {
+  outlet_id: false,
+  display_name: false,
+};
+
+function missingColumnFromError(
+  error: { message?: string } | null,
+): "outlet_id" | "display_name" | null {
+  const msg = error?.message?.toLowerCase() ?? "";
+  if (msg.includes("outlet_id")) return "outlet_id";
+  if (msg.includes("display_name")) return "display_name";
+  return null;
+}
+
 async function ensureSeeded() {
   if (seeded) return;
   seeded = true;
@@ -45,7 +73,15 @@ async function ensureSeeded() {
     .select("name", { count: "exact", head: true });
   if (error) throw error;
   if (count === 0) {
-    const { error: insertError } = await supabase.from("registers").insert({
+    // Best-effort — if the outlets table hasn't been migrated in yet, seed with no outlet
+    // rather than failing register seeding entirely; it can be assigned later.
+    let outletId: string | null = null;
+    try {
+      outletId = (await getOrCreateDefaultOutlet()).id;
+    } catch {
+      // outlets table not migrated yet
+    }
+    const baseRow = {
       name: "Counter 1",
       is_open: false,
       opened_at: null,
@@ -54,8 +90,19 @@ async function ensureSeeded() {
       last_closed_at: null,
       held_bill: null,
       opening: null,
-    });
-    if (insertError) throw insertError;
+    };
+    for (;;) {
+      const row = {
+        ...baseRow,
+        ...(columnKnownMissing.outlet_id ? {} : { outlet_id: outletId }),
+        ...(columnKnownMissing.display_name ? {} : { display_name: "Counter 1" }),
+      };
+      const { error: insertError } = await supabase.from("registers").insert(row);
+      if (!insertError) break;
+      const missing = missingColumnFromError(insertError);
+      if (!missing || columnKnownMissing[missing]) throw insertError;
+      columnKnownMissing[missing] = true;
+    }
   }
 }
 
@@ -69,6 +116,10 @@ function rowToRecord(row: any): ServerRegisterRecord {
     lastClosedAt: row.last_closed_at,
     heldBill: row.held_bill,
     opening: row.opening,
+    outletId: row.outlet_id ?? null,
+    // Rows created before display_name existed have it null — their `name` (this record's
+    // key) is already the plain human name in that case, so fall back to it.
+    displayName: row.display_name ?? row.name,
   };
 }
 
@@ -91,22 +142,31 @@ export async function mutateServerRegisterState(
 
   const nextEntries = Object.entries(next.registers);
   if (nextEntries.length > 0) {
-    const { error } = await supabase
-      .from("registers")
-      .upsert(
-        nextEntries.map(([name, r]) => ({
-          name,
-          is_open: r.isOpen,
-          opened_at: r.openedAt,
-          opened_by: r.openedBy,
-          opened_by_device_id: r.openedByDeviceId,
-          last_closed_at: r.lastClosedAt,
-          held_bill: r.heldBill,
-          opening: r.opening,
-        })),
-        { onConflict: "name" },
-      );
-    if (error) throw error;
+    for (;;) {
+      const rows = nextEntries.map(([key, r]) => ({
+        name: key,
+        is_open: r.isOpen,
+        opened_at: r.openedAt,
+        opened_by: r.openedBy,
+        opened_by_device_id: r.openedByDeviceId,
+        last_closed_at: r.lastClosedAt,
+        held_bill: r.heldBill,
+        opening: r.opening,
+        ...(columnKnownMissing.outlet_id ? {} : { outlet_id: r.outletId }),
+        ...(columnKnownMissing.display_name ? {} : { display_name: r.displayName }),
+      }));
+      const { error: upsertError } = await supabase
+        .from("registers")
+        .upsert(rows, { onConflict: "name" });
+      if (!upsertError) break;
+      // A pending migration (0008_registers_outlet.sql or 0009_registers_display_name.sql)
+      // hasn't been run yet — fall back to writing without that column rather than letting
+      // this (and every future open/close/create) fail outright, and remember not to bother
+      // retrying with it for this process's lifetime.
+      const missing = missingColumnFromError(upsertError);
+      if (!missing || columnKnownMissing[missing]) throw upsertError;
+      columnKnownMissing[missing] = true;
+    }
   }
   const currentNames = new Set(Object.keys(current.registers));
   const nextNames = new Set(Object.keys(next.registers));

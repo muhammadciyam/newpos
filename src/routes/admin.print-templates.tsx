@@ -35,6 +35,7 @@ const demoBill: Bill = {
   customer: "Jane Cooper",
   location: "Seven Mart",
   register: "Register 1",
+  outletId: null,
   status: "Sale",
   items: [
     { productId: "p1", name: "Espresso", price: 3.5, qty: 2 },

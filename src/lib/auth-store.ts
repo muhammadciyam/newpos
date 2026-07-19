@@ -15,13 +15,19 @@ import {
   fetchUsersOnServer,
   loginOnServer,
   createUserOnServer,
+  createSuperAdminOnServer,
   setStatusOnServer,
   setRoleOnServer,
   updateProfileOnServer,
   removeUserOnServer,
 } from "@/lib/users-api";
 
-export type Role = "Super Admin" | "Admin" | "Manager" | "Supervisor" | "Cashier";
+// The 5 built-in roles ship with a fixed permission set (see permissions.ts). A Super Admin
+// can also define custom roles (Admin > Users > Create Role) with a hand-picked permission
+// set — so `Role` accepts any string, not just these 5 literals.
+export const BUILT_IN_ROLES = ["Admin", "Manager", "Supervisor", "Cashier"] as const;
+export type BuiltInRole = "Super Admin" | (typeof BUILT_IN_ROLES)[number];
+export type Role = string;
 export type UserStatus = "Active" | "Suspended" | "Inactive";
 export type RegisterName = string;
 export type PayType = "Hourly" | "Monthly";
@@ -60,19 +66,34 @@ export type AppUser = {
   role: Role;
   status: UserStatus;
   authorizedRegister: RegisterName | null;
+  // Which outlet this user works at — required when creating a user from Admin > Users or
+  // Admin > Employees. Nullable only because users created before this field existed have
+  // none set.
+  outletId: string | null;
   createdAt: string;
 } & EmployeeProfile;
 
 export type LoginResult =
   | { ok: true; user: AppUser }
   | { ok: false; reason: "invalid" | "suspended" | "inactive" }
-  | { ok: false; reason: "network"; message: string };
+  | { ok: false; reason: "network"; message: string }
+  // The outlet typed on the login form isn't this account's assigned outlet — carries
+  // the assigned outlet's id so the caller can show its actual name.
+  | { ok: false; reason: "outlet-mismatch"; expectedOutletId: string };
 
 // Only this device's "which email am I logged in as" is local — the account directory
 // itself lives on the server (users-server-store.ts) so a user created on one device
 // can log in from any device, the same fix already applied to registers and sessions.
-const sessionStoreInternal = createPersistedStore<{ email: string | null }>("dhipos-session", {
+const sessionStoreInternal = createPersistedStore<{
+  email: string | null;
+  // The outlet name typed on the login form, matched against Outlet.id — must match this
+  // account's own assigned outlet (see login() below), and drives which outlet's name
+  // shows as storeName (header/sidebar/register/receipts). Actual data scoping
+  // (registers/bills/reports) instead uses the account's own outletId — see outlet-scope.ts.
+  outletId: string | null;
+}>("dhipos-session", {
   email: null,
+  outletId: null,
 });
 
 function normalize(value: string) {
@@ -161,7 +182,7 @@ export const authStore = {
   // Logging in on a new device always wins — it takes over the session server-side.
   // Whichever device held it previously discovers this via isSessionStillMine() polling
   // (see app-shell.tsx) and is logged out locally, with a message explaining why.
-  async login(identifier: string, password: string): Promise<LoginResult> {
+  async login(identifier: string, password: string, outletId: string | null): Promise<LoginResult> {
     const login = await safeServerCall(() => loginOnServer({ data: { identifier, password } }));
     if ("networkError" in login) {
       return { ok: false, reason: "network", message: login.error };
@@ -170,20 +191,31 @@ export const authStore = {
       // loginOnServer only ever returns one of these three literals here.
       return { ok: false, reason: login.error as "invalid" | "suspended" | "inactive" };
     }
+    // Reject before claiming a session — a user assigned to one outlet must not be able
+    // to log in under a different outlet's name (that would silently mislabel their
+    // header/sidebar/register view as the wrong outlet). Super Admin isn't tied to one
+    // outlet and unassigned accounts have nothing to check against, so both skip this.
+    if (
+      login.user.role !== "Super Admin" &&
+      login.user.outletId &&
+      login.user.outletId !== outletId
+    ) {
+      return { ok: false, reason: "outlet-mismatch", expectedOutletId: login.user.outletId };
+    }
     const claim = await safeServerCall(() =>
       claimSessionOnServer({ data: { email: login.user.email, deviceId: getDeviceId() } }),
     );
     if ("networkError" in claim) {
       return { ok: false, reason: "network", message: claim.error };
     }
-    sessionStoreInternal.set({ email: login.user.email });
+    sessionStoreInternal.set({ email: login.user.email, outletId });
     void refreshUsersFromServer();
     return { ok: true, user: login.user };
   },
 
   async logout() {
     const email = sessionStoreInternal.get().email;
-    sessionStoreInternal.set({ email: null });
+    sessionStoreInternal.set({ email: null, outletId: null });
     if (email) {
       try {
         await releaseSessionOnServer({ data: { email } });
@@ -198,7 +230,7 @@ export const authStore = {
   // NOT release the server-side claim, since that claim now legitimately belongs to
   // the other device; releasing it here would incorrectly kick that device out too.
   clearLocalSession() {
-    sessionStoreInternal.set({ email: null });
+    sessionStoreInternal.set({ email: null, outletId: null });
   },
 
   // Polled periodically while logged in (see app-shell.tsx) to detect a takeover by
@@ -236,6 +268,7 @@ export const authStore = {
       username: string;
       password: string;
       role: Role;
+      outletId: string | null;
     } & Partial<EmployeeProfile>,
   ): Promise<AppUser | { error: string }> {
     const result = await safeServerCall(() => createUserOnServer({ data: input }));
@@ -243,6 +276,23 @@ export const authStore = {
     if ("error" in result) return { error: result.error as string };
     await refreshUsersFromServer();
     logAudit(actor(), "create", `User / ${result.user.email}`);
+    return result.user;
+  },
+
+  // Mints an additional Super Admin. Gated client-side to existing Super Admins only (see
+  // src/routes/admin.super-admin.tsx) — there is no server-verified auth in this app, so
+  // this is a UI-level guard consistent with the rest of the app's all-client-trust model.
+  async createSuperAdmin(input: {
+    name: string;
+    email: string;
+    username: string;
+    password: string;
+  }): Promise<AppUser | { error: string }> {
+    const result = await safeServerCall(() => createSuperAdminOnServer({ data: input }));
+    if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return { error: result.error as string };
+    await refreshUsersFromServer();
+    logAudit(actor(), "create", `User / ${result.user.email} (Super Admin)`);
     return result.user;
   },
 
@@ -263,11 +313,15 @@ export const authStore = {
     return { ok: true };
   },
 
-  // Updates name, role/register, and all employee-profile fields (job info, pay,
+  // Updates name, role/register, outlet, and all employee-profile fields (job info, pay,
   // ID/emergency contact, photo). Does not touch email/username/password.
   async updateProfile(
     id: string,
-    patch: Partial<EmployeeProfile> & { name?: string; authorizedRegister?: RegisterName | null },
+    patch: Partial<EmployeeProfile> & {
+      name?: string;
+      authorizedRegister?: RegisterName | null;
+      outletId?: string | null;
+    },
   ): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() => updateProfileOnServer({ data: { id, patch } }));
     if ("error" in result) return result;
@@ -290,6 +344,13 @@ export function useCurrentUser(): AppUser | null {
   const users = useServerUsers();
   if (!session.email) return null;
   return users.find((u) => u.email === session.email) ?? null;
+}
+
+// The outlet matched against the name typed on the login form (see login.tsx) — reactive,
+// so anything displaying "which outlet am I in" updates immediately after a fresh login.
+export function useCurrentOutletId(): string | null {
+  const session = usePersistedStore(sessionStoreInternal);
+  return session.outletId;
 }
 
 export function useUsers() {
