@@ -145,18 +145,19 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
-        <div className="flex items-center gap-2 px-2 py-3">
+        <div className="flex items-center justify-center px-2 py-2.5">
           {collapsed ? (
             // Rail too narrow for the wordmark — same compact mark used for the favicon.
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center">
-              <img src="/icon.png" alt="Dhipos" className="h-8 w-8 object-contain" />
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center">
+              <img src="/icon.png" alt="Dhipos" className="h-10 w-10 object-contain" />
             </div>
           ) : (
-            // Full wordmark, same as the login screen — it already reads "Dhipos", so no
-            // separate text label next to it.
-            <div className="flex flex-1 items-center justify-between gap-2">
-              <img src="/logo.png" alt="Dhipos" className="h-7 w-auto" />
-              <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-sidebar-foreground/60">
+            // Full wordmark, same treatment as the login screen but a little larger — it
+            // already reads "Dhipos", so no separate text label, just the version inline
+            // right after it.
+            <div className="flex items-end gap-1.5">
+              <img src="/logo.png" alt="Dhipos" className="h-16 w-auto" />
+              <span className="pb-1 text-[11px] font-medium tracking-wide text-sidebar-foreground/50">
                 v1.0
               </span>
             </div>
