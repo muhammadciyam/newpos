@@ -640,6 +640,7 @@ function SellPage() {
                     <TableHead>Stock</TableHead>
                     <TableHead>Qty</TableHead>
                     <TableHead>Unit Price</TableHead>
+                    <TableHead>GST</TableHead>
                     <TableHead>Total</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -715,24 +716,29 @@ function SellPage() {
                             linePrice(i).toFixed(2)
                           )}
                         </TableCell>
+                        <TableCell className="text-muted-foreground">
+                          {i.product.gstApplicable !== false
+                            ? (linePrice(i) * i.qty * (settings.tax.gstPercent / 100)).toFixed(2)
+                            : "—"}
+                        </TableCell>
                         <TableCell>{(linePrice(i) * i.qty).toFixed(2)}</TableCell>
                       </TableRow>
                     );
                   })}
                   <TableRow>
-                    <TableCell colSpan={3} className="text-right font-semibold">
+                    <TableCell colSpan={4} className="text-right font-semibold">
                       Sub Total
                     </TableCell>
                     <TableCell className="font-semibold">{subtotal.toFixed(2)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={3} className="text-right font-semibold">
+                    <TableCell colSpan={4} className="text-right font-semibold">
                       Discount
                     </TableCell>
                     <TableCell className="font-semibold">{discount.toFixed(2)}</TableCell>
                   </TableRow>
                   <TableRow>
-                    <TableCell colSpan={3} className="text-right font-semibold">
+                    <TableCell colSpan={4} className="text-right font-semibold">
                       {subtotal > 0
                         ? `${settings.tax.gstLabel} @ ${settings.tax.gstPercent}%`
                         : "Total Taxes"}
@@ -741,7 +747,7 @@ function SellPage() {
                   </TableRow>
                   {tab.bagEnabled && bagQtyNum > 0 && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-right font-semibold">
+                      <TableCell colSpan={4} className="text-right font-semibold">
                         Plastic Bag Charge ({bagQtyNum} × {settings.tax.bagFeeRate.toFixed(2)}{" "}
                         {settings.general.currency})
                       </TableCell>
@@ -749,14 +755,14 @@ function SellPage() {
                     </TableRow>
                   )}
                   <TableRow>
-                    <TableCell colSpan={3} className="text-right text-base font-bold">
+                    <TableCell colSpan={4} className="text-right text-base font-bold">
                       Grand Total
                     </TableCell>
                     <TableCell className="text-base font-bold">{total.toFixed(2)}</TableCell>
                   </TableRow>
                   {currencyTotal !== null && (
                     <TableRow>
-                      <TableCell colSpan={3} className="text-right text-muted-foreground">
+                      <TableCell colSpan={4} className="text-right text-muted-foreground">
                         ≈ {tab.currency}
                       </TableCell>
                       <TableCell className="text-muted-foreground">
