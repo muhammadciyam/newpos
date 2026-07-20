@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { useBills } from "@/lib/bills-store";
-import { toIsoDate, dateToIso, daysAgoIso, todayIso } from "@/lib/report-utils";
+import { toIsoDate, dateToIso, isoToDate, daysAgoIso, todayIso } from "@/lib/report-utils";
+import type { ReportRange } from "@/components/report-date-range";
 import type { Bill, SalesPoint, TopSellingProduct } from "@/lib/pos-data";
 
 // The Home dashboard (src/routes/index.tsx) used to import dashboardStats/netSalesSeries/
@@ -87,11 +88,22 @@ function monthToDateRange(monthsAgo: number, dayOfMonth: number): { from: string
   return { from, to };
 }
 
-export function useDashboardStats(): {
+// Every field the "Details" view for a Top Selling Product needs — which bills (within the
+// selected range) actually contributed to its sold/revenue totals.
+export type ProductSaleDetail = {
+  billNumber: string;
+  created: string;
+  qty: number;
+  price: number;
+  lineTotal: number;
+};
+
+export function useDashboardStats(range: ReportRange): {
   stats: DashboardStats;
   netSalesSeries: SalesPoint[];
   salesCountSeries: SalesPoint[];
   topSellingProducts: TopSellingProduct[];
+  productDetails: Map<string, ProductSaleDetail[]>;
 } {
   const bills = useBills();
 
@@ -169,11 +181,13 @@ export function useDashboardStats(): {
       voidsThisMonthChange: pctChange(voidsThisMonth, voidsLastMonth),
     };
 
-    // Trailing 14 days, oldest first, for the two line charts.
+    // One point per day across the selected range, oldest first, for the two line charts —
+    // driven by the date picker in the page header instead of a fixed trailing window.
     const days: { iso: string; label: string }[] = [];
-    for (let i = 13; i >= 0; i--) {
-      const iso = daysAgoIso(i);
-      const d = new Date(iso);
+    const rangeStart = isoToDate(range.from);
+    const rangeEnd = isoToDate(range.to);
+    for (let d = new Date(rangeStart); d <= rangeEnd; d.setDate(d.getDate() + 1)) {
+      const iso = dateToIso(d);
       days.push({
         iso,
         label: d.toLocaleDateString(undefined, { day: "2-digit", month: "short" }),
@@ -190,14 +204,15 @@ export function useDashboardStats(): {
       value: bills.filter((b) => b.status !== "Void" && billDateIso(b) === iso).length,
     }));
 
-    // Best sellers over the trailing 30 days — a fixed all-time ranking would just ossify
-    // around whatever sold first and never reflect what's actually moving now.
-    const last30From = daysAgoIso(29);
-    const recentBills = bills.filter(
-      (b) => b.status !== "Void" && inRange(billDateIso(b), last30From, today),
+    // Best sellers within the selected range, plus which bills made up each one's totals
+    // (for the "Details" view) — a fixed all-time ranking would just ossify around whatever
+    // sold first and never reflect what's actually moving in the period being looked at.
+    const rangeBills = bills.filter(
+      (b) => b.status !== "Void" && inRange(billDateIso(b), range.from, range.to),
     );
     const byProduct = new Map<string, TopSellingProduct>();
-    for (const b of recentBills) {
+    const productDetails = new Map<string, ProductSaleDetail[]>();
+    for (const b of rangeBills) {
       for (const item of b.items) {
         const qty = Math.max(0, item.qty - (item.refundedQty ?? 0));
         if (qty === 0) continue;
@@ -208,12 +223,21 @@ export function useDashboardStats(): {
         } else {
           byProduct.set(item.name, { name: item.name, sold: qty, revenue: qty * item.price });
         }
+        const detailList = productDetails.get(item.name) ?? [];
+        detailList.push({
+          billNumber: b.number,
+          created: b.created,
+          qty,
+          price: item.price,
+          lineTotal: qty * item.price,
+        });
+        productDetails.set(item.name, detailList);
       }
     }
     const topSellingProducts = [...byProduct.values()]
       .sort((a, b) => b.revenue - a.revenue)
       .slice(0, 8);
 
-    return { stats, netSalesSeries, salesCountSeries, topSellingProducts };
-  }, [bills]);
+    return { stats, netSalesSeries, salesCountSeries, topSellingProducts, productDetails };
+  }, [bills, range.from, range.to]);
 }

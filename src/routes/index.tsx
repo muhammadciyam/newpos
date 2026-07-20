@@ -21,7 +21,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  CalendarDays,
   Wallet,
   TrendingUp,
   CreditCard,
@@ -52,6 +51,16 @@ import {
 import { toast } from "sonner";
 import { useDashboardStats } from "@/lib/dashboard-stats";
 import { useBillsPolling } from "@/lib/bills-store";
+import { ReportDateRangeControl, type ReportRange } from "@/components/report-date-range";
+import { daysAgoIso, todayIso } from "@/lib/report-utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { useSettings } from "@/lib/settings-store";
 import type { SalesPoint } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/")({
@@ -156,8 +165,17 @@ function DashboardPage() {
   // Actively refetches so a sale rung up on another device/register shows up here within
   // a few seconds too, not just when it happens in this same browser tab.
   useBillsPolling();
-  const { stats: s, netSalesSeries, salesCountSeries, topSellingProducts } = useDashboardStats();
+  const [range, setRange] = useState<ReportRange>(() => ({ from: daysAgoIso(13), to: todayIso() }));
+  const {
+    stats: s,
+    netSalesSeries,
+    salesCountSeries,
+    topSellingProducts,
+    productDetails,
+  } = useDashboardStats(range);
   const [showPromo, setShowPromo] = useState(true);
+  const [detailProduct, setDetailProduct] = useState<string | null>(null);
+  const currency = useSettings().general.currency;
 
   return (
     <AppShell>
@@ -187,21 +205,7 @@ function DashboardPage() {
                 <SelectItem value="seven-mart">Seven Mart</SelectItem>
               </SelectContent>
             </Select>
-            <Button
-              variant="outline"
-              className="gap-2 font-normal text-foreground"
-              onClick={() => toast("Date range picker coming soon")}
-            >
-              <span
-                className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
-                  iconColors.indigo,
-                )}
-              >
-                <CalendarDays className="h-3.5 w-3.5" strokeWidth={2.25} />
-              </span>
-              13 Jun 2026 <span className="text-muted-foreground">~</span> 13 Jul 2026
-            </Button>
+            <ReportDateRangeControl value={range} onChange={setRange} />
           </div>
         </div>
 
@@ -384,11 +388,7 @@ function DashboardPage() {
                         variant="outline"
                         size="sm"
                         className="gap-1.5 text-blue-600 hover:text-blue-700"
-                        onClick={() =>
-                          toast(
-                            `${p.name}: ${p.sold.toLocaleString()} sold, ${p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} revenue`,
-                          )
-                        }
+                        onClick={() => setDetailProduct(p.name)}
                       >
                         <Eye className="h-3.5 w-3.5" />
                         Details
@@ -401,6 +401,88 @@ function DashboardPage() {
           </div>
         </Card>
       </div>
+
+      <Dialog open={!!detailProduct} onOpenChange={(v) => !v && setDetailProduct(null)}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{detailProduct}</DialogTitle>
+            <DialogDescription>
+              Sales detail for the period selected above ({range.from} ~ {range.to}).
+            </DialogDescription>
+          </DialogHeader>
+          {detailProduct &&
+            (() => {
+              const summary = topSellingProducts.find((p) => p.name === detailProduct);
+              const lines = productDetails.get(detailProduct) ?? [];
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Total Sold</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {(summary?.sold ?? 0).toLocaleString()}
+                      </p>
+                    </div>
+                    <div className="rounded-lg border border-border p-3">
+                      <p className="text-xs text-muted-foreground">Total Revenue</p>
+                      <p className="text-xl font-bold text-foreground">
+                        {currency}{" "}
+                        {(summary?.revenue ?? 0).toLocaleString(undefined, {
+                          minimumFractionDigits: 2,
+                          maximumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+                  <div>
+                    <p className="mb-1.5 text-xs font-medium text-muted-foreground">
+                      Bills ({lines.length})
+                    </p>
+                    <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Bill</TableHead>
+                            <TableHead>Date</TableHead>
+                            <TableHead>Qty</TableHead>
+                            <TableHead>Line Total</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {lines.length === 0 && (
+                            <TableRow>
+                              <TableCell
+                                colSpan={4}
+                                className="py-6 text-center text-muted-foreground"
+                              >
+                                No bills in this period.
+                              </TableCell>
+                            </TableRow>
+                          )}
+                          {lines.map((line, idx) => (
+                            <TableRow key={`${line.billNumber}-${idx}`}>
+                              <TableCell className="font-medium">{line.billNumber}</TableCell>
+                              <TableCell className="text-muted-foreground">
+                                {line.created}
+                              </TableCell>
+                              <TableCell>{line.qty}</TableCell>
+                              <TableCell>
+                                {line.lineTotal.toLocaleString(undefined, {
+                                  minimumFractionDigits: 2,
+                                  maximumFractionDigits: 2,
+                                })}
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </div>
+                </div>
+              );
+            })()}
+        </DialogContent>
+      </Dialog>
     </AppShell>
   );
 }
