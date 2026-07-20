@@ -7,11 +7,11 @@ export const fetchProducts = createServerFn({ method: "GET" }).handler(async () 
 });
 
 export const createProductOnServer = createServerFn({ method: "POST" })
-  .validator((data: Omit<Product, "id" | "stock" | "stockByOutlet">) => data)
+  .validator((data: Omit<Product, "id" | "stock">) => data)
   .handler(async ({ data }) => {
-    // New products always start at zero stock everywhere — quantity can only ever be added
-    // via an approved Purchase Invoice or Stock Count, never set directly here.
-    const product: Product = { ...data, id: `p-${Date.now()}`, stock: 0, stockByOutlet: {} };
+    // New products always start at zero stock — quantity can only ever be added via an
+    // approved Purchase Invoice or Stock Count, never set directly here.
+    const product: Product = { ...data, id: `p-${Date.now()}`, stock: 0 };
     await mutateServerProducts((ps) => [product, ...ps]);
     return { ok: true as const, product };
   });
@@ -20,40 +20,43 @@ export const createProductOnServer = createServerFn({ method: "POST" })
 // createProductOnServer, just for many rows in one round trip. IDs are suffixed with the
 // row index (not just Date.now()) since a loop of single-ms inserts would otherwise collide.
 export const createProductsBulkOnServer = createServerFn({ method: "POST" })
-  .validator((data: { items: Omit<Product, "id" | "stock" | "stockByOutlet">[] }) => data)
+  .validator((data: { items: Omit<Product, "id" | "stock">[] }) => data)
   .handler(async ({ data }) => {
     const now = Date.now();
     const created: Product[] = data.items.map((item, i) => ({
       ...item,
       id: `p-${now}-${i}`,
       stock: 0,
-      stockByOutlet: {},
     }));
     await mutateServerProducts((ps) => [...created, ...ps]);
     return { ok: true as const, products: created };
   });
 
-// The product catalog (name/price/category/etc.) is shared across every outlet, so editing
-// it here affects every outlet at once — restricted to Super Admin so one outlet's Admin
-// can't change what every other outlet sees. `role` is a client-supplied claim — this app
-// has no server-verified auth (see the same caveat on forceCloseRegisterOnServer in
-// register-api.ts) — a UI-level guard consistent with the rest of the app's all-client-trust
-// permission model. Per-outlet stock changes (Stock Count, Purchase Invoices) go through
-// setProductCountableOnServer/adjustStock instead, and stay open to any outlet's staff.
+// Each outlet's catalog is its own — editing or deleting a product is only allowed by
+// Super Admin or by an Admin whose own outlet matches the product's outlet. `role`/
+// `callerOutletId` are client-supplied claims — this app has no server-verified auth (see
+// the same caveat on forceCloseRegisterOnServer in register-api.ts) — a UI-level guard
+// consistent with the rest of the app's all-client-trust permission model. `outletId`
+// itself is never editable via patch — a product can't be moved to a different outlet.
+function canManageProduct(product: Product, role: string, callerOutletId: string | null): boolean {
+  if (role === "Super Admin") return true;
+  return product.outletId !== null && product.outletId === callerOutletId;
+}
+
 export const updateProductOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: {
       id: string;
-      patch: Partial<Omit<Product, "stock" | "stockByOutlet">>;
+      patch: Partial<Omit<Product, "stock" | "outletId">>;
       role: string;
+      callerOutletId: string | null;
     }) => data,
   )
   .handler(async ({ data }) => {
-    if (data.role !== "Super Admin") {
-      return { error: "Only a Super Admin can edit the shared product catalog" };
-    }
-    if (!(await getServerProducts()).some((p) => p.id === data.id)) {
-      return { error: "Product not found" };
+    const product = (await getServerProducts()).find((p) => p.id === data.id);
+    if (!product) return { error: "Product not found" };
+    if (!canManageProduct(product, data.role, data.callerOutletId)) {
+      return { error: "You can only edit products belonging to your own outlet" };
     }
     await mutateServerProducts((ps) =>
       ps.map((p) => (p.id === data.id ? { ...p, ...data.patch } : p)),
@@ -62,10 +65,12 @@ export const updateProductOnServer = createServerFn({ method: "POST" })
   });
 
 export const removeProductOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string; role: string }) => data)
+  .validator((data: { id: string; role: string; callerOutletId: string | null }) => data)
   .handler(async ({ data }) => {
-    if (data.role !== "Super Admin") {
-      return { error: "Only a Super Admin can delete a product from the shared catalog" };
+    const product = (await getServerProducts()).find((p) => p.id === data.id);
+    if (!product) return { error: "Product not found" };
+    if (!canManageProduct(product, data.role, data.callerOutletId)) {
+      return { error: "You can only delete products belonging to your own outlet" };
     }
     await mutateServerProducts((ps) => ps.filter((p) => p.id !== data.id));
     return { ok: true as const };
@@ -108,34 +113,23 @@ export const setProductCostOnServer = createServerFn({ method: "POST" })
 // The only client-callable way stock is ever added — called when a Purchase Invoice is
 // approved. Sales instead decrement stock atomically inside bills-api.ts's handlers.
 export const increaseStockOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string; outletId: string; qty: number }) => data)
+  .validator((data: { id: string; qty: number }) => data)
   .handler(async ({ data }) => {
-    await adjustStock(data.id, data.outletId, data.qty);
+    await adjustStock(data.id, data.qty);
     const product = (await getServerProducts()).find((p) => p.id === data.id);
-    return {
-      ok: true as const,
-      stock: product?.stock ?? 0,
-      stockByOutlet: product?.stockByOutlet ?? {},
-    };
+    return { ok: true as const, stock: product?.stock ?? 0 };
   });
 
-// Stock Count — sets a product's stock at one outlet to a manually counted quantity (can
-// move it up or down, unlike increaseStockOnServer). `reason` is caller-supplied for the
-// audit trail only; validation of allowed reasons happens client-side against Settings >
-// Inventory.
+// Stock Count — sets a product's stock to a manually counted quantity (can move it up or
+// down, unlike increaseStockOnServer). `reason` is caller-supplied for the audit trail
+// only; validation of allowed reasons happens client-side against Settings > Inventory.
 export const setStockCountOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string; outletId: string; newQty: number; reason: string }) => data)
+  .validator((data: { id: string; newQty: number; reason: string }) => data)
   .handler(async ({ data }) => {
     const product = (await getServerProducts()).find((p) => p.id === data.id);
     if (!product) return { error: "Product not found" };
-    const currentAtOutlet = product.stockByOutlet?.[data.outletId] ?? 0;
-    const delta = data.newQty - currentAtOutlet;
-    await adjustStock(data.id, data.outletId, delta);
+    const delta = data.newQty - product.stock;
+    await adjustStock(data.id, delta);
     const updated = (await getServerProducts()).find((p) => p.id === data.id);
-    return {
-      ok: true as const,
-      stock: updated?.stock ?? 0,
-      stockByOutlet: updated?.stockByOutlet ?? {},
-      delta,
-    };
+    return { ok: true as const, stock: updated?.stock ?? 0, delta };
   });

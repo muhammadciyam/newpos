@@ -106,6 +106,11 @@ function InventoryPage() {
 
   if (!canAccess) return <RestrictedPage />;
 
+  // The line-item picker below only offers products belonging to the outlet this invoice is
+  // for — stock only ever lands in one outlet's catalog, so cross-outlet products don't belong
+  // in the list even for Super Admin.
+  const productsForOutlet = products.filter((p) => p.outletId === outletId);
+
   const detailsInvoice = invoices.find((i) => i.id === detailsId) ?? null;
   const filteredInvoices = invoices.filter((inv) => {
     const q = search.trim().toLowerCase();
@@ -119,7 +124,7 @@ function InventoryPage() {
   });
 
   function addLine() {
-    const product = products.find((p) => p.id === productId);
+    const product = productsForOutlet.find((p) => p.id === productId);
     if (!product) return;
     const quantity = parseInt(qty, 10) || 0;
     const cost = parseFloat(costPrice) || 0;
@@ -156,7 +161,7 @@ function InventoryPage() {
 
   function selectProduct(id: string) {
     setProductId(id);
-    const product = products.find((p) => p.id === id);
+    const product = productsForOutlet.find((p) => p.id === id);
     setCostPrice(product?.cost != null ? String(product.cost) : "");
     // GST is set on the product itself (Products > edit > GST switch) — a purchase invoice
     // line always follows that, never an independent choice made here.
@@ -460,12 +465,14 @@ function InventoryPage() {
             <div className="grid grid-cols-[1fr_70px_90px_auto_auto] items-end gap-2">
               <div className="space-y-1.5">
                 <label className="text-sm text-foreground">Product</label>
-                <Select value={productId} onValueChange={selectProduct}>
+                <Select value={productId} onValueChange={selectProduct} disabled={!outletId}>
                   <SelectTrigger>
-                    <SelectValue placeholder="Select a product" />
+                    <SelectValue
+                      placeholder={outletId ? "Select a product" : "Choose an outlet first"}
+                    />
                   </SelectTrigger>
                   <SelectContent>
-                    {products.map((p) => (
+                    {productsForOutlet.map((p) => (
                       <SelectItem key={p.id} value={p.id}>
                         {p.name}
                       </SelectItem>

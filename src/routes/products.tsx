@@ -37,7 +37,8 @@ import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import { useHasPermission } from "@/lib/permissions";
 import { ProductImportDialog } from "@/components/product-import-dialog";
 import { useSettings } from "@/lib/settings-store";
-import { useCurrentUser } from "@/lib/auth-store";
+import { useCurrentUser, useCurrentOutletId } from "@/lib/auth-store";
+import { useOutlets } from "@/lib/outlets-store";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/products")({
@@ -59,16 +60,23 @@ const emptyForm = {
   image: "",
   countable: true,
   gstApplicable: true,
+  outletId: "",
 };
 
 function ProductsPage() {
   const canManage = useHasPermission("products.manage");
-  // Editing/deleting an EXISTING product changes the shared catalog for every outlet at
-  // once, so — unlike adding a brand-new product, which only this outlet's stock starts
-  // at zero for — that's restricted to Super Admin (enforced again server-side in
-  // products-api.ts; this just keeps the buttons from being shown only to have them fail).
-  const isSuperAdmin = useCurrentUser()?.role === "Super Admin";
-  const canEditCatalog = canManage && isSuperAdmin;
+  const role = useCurrentUser()?.role;
+  const isSuperAdmin = role === "Super Admin";
+  const currentOutletId = useCurrentOutletId();
+  const outlets = useOutlets();
+  // Each outlet's catalog is its own — Super Admin can edit/delete anything, everyone else
+  // only their own outlet's products (enforced again server-side in products-api.ts; this
+  // just keeps the buttons from being shown only to have them fail).
+  function canManageProduct(p: { outletId: string | null }): boolean {
+    if (!canManage) return false;
+    if (isSuperAdmin) return true;
+    return p.outletId !== null && p.outletId === currentOutletId;
+  }
   const products = useProducts();
   useProductsPolling();
   const categories = useCategories();
@@ -98,7 +106,9 @@ function ProductsPage() {
 
   function openCreate() {
     setEditingId(null);
-    setForm(emptyForm);
+    // Pre-filled from the current user's own outlet; only Super Admin (who has none) gets
+    // a picker to choose one — see the dialog below.
+    setForm({ ...emptyForm, outletId: currentOutletId ?? "" });
     setOpen(true);
   }
 
@@ -115,6 +125,7 @@ function ProductsPage() {
       image: p.image,
       countable: p.countable ?? true,
       gstApplicable: p.gstApplicable ?? true,
+      outletId: p.outletId ?? "",
     });
     setOpen(true);
   }
@@ -130,6 +141,10 @@ function ProductsPage() {
   async function save() {
     if (settings.product.skuRequired && !form.sku.trim()) {
       toast.error("SKU is required (Settings > Product > Require SKU on new products).");
+      return;
+    }
+    if (!editingId && !form.outletId) {
+      toast.error("Choose which outlet this product belongs to.");
       return;
     }
     // Auto-generate a barcode when the setting is on and none was entered manually —
@@ -167,6 +182,7 @@ function ProductsPage() {
     const manualImage = form.image;
     const created = await productsStore.create({
       ...basePayload,
+      outletId: form.outletId,
       image: manualImage || PLACEHOLDER_PRODUCT_IMAGE,
     });
     if ("error" in created) {
@@ -262,13 +278,14 @@ function ProductsPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Product</TableHead>
+                {isSuperAdmin && <TableHead>Outlet</TableHead>}
                 <TableHead>Category</TableHead>
                 <TableHead>Cost</TableHead>
                 <TableHead>Price</TableHead>
                 <TableHead>Stock</TableHead>
                 <TableHead>Countable</TableHead>
                 <TableHead>GST</TableHead>
-                {canEditCatalog && <TableHead className="text-right">Actions</TableHead>}
+                {canManage && <TableHead className="text-right">Actions</TableHead>}
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -294,6 +311,11 @@ function ProductsPage() {
                       </div>
                     </div>
                   </TableCell>
+                  {isSuperAdmin && (
+                    <TableCell className="text-muted-foreground">
+                      {outlets.find((o) => o.id === p.outletId)?.name ?? "—"}
+                    </TableCell>
+                  )}
                   <TableCell className="capitalize text-muted-foreground">{p.category}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {p.cost != null ? `${currency} ${p.cost.toFixed(2)}` : "—"}
@@ -328,14 +350,20 @@ function ProductsPage() {
                       {p.gstApplicable === false ? "Exempt" : "Yes"}
                     </Badge>
                   </TableCell>
-                  {canEditCatalog && (
+                  {canManage && (
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(p.id)}>
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="icon" onClick={() => remove(p.id, p.name)}>
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {canManageProduct(p) ? (
+                        <>
+                          <Button variant="ghost" size="icon" onClick={() => openEdit(p.id)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button variant="ghost" size="icon" onClick={() => remove(p.id, p.name)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">Another outlet</span>
+                      )}
                     </TableCell>
                   )}
                 </TableRow>
@@ -343,7 +371,7 @@ function ProductsPage() {
               {filtered.length === 0 && (
                 <TableRow>
                   <TableCell
-                    colSpan={canEditCatalog ? 8 : 7}
+                    colSpan={(isSuperAdmin ? 1 : 0) + (canManage ? 8 : 7)}
                     className="py-10 text-center text-muted-foreground"
                   >
                     No products match your search.
@@ -403,6 +431,35 @@ function ProductsPage() {
                 placeholder="Product name"
               />
             </div>
+            {editingId ? (
+              <p className="text-xs text-muted-foreground">
+                Outlet: {outlets.find((o) => o.id === form.outletId)?.name ?? "—"} (can't be
+                changed)
+              </p>
+            ) : (
+              isSuperAdmin && (
+                <div className="space-y-1.5">
+                  <Label>
+                    <span className="text-destructive">*</span> Outlet
+                  </Label>
+                  <Select
+                    value={form.outletId}
+                    onValueChange={(v) => setForm((f) => ({ ...f, outletId: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select which outlet this product belongs to" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outlets.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              )
+            )}
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
                 <Label>Barcode</Label>
@@ -536,7 +593,8 @@ function ProductsPage() {
               disabled={
                 !form.name.trim() ||
                 !form.price ||
-                (settings.product.skuRequired && !form.sku.trim())
+                (settings.product.skuRequired && !form.sku.trim()) ||
+                (!editingId && !form.outletId)
               }
               onClick={save}
             >
@@ -546,7 +604,13 @@ function ProductsPage() {
         </DialogContent>
       </Dialog>
 
-      <ProductImportDialog open={importOpen} onOpenChange={setImportOpen} />
+      <ProductImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        outlets={outlets}
+        isSuperAdmin={isSuperAdmin}
+        defaultOutletId={currentOutletId}
+      />
     </AppShell>
   );
 }

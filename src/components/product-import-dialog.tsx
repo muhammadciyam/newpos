@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { FileDown, Upload } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
   Dialog,
   DialogContent,
@@ -8,15 +9,39 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
 import { toast } from "sonner";
 import { parseCsv, downloadCsv } from "@/lib/csv-utils";
 import { productsStore } from "@/lib/products-store";
 import { categoriesStore } from "@/lib/categories-store";
 import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import type { Product, Category } from "@/lib/pos-data";
+import type { Outlet } from "@/lib/outlets-store";
 
-const COLUMNS = ["Name", "Category", "Price", "Cost", "SKU", "Barcode", "GST Applicable", "Countable"];
+const COLUMNS = [
+  "Name",
+  "Category",
+  "Price",
+  "Cost",
+  "SKU",
+  "Barcode",
+  "GST Applicable",
+  "Countable",
+];
 
 const SAMPLE_ROWS = [
   ["Espresso", "Drinks", "3.50", "1.20", "ESP-001", "", "Yes", "Yes"],
@@ -99,7 +124,10 @@ function resolveCategoryId(name: string, cache: Map<string, string>): string {
     return existing.id;
   }
   const created = categoriesStore.create(name);
-  const id = "error" in created ? (categoriesStore.get().find((c) => c.name.toLowerCase() === key)?.id ?? "all") : created.id;
+  const id =
+    "error" in created
+      ? (categoriesStore.get().find((c) => c.name.toLowerCase() === key)?.id ?? "all")
+      : created.id;
   cache.set(key, id);
   return id;
 }
@@ -107,12 +135,21 @@ function resolveCategoryId(name: string, cache: Map<string, string>): string {
 export function ProductImportDialog({
   open,
   onOpenChange,
+  outlets,
+  isSuperAdmin,
+  defaultOutletId,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  // Every imported row lands in this one outlet's catalog — Super Admin has none of their
+  // own, so they pick one explicitly; everyone else's own outlet is used automatically.
+  outlets: Outlet[];
+  isSuperAdmin: boolean;
+  defaultOutletId: string | null;
 }) {
   const [rows, setRows] = useState<ParsedRow[] | null>(null);
   const [importing, setImporting] = useState(false);
+  const [outletId, setOutletId] = useState(defaultOutletId ?? "");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const validRows = rows?.filter((r) => !r.error) ?? [];
@@ -129,7 +166,7 @@ export function ProductImportDialog({
   }
 
   async function confirmImport() {
-    if (validRows.length === 0) return;
+    if (validRows.length === 0 || !outletId) return;
     setImporting(true);
     const categoryCache = new Map<string, string>();
     const inputs: Omit<Product, "id" | "stock">[] = validRows.map((r) => ({
@@ -137,6 +174,7 @@ export function ProductImportDialog({
       price: r.price as number,
       category: resolveCategoryId(r.categoryName, categoryCache),
       image: PLACEHOLDER_PRODUCT_IMAGE,
+      outletId,
       cost: r.cost,
       sku: r.sku,
       barcode: r.barcode,
@@ -159,6 +197,8 @@ export function ProductImportDialog({
     if (!v) {
       setRows(null);
       if (fileInputRef.current) fileInputRef.current.value = "";
+    } else {
+      setOutletId(defaultOutletId ?? "");
     }
   }
 
@@ -170,6 +210,25 @@ export function ProductImportDialog({
         </DialogHeader>
 
         <div className="space-y-4">
+          {isSuperAdmin && (
+            <div className="space-y-1.5">
+              <Label>
+                <span className="text-destructive">*</span> Outlet
+              </Label>
+              <Select value={outletId} onValueChange={setOutletId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Which outlet do these products belong to?" />
+                </SelectTrigger>
+                <SelectContent>
+                  {outlets.map((o) => (
+                    <SelectItem key={o.id} value={o.id}>
+                      {o.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <div className="flex flex-col gap-2 rounded-lg border border-border p-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-sm font-medium text-foreground">1. Get the template</p>
@@ -211,7 +270,9 @@ export function ProductImportDialog({
           {rows && (
             <div>
               <p className="mb-2 text-sm text-foreground">
-                <span className="font-medium text-emerald-600">{validRows.length} ready to import</span>
+                <span className="font-medium text-emerald-600">
+                  {validRows.length} ready to import
+                </span>
                 {invalidRows.length > 0 && (
                   <span className="text-destructive"> · {invalidRows.length} skipped (errors)</span>
                 )}
@@ -254,8 +315,13 @@ export function ProductImportDialog({
           <Button variant="outline" onClick={() => reset(false)}>
             Cancel
           </Button>
-          <Button onClick={confirmImport} disabled={validRows.length === 0 || importing}>
-            {importing ? "Importing..." : `Import ${validRows.length || ""} Product${validRows.length === 1 ? "" : "s"}`}
+          <Button
+            onClick={confirmImport}
+            disabled={validRows.length === 0 || importing || !outletId}
+          >
+            {importing
+              ? "Importing..."
+              : `Import ${validRows.length || ""} Product${validRows.length === 1 ? "" : "s"}`}
           </Button>
         </DialogFooter>
       </DialogContent>

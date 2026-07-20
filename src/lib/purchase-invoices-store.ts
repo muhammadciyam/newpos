@@ -163,7 +163,7 @@ export const purchaseInvoicesStore = {
     const invoice = invoices.find((i) => i.id === id);
     if (!invoice || invoice.status !== "Received") return { error: "Invoice not found" };
     for (const item of invoice.items) {
-      await productsStore.increaseStock(item.productId, invoice.outletId, item.qty);
+      await productsStore.increaseStock(item.productId, item.qty);
       await productsStore.setCost(item.productId, item.costPrice);
     }
     const at = formatNow();

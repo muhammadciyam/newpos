@@ -23,7 +23,6 @@ import {
 import { ClipboardList, Check, Search, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
-import { stockAt } from "@/lib/pos-data";
 import { useSettings } from "@/lib/settings-store";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
@@ -66,7 +65,13 @@ function StockCountPage() {
 
   if (!canAccess) return <RestrictedPage />;
 
-  const filtered = products.filter((p) => {
+  // useProducts() already scopes to the viewer's own outlet, but Super Admin can pick a
+  // *different* outlet via the Select above (scopeOutletId is null for them, so it returns
+  // every outlet's products combined) — filter to whichever outlet is actually selected so
+  // switching it re-filters the product list too, not just what stock number shows.
+  const productsForOutlet = products.filter((p) => p.outletId === outletId);
+
+  const filtered = productsForOutlet.filter((p) => {
     const q = search.trim().toLowerCase();
     if (!q) return true;
     return (
@@ -76,7 +81,7 @@ function StockCountPage() {
       (p.barcode ?? "").toLowerCase().includes(q)
     );
   });
-  const countableCount = products.filter((p) => p.countable !== false).length;
+  const countableCount = productsForOutlet.filter((p) => p.countable !== false).length;
 
   function draftFor(id: string, stock: number): DraftRow {
     return drafts[id] ?? { qty: String(stock), reason: "" };
@@ -104,7 +109,7 @@ function StockCountPage() {
     const newQty = parseInt(draft.qty, 10);
     if (!Number.isFinite(newQty) || newQty < 0 || !draft.reason) return;
     setSavingId(id);
-    const result = await productsStore.setStockCount(id, outletId, newQty, draft.reason);
+    const result = await productsStore.setStockCount(id, newQty, draft.reason);
     setSavingId(null);
     if ("error" in result) {
       toast.error(result.error);
@@ -131,7 +136,7 @@ function StockCountPage() {
           </div>
           <div className="flex items-center gap-3">
             <Badge variant="outline" className="bg-emerald-100 text-emerald-700">
-              {countableCount} of {products.length} countable
+              {countableCount} of {productsForOutlet.length} countable
             </Badge>
             <Select value={outletId} onValueChange={setOutletId} disabled={!!scopeOutletId}>
               <SelectTrigger className="w-48">
@@ -171,7 +176,7 @@ function StockCountPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {products.length === 0 && (
+              {productsForOutlet.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7}>
                     <div className="flex flex-col items-center gap-2 py-12 text-muted-foreground">
@@ -181,7 +186,7 @@ function StockCountPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {products.length > 0 && filtered.length === 0 && (
+              {productsForOutlet.length > 0 && filtered.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={7} className="py-10 text-center text-muted-foreground">
                     No products match your search.
@@ -190,9 +195,9 @@ function StockCountPage() {
               )}
               {filtered.map((p) => {
                 const countable = p.countable !== false;
-                const draft = draftFor(p.id, stockAt(p, outletId));
+                const draft = draftFor(p.id, p.stock);
                 const parsedQty = parseInt(draft.qty, 10);
-                const delta = Number.isFinite(parsedQty) ? parsedQty - stockAt(p, outletId) : null;
+                const delta = Number.isFinite(parsedQty) ? parsedQty - p.stock : null;
                 const canSave =
                   countable &&
                   Number.isFinite(parsedQty) &&
@@ -221,12 +226,12 @@ function StockCountPage() {
                       <Badge
                         variant="outline"
                         className={
-                          stockAt(p, outletId) === 0
+                          p.stock === 0
                             ? "bg-destructive/10 text-destructive"
                             : "bg-emerald-100 text-emerald-700"
                         }
                       >
-                        {stockAt(p, outletId)}
+                        {p.stock}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -236,9 +241,7 @@ function StockCountPage() {
                             type="number"
                             min="0"
                             value={draft.qty}
-                            onChange={(e) =>
-                              setDraft(p.id, stockAt(p, outletId), { qty: e.target.value })
-                            }
+                            onChange={(e) => setDraft(p.id, p.stock, { qty: e.target.value })}
                             className="w-24"
                           />
                           <Button
@@ -271,7 +274,7 @@ function StockCountPage() {
                       {countable && (
                         <Select
                           value={draft.reason}
-                          onValueChange={(v) => setDraft(p.id, stockAt(p, outletId), { reason: v })}
+                          onValueChange={(v) => setDraft(p.id, p.stock, { reason: v })}
                         >
                           <SelectTrigger className="w-40">
                             <SelectValue placeholder="Select reason" />
@@ -291,7 +294,7 @@ function StockCountPage() {
                         <Button
                           size="sm"
                           disabled={!canSave}
-                          onClick={() => saveCount(p.id, p.name, stockAt(p, outletId))}
+                          onClick={() => saveCount(p.id, p.name, p.stock)}
                           className="gap-1.5"
                         >
                           <Check className="h-3.5 w-3.5" />
@@ -315,7 +318,7 @@ function StockCountPage() {
           if (!calculatorProductId) return;
           const product = products.find((p) => p.id === calculatorProductId);
           if (!product) return;
-          setDraft(calculatorProductId, stockAt(product, outletId), {
+          setDraft(calculatorProductId, product.stock, {
             qty: String(Math.round(value)),
           });
         }}

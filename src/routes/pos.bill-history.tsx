@@ -447,7 +447,10 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
 }
 
 function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
-  const products = useProducts();
+  // useProducts() scopes to the *viewer's* own outlet, but a bill belongs to whichever outlet
+  // it was rung up at — for Super Admin editing another outlet's bill those can differ, so the
+  // add-product picker must filter to the bill's own outlet, not the viewer's.
+  const productsForOutlet = useProducts().filter((p) => p.outletId === bill.outletId);
   const currency = useSettings().general.currency;
   const [items, setItems] = useState<BillLineItem[]>(bill.items.map((i) => ({ ...i })));
   const [addProductId, setAddProductId] = useState("");
@@ -463,7 +466,7 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
   }
 
   function addLine() {
-    const product = products.find((p) => p.id === addProductId);
+    const product = productsForOutlet.find((p) => p.id === addProductId);
     if (!product) return;
     setItems((its) =>
       its.some((i) => i.productId === product.id)
@@ -507,7 +510,7 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
               <SelectValue placeholder="Add a product…" />
             </SelectTrigger>
             <SelectContent>
-              {products.map((p) => (
+              {productsForOutlet.map((p) => (
                 <SelectItem key={p.id} value={p.id}>
                   {p.name} ({p.stock} in stock)
                 </SelectItem>

@@ -1,6 +1,5 @@
 import { getSupabase } from "@/lib/supabase-client";
 import { products as seedProducts, type Product } from "@/lib/pos-data";
-import { getOrCreateDefaultOutlet } from "@/lib/outlets-server-store";
 
 // Server-only. Only products-api.ts and bills-api.ts (which adjusts stock as part of a
 // bill mutation, in the same process) should import this — never a client component.
@@ -27,31 +26,18 @@ async function ensureSeeded() {
   }
 }
 
-// Legacy products (created before per-outlet inventory existed) have no stockByOutlet
-// breakdown yet — attribute their existing flat `stock` number entirely to the default
-// outlet so nothing looks like it silently lost inventory. Best-effort: if the outlets
-// table itself hasn't been migrated in yet, leave products as plain flat-stock for now
-// rather than failing every product fetch.
-async function backfillStockByOutlet(products: Product[]): Promise<Product[]> {
-  const needsBackfill = products.some((p) => !p.stockByOutlet);
-  if (!needsBackfill) return products;
-  let defaultOutletId: string;
-  try {
-    defaultOutletId = (await getOrCreateDefaultOutlet()).id;
-  } catch {
-    return products;
-  }
-  return products.map((p) =>
-    p.stockByOutlet ? p : { ...p, stockByOutlet: { [defaultOutletId]: p.stock } },
-  );
-}
-
 export async function getServerProducts(): Promise<Product[]> {
   await ensureSeeded();
   const supabase = getSupabase();
   const { data, error } = await supabase.from("products").select("data");
   if (error) throw error;
-  return backfillStockByOutlet(data.map((row) => row.data as Product));
+  // Legacy products from before per-outlet catalogs existed have no outletId yet — leave
+  // them null (visible only to Super Admin, same as a Customer/Bill with no outlet) rather
+  // than guessing which outlet they belong to.
+  return data.map((row) => {
+    const p = row.data as Product;
+    return p.outletId !== undefined ? p : { ...p, outletId: null };
+  });
 }
 
 export async function mutateServerProducts(
@@ -80,17 +66,10 @@ export async function mutateServerProducts(
 
 // Plain (non-createServerFn) helper so bills-api.ts can adjust stock atomically as part of
 // a bill create/edit/void/refund, in the same server process, without a second round trip.
-// Positive delta adds stock, negative delta removes it (never below zero) — at the given
-// outlet specifically; `stock` (the cross-outlet total) is recomputed alongside it so every
-// aggregate-only reader (reports, analytics, product badges) keeps working unchanged.
-export async function adjustStock(id: string, outletId: string, delta: number): Promise<void> {
+// Positive delta adds stock, negative delta removes it (never below zero). A product only
+// ever has one outlet's stock now, so there's nothing to key by — just the product id.
+export async function adjustStock(id: string, delta: number): Promise<void> {
   await mutateServerProducts((ps) =>
-    ps.map((p) => {
-      if (p.id !== id) return p;
-      const byOutlet = { ...(p.stockByOutlet ?? {}) };
-      byOutlet[outletId] = Math.max(0, (byOutlet[outletId] ?? 0) + delta);
-      const stock = Object.values(byOutlet).reduce((sum, n) => sum + n, 0);
-      return { ...p, stock, stockByOutlet: byOutlet };
-    }),
+    ps.map((p) => (p.id === id ? { ...p, stock: Math.max(0, p.stock + delta) } : p)),
   );
 }

@@ -54,7 +54,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { type Product, type Bill, stockAt } from "@/lib/pos-data";
+import { type Product, type Bill } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useCategories } from "@/lib/categories-store";
 import { billsStore } from "@/lib/bills-store";
@@ -178,11 +178,15 @@ function SellPage() {
   const filtered = useMemo(
     () =>
       products.filter(
+        // useProducts() scopes to the viewer's own outlet, but for Super Admin (unrestricted)
+        // that's every outlet's catalog combined — only this register's own outlet's
+        // products should ever be searchable/sellable here, regardless of who's operating it.
         (p) =>
+          p.outletId === currentOutletId &&
           (category === "all" || p.category === category) &&
           (p.name.toLowerCase().includes(query.toLowerCase()) || (p.barcode ?? "").includes(query)),
       ),
-    [products, category, query],
+    [products, currentOutletId, category, query],
   );
   const showSuggestions = searchFocused && query.trim().length > 0 && filtered.length > 0;
 
@@ -216,7 +220,7 @@ function SellPage() {
   const balance = tab.payMethod === "Cash" ? Math.max(0, cashReceived - total) : 0;
   const outOfStock = tab.items.find((i) => {
     const live = products.find((p) => p.id === i.product.id);
-    const available = live ? stockAt(live, currentOutletId) : stockAt(i.product, currentOutletId);
+    const available = live ? live.stock : i.product.stock;
     return available < i.qty;
   });
 
@@ -607,7 +611,7 @@ function SellPage() {
                           <span className="font-medium text-foreground">{p.name}</span>
                         </span>
                         <span className="flex items-center gap-2 text-muted-foreground">
-                          <span>{stockAt(p, currentOutletId)} in stock</span>
+                          <span>{p.stock} in stock</span>
                           <span className="font-semibold text-primary">${p.price.toFixed(2)}</span>
                         </span>
                       </button>
@@ -634,7 +638,7 @@ function SellPage() {
                 <TableBody>
                   {tab.items.map((i) => {
                     const liveProduct = products.find((p) => p.id === i.product.id);
-                    const liveStock = stockAt(liveProduct ?? i.product, currentOutletId);
+                    const liveStock = (liveProduct ?? i.product).stock;
                     return (
                       <TableRow key={i.product.id}>
                         <TableCell>

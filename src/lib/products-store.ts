@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useSyncExternalStore } from "react";
-import { stockAt, type Product } from "@/lib/pos-data";
+import type { Product } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
@@ -55,28 +55,33 @@ export function useProductsPolling(intervalMs = 5000) {
   }, [intervalMs]);
 }
 
-// Applies stock numbers returned by a bill mutation (create/edit/void/refund) immediately,
-// so the local product cache doesn't show stale (pre-sale) stock until the next poll tick.
-function applyStockPatches(
-  patches: { productId: string; stock: number; stockByOutlet: Record<string, number> }[],
-) {
+// Applies the stock number returned by a bill mutation (create/edit/void/refund)
+// immediately, so the local product cache doesn't show stale (pre-sale) stock until the
+// next poll tick.
+function applyStockPatches(patches: { productId: string; stock: number }[]) {
   if (patches.length === 0) return;
   const byId = new Map(patches.map((p) => [p.productId, p]));
   setProducts(
     products.map((p) => {
       const patch = byId.get(p.id);
-      return patch ? { ...p, stock: patch.stock, stockByOutlet: patch.stockByOutlet } : p;
+      return patch ? { ...p, stock: patch.stock } : p;
     }),
   );
+}
+
+function callerContext() {
+  const user = authStore.getCurrentUser();
+  return { role: user?.role ?? "", callerOutletId: user?.outletId ?? null };
 }
 
 export const productsStore = {
   get: () => products,
   applyStockPatches,
 
-  async create(
-    input: Omit<Product, "id" | "stock" | "stockByOutlet">,
-  ): Promise<Product | { error: string }> {
+  // `outletId` is part of `input` (not auto-injected here) because Super Admin has no
+  // outlet of their own and must explicitly choose one — see products.tsx's Add Product
+  // form, which pre-fills it from the current user for everyone else.
+  async create(input: Omit<Product, "id" | "stock">): Promise<Product | { error: string }> {
     const result = await safeServerCall(() => createProductOnServer({ data: input }));
     if ("networkError" in result) return { error: result.error };
     setProducts([result.product, ...products]);
@@ -86,7 +91,7 @@ export const productsStore = {
 
   // Used by the Products page's CSV import.
   async createBulk(
-    inputs: Omit<Product, "id" | "stock" | "stockByOutlet">[],
+    inputs: Omit<Product, "id" | "stock">[],
   ): Promise<Product[] | { error: string }> {
     const result = await safeServerCall(() =>
       createProductsBulkOnServer({ data: { items: inputs } }),
@@ -97,14 +102,16 @@ export const productsStore = {
     return result.products;
   },
 
-  // Restricted to Super Admin server-side — the catalog is shared across every outlet, so
-  // editing it here would otherwise let one outlet's Admin change what every other outlet sees.
+  // Restricted server-side to Super Admin, or an Admin whose own outlet owns this product —
+  // see updateProductOnServer.
   async update(
     id: string,
-    patch: Partial<Omit<Product, "stock" | "stockByOutlet">>,
+    patch: Partial<Omit<Product, "stock" | "outletId">>,
   ): Promise<{ ok: true } | { error: string }> {
-    const role = authStore.getCurrentUser()?.role ?? "";
-    const result = await safeServerCall(() => updateProductOnServer({ data: { id, patch, role } }));
+    const { role, callerOutletId } = callerContext();
+    const result = await safeServerCall(() =>
+      updateProductOnServer({ data: { id, patch, role, callerOutletId } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     patchProduct(id, patch);
@@ -112,11 +119,14 @@ export const productsStore = {
     return { ok: true };
   },
 
-  // Restricted to Super Admin server-side — see update() above.
+  // Restricted server-side to Super Admin, or an Admin whose own outlet owns this product —
+  // see removeProductOnServer.
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const product = products.find((p) => p.id === id);
-    const role = authStore.getCurrentUser()?.role ?? "";
-    const result = await safeServerCall(() => removeProductOnServer({ data: { id, role } }));
+    const { role, callerOutletId } = callerContext();
+    const result = await safeServerCall(() =>
+      removeProductOnServer({ data: { id, role, callerOutletId } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setProducts(products.filter((p) => p.id !== id));
@@ -146,13 +156,9 @@ export const productsStore = {
   // The only way stock is ever added client-side — called when a Purchase Invoice is
   // approved. Sales instead go through billsStore.create, which adjusts stock atomically
   // on the server as part of creating the bill.
-  async increaseStock(id: string, outletId: string, qty: number): Promise<void> {
-    const result = await safeServerCall(() =>
-      increaseStockOnServer({ data: { id, outletId, qty } }),
-    );
-    if (!("networkError" in result)) {
-      patchProduct(id, { stock: result.stock, stockByOutlet: result.stockByOutlet });
-    }
+  async increaseStock(id: string, qty: number): Promise<void> {
+    const result = await safeServerCall(() => increaseStockOnServer({ data: { id, qty } }));
+    if (!("networkError" in result)) patchProduct(id, { stock: result.stock });
   },
 
   // Silent — keeps the product's "last known cost" in sync when a Purchase Invoice for it
@@ -162,21 +168,20 @@ export const productsStore = {
     if (!("networkError" in result)) patchProduct(id, { cost });
   },
 
-  // Stock Count — sets a product's stock at one outlet to a manually counted quantity, up
-  // or down, with a reason for the audit trail (Settings > Inventory > Stock Adjustment Types).
+  // Stock Count — sets a product's stock to a manually counted quantity, up or down, with
+  // a reason for the audit trail (Settings > Inventory > Stock Adjustment Types).
   async setStockCount(
     id: string,
-    outletId: string,
     newQty: number,
     reason: string,
   ): Promise<{ ok: true } | { error: string }> {
     const product = products.find((p) => p.id === id);
     const result = await safeServerCall(() =>
-      setStockCountOnServer({ data: { id, outletId, newQty, reason } }),
+      setStockCountOnServer({ data: { id, newQty, reason } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
-    patchProduct(id, { stock: result.stock, stockByOutlet: result.stockByOutlet });
+    patchProduct(id, { stock: result.stock });
     const sign = result.delta > 0 ? "+" : "";
     logAudit(
       actor(),
@@ -197,16 +202,12 @@ export function useProducts(): Product[] {
     () => products,
     () => products,
   );
-  // The product catalog itself (name, price, barcode, etc.) is shared across every outlet —
-  // only `stock` is re-derived to the current user's own outlet here, so every existing
-  // consumer (Sell, Products, Stock Count, every Report) shows outlet-scoped quantities
-  // without needing its own outlet-aware logic. Super Admin sees the true cross-outlet total.
+  // Each outlet's catalog is its own — filter to the current user's outlet, same as
+  // useCustomers()/usePurchaseInvoices(). Super Admin (scopeOutletId === null) sees every
+  // outlet's products combined.
   const scopeOutletId = useScopeOutletId();
   return useMemo(
-    () =>
-      scopeOutletId
-        ? allProducts.map((p) => ({ ...p, stock: stockAt(p, scopeOutletId) }))
-        : allProducts,
+    () => (scopeOutletId ? allProducts.filter((p) => p.outletId === scopeOutletId) : allProducts),
     [allProducts, scopeOutletId],
   );
 }

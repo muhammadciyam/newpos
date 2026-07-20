@@ -5,13 +5,12 @@ export type Product = {
   price: number;
   category: string;
   image: string;
-  // Total stock across every outlet — kept in sync automatically whenever stockByOutlet
-  // changes (see adjustStock in products-server-store.ts). Read this for a quick aggregate;
-  // read stockByOutlet (via stockAt()) for how much is actually available at one outlet.
+  // Each product belongs to exactly one outlet — its catalog, stock, and every action on it
+  // (edit/delete/count/purchase) are scoped to that one outlet, same as Customer.outletId
+  // below. Null only for products created before outlets existed or by a user with no
+  // outlet assigned; only Super Admin sees those.
+  outletId: string | null;
   stock: number;
-  // Per-outlet quantity on hand, keyed by Outlet.id. Missing/legacy products (from before
-  // outlets existed) are backfilled on read — see products-server-store.ts.
-  stockByOutlet?: Record<string, number>;
   barcode?: string;
   sku?: string;
   // Last known unit cost, set from the most recently approved Purchase Invoice line for this product.
@@ -23,14 +22,6 @@ export type Product = {
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
 };
-
-// Stock actually available at a specific outlet — falls back to the aggregate `stock` when
-// no outlet is given (e.g. a report showing totals across every outlet) or when this
-// product hasn't been backfilled with a per-outlet breakdown yet.
-export function stockAt(product: Product, outletId: string | null | undefined): number {
-  if (!outletId) return product.stock;
-  return product.stockByOutlet?.[outletId] ?? 0;
-}
 
 export const categories: Category[] = [
   { id: "all", name: "All Items" },

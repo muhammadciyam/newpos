@@ -26,8 +26,7 @@ import { MapPin, Plus, Pencil, Trash2, Package, Search } from "lucide-react";
 import { toast } from "sonner";
 import { useHasPermission } from "@/lib/permissions";
 import { outletsStore, useOutlets, type Outlet } from "@/lib/outlets-store";
-import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
-import { stockAt } from "@/lib/pos-data";
+import { useProducts, useProductsPolling } from "@/lib/products-store";
 
 export const Route = createFileRoute("/admin/locations")({
   head: () => ({ meta: [{ title: "Locations — Dhipos" }] }),
@@ -47,7 +46,6 @@ function LocationsPage() {
   const [editForm, setEditForm] = useState(emptyForm);
   const [inventoryOutletId, setInventoryOutletId] = useState<string | null>(null);
   const [productSearch, setProductSearch] = useState("");
-  const [addingProductId, setAddingProductId] = useState<string | null>(null);
 
   if (!canManageOutlets) return <RestrictedPage />;
 
@@ -113,17 +111,6 @@ function LocationsPage() {
       return;
     }
     toast.success(`"${outlet.name}" removed`);
-  }
-
-  // Adds an existing (globally shared) product to this outlet's inventory at zero stock —
-  // ready to receive via a Purchase Invoice or Stock Count. Product name/price/etc. stay
-  // exactly as they are everywhere else; only this outlet's stock entry is created.
-  async function addExistingProduct(productId: string, outletId: string) {
-    setAddingProductId(productId);
-    await productsStore.increaseStock(productId, outletId, 0);
-    setAddingProductId(null);
-    const product = products.find((p) => p.id === productId);
-    toast.success(`"${product?.name ?? "Product"}" added to this outlet's inventory`);
   }
 
   return (
@@ -291,9 +278,9 @@ function LocationsPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Outlet inventory — product names/prices/etc. are shared everywhere; only the
-          stock-at-this-outlet entry is outlet-specific. Adding a product here just creates
-          a zero-stock entry, ready to receive via a Purchase Invoice or Stock Count. */}
+      {/* Outlet inventory — read-only: each outlet has its own independent product catalog now,
+          so this is just a lookup, not a management screen. To add/edit/delete products for an
+          outlet, go to the Products page (Super Admin can pick any outlet there). */}
       <Dialog open={!!inventoryOutletId} onOpenChange={(v) => !v && setInventoryOutletId(null)}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
@@ -319,90 +306,40 @@ function LocationsPage() {
                   (p.sku ?? "").toLowerCase().includes(q) ||
                   (p.barcode ?? "").toLowerCase().includes(q);
                 const stocked = products.filter(
-                  (p) => p.stockByOutlet?.[inventoryOutlet.id] !== undefined,
-                );
-                const notStocked = products.filter(
-                  (p) => p.stockByOutlet?.[inventoryOutlet.id] === undefined && matches(p),
+                  (p) => p.outletId === inventoryOutlet.id && matches(p),
                 );
                 return (
-                  <>
-                    {q && (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          Add an existing product to this outlet
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">
+                      Products at this outlet ({stocked.length})
+                    </p>
+                    <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
+                      {stocked.length === 0 ? (
+                        <p className="p-3 text-sm text-muted-foreground">
+                          No products in this outlet's catalog yet — add one from the Products page.
                         </p>
-                        <div className="max-h-48 overflow-y-auto rounded-lg border border-border">
-                          {notStocked.length === 0 ? (
-                            <p className="p-3 text-sm text-muted-foreground">
-                              No matching products outside this outlet's inventory.
-                            </p>
-                          ) : (
-                            notStocked.map((p) => (
-                              <div
-                                key={p.id}
-                                className="flex items-center justify-between gap-2 border-b border-border p-2 last:border-b-0"
-                              >
-                                <div className="min-w-0">
-                                  <p className="truncate text-sm font-medium text-foreground">
-                                    {p.name}
-                                  </p>
-                                  {(p.sku || p.barcode) && (
-                                    <p className="truncate text-xs text-muted-foreground">
-                                      {p.sku || p.barcode}
-                                    </p>
-                                  )}
-                                </div>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  className="shrink-0 gap-1.5"
-                                  disabled={addingProductId === p.id}
-                                  onClick={() => addExistingProduct(p.id, inventoryOutlet.id)}
-                                >
-                                  <Plus className="h-3.5 w-3.5" />
-                                  {addingProductId === p.id ? "Adding..." : "Add"}
-                                </Button>
-                              </div>
-                            ))
-                          )}
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <p className="text-xs font-medium text-muted-foreground">
-                        Products stocked at this outlet ({stocked.length})
-                      </p>
-                      <div className="max-h-64 overflow-y-auto rounded-lg border border-border">
-                        {stocked.length === 0 ? (
-                          <p className="p-3 text-sm text-muted-foreground">
-                            No products in this outlet's inventory yet — search above to add one.
-                          </p>
-                        ) : (
-                          stocked.map((p) => (
-                            <div
-                              key={p.id}
-                              className="flex items-center justify-between gap-2 border-b border-border p-2 last:border-b-0"
+                      ) : (
+                        stocked.map((p) => (
+                          <div
+                            key={p.id}
+                            className="flex items-center justify-between gap-2 border-b border-border p-2 last:border-b-0"
+                          >
+                            <p className="truncate text-sm font-medium text-foreground">{p.name}</p>
+                            <Badge
+                              variant="outline"
+                              className={
+                                p.stock === 0
+                                  ? "bg-destructive/10 text-destructive"
+                                  : "bg-emerald-100 text-emerald-700"
+                              }
                             >
-                              <p className="truncate text-sm font-medium text-foreground">
-                                {p.name}
-                              </p>
-                              <Badge
-                                variant="outline"
-                                className={
-                                  stockAt(p, inventoryOutlet.id) === 0
-                                    ? "bg-destructive/10 text-destructive"
-                                    : "bg-emerald-100 text-emerald-700"
-                                }
-                              >
-                                {stockAt(p, inventoryOutlet.id)} in stock
-                              </Badge>
-                            </div>
-                          ))
-                        )}
-                      </div>
+                              {p.stock} in stock
+                            </Badge>
+                          </div>
+                        ))
+                      )}
                     </div>
-                  </>
+                  </div>
                 );
               })()}
             </div>
