@@ -1,7 +1,12 @@
 import { useEffect } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import type { Product } from "@/lib/pos-data";
-import { useRegister, type RegisterName } from "@/lib/register-store";
+import {
+  useRegister,
+  ensureRegistersFetched,
+  getServerRegisters,
+  type RegisterName,
+} from "@/lib/register-store";
 import { saveHeldBillOnServer } from "@/lib/register-api";
 import { safeServerCall } from "@/lib/server-fn-helpers";
 
@@ -138,11 +143,20 @@ export function useSaleTabs(): SaleTabsState {
     }
     if (linkedRegister === registerName) return;
     linkedRegister = registerName;
-    const heldBill = register.registers[registerName]?.heldBill;
-    store.set(isSaleTabsState(heldBill) ? normalizeState(heldBill) : emptySaleTabsState());
-    // Only re-run when the register we're looking at changes — register.registers updates
-    // on every poll tick and must not re-trigger hydration each time.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    let cancelled = false;
+    // Must wait for the registers fetch to actually land before deciding whether to
+    // hydrate from a held bill or reset to empty — on a fresh page load (e.g. right after
+    // a refresh) the server snapshot starts out as an empty placeholder, and deciding
+    // against that would silently wipe out a held bill that was saved just before the
+    // reload, then (via the debounced save effect below) overwrite it server-side too.
+    void ensureRegistersFetched().then(() => {
+      if (cancelled || linkedRegister !== registerName) return;
+      const heldBill = getServerRegisters()[registerName]?.heldBill;
+      store.set(isSaleTabsState(heldBill) ? normalizeState(heldBill) : emptySaleTabsState());
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [registerName]);
 
   useEffect(() => {

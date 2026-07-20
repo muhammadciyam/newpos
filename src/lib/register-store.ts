@@ -129,15 +129,35 @@ async function refreshRegistersFromServer() {
   }
 }
 
-let initialFetchTriggered = false;
-function ensureInitialFetch() {
-  if (initialFetchTriggered) return;
-  initialFetchTriggered = true;
-  void refreshRegistersFromServer();
+// Shared across every caller so whichever one fires first is the one everyone actually
+// waits on (see the identical fix — and its reasoning — in auth-store.ts's
+// ensureInitialUsersFetch). Also exported as ensureRegistersFetched() for
+// sale-tabs-store.ts, which must not decide "hydrate from this register's held bill or
+// reset to empty" against a snapshot that's still the pre-fetch default {}.
+let initialFetchPromise: Promise<void> | null = null;
+function ensureInitialFetch(): Promise<void> {
+  if (!initialFetchPromise) {
+    initialFetchPromise = refreshRegistersFromServer();
+  }
+  return initialFetchPromise;
+}
+
+export function ensureRegistersFetched(): Promise<void> {
+  return ensureInitialFetch();
+}
+
+// Direct (non-reactive) read of the latest server snapshot — for callers like
+// sale-tabs-store.ts that need the freshest data right after awaiting
+// ensureRegistersFetched(), not whatever `registers` a component's own render closed over
+// before that fetch resolved.
+export function getServerRegisters(): Record<RegisterName, RegisterRecord> {
+  return serverRegisters;
 }
 
 function useServerRegisters() {
-  useEffect(() => ensureInitialFetch(), []);
+  useEffect(() => {
+    void ensureInitialFetch();
+  }, []);
   return useSyncExternalStore(
     (cb) => {
       serverListeners.add(cb);

@@ -133,6 +133,7 @@ function SellPage() {
   const [tagDraft, setTagDraft] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
+  const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
   const slipInput = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -151,6 +152,24 @@ function SellPage() {
     }
     window.addEventListener("beforeunload", handler);
     return () => window.removeEventListener("beforeunload", handler);
+  }, [tabs]);
+
+  // Browsers won't let a beforeunload prompt say anything custom (Chrome/Edge/Firefox all
+  // ignore the message and show their own generic "leave site?" wording), so the in-page F5
+  // / Ctrl+R shortcut is intercepted here instead to ask something that actually explains
+  // what happens: refreshing is safe, the cart is already auto-saved as a held sale either
+  // way (see sale-tabs-store.ts), this is just reassurance before doing it. Skipped
+  // entirely when every tab is empty — nothing to hold, so just let the refresh happen.
+  useEffect(() => {
+    function handler(e: KeyboardEvent) {
+      const isRefreshKey = e.key === "F5" || ((e.ctrlKey || e.metaKey) && e.key === "r");
+      if (!isRefreshKey) return;
+      if (!tabs.some((t) => t.items.length > 0)) return;
+      e.preventDefault();
+      setRefreshConfirmOpen(true);
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [tabs]);
 
   const tab = tabs.find((t) => t.id === activeTab)!;
@@ -295,7 +314,13 @@ function SellPage() {
   // customer.
   useEffect(() => {
     const dialogOpen =
-      newCustomerOpen || printOpen || noteOpen || tagsOpen || currencyOpen || discardConfirmOpen;
+      newCustomerOpen ||
+      printOpen ||
+      noteOpen ||
+      tagsOpen ||
+      currencyOpen ||
+      discardConfirmOpen ||
+      refreshConfirmOpen;
     if (dialogOpen) return;
     function handler(e: KeyboardEvent) {
       if (e.key === "F2") {
@@ -312,7 +337,16 @@ function SellPage() {
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [newCustomerOpen, printOpen, noteOpen, tagsOpen, currencyOpen, discardConfirmOpen, activeTab]);
+  }, [
+    newCustomerOpen,
+    printOpen,
+    noteOpen,
+    tagsOpen,
+    currencyOpen,
+    discardConfirmOpen,
+    refreshConfirmOpen,
+    activeTab,
+  ]);
 
   function selectCustomer(id: string, name: string) {
     updateTab({ customerId: id });
@@ -1035,6 +1069,23 @@ function SellPage() {
             >
               Discard
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={refreshConfirmOpen} onOpenChange={setRefreshConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Refresh page?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Your current sale{tabs.filter((t) => t.items.length > 0).length > 1 ? "s are" : " is"}{" "}
+              already saved as a held sale, so nothing will be lost — you can pick up right where
+              you left off after refreshing.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => window.location.reload()}>Refresh</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

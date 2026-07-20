@@ -121,15 +121,28 @@ async function refreshUsersFromServer() {
   }
 }
 
-let initialUsersFetchTriggered = false;
-function ensureInitialUsersFetch() {
-  if (initialUsersFetchTriggered) return;
-  initialUsersFetchTriggered = true;
-  void refreshUsersFromServer();
+// Shared by every caller (there are several — useServerUsers() below, and
+// authStore.hydrate()) so whichever one runs first is the one everyone else actually waits
+// on, rather than each just checking a boolean and assuming someone else has it handled.
+// That "assume someone else is on it" version raced on a hard reload of any AppShell page
+// that also calls useCurrentUser()/useUsers(): React fires child effects before parent
+// effects, so the page's own useServerUsers() effect kicked off the fetch first, and
+// AppShell's hydrate() call — seeing the flag already set — returned immediately without
+// actually waiting for that fetch to finish, so its getCurrentUser() check ran against a
+// still-empty user list and treated a genuinely logged-in session as logged out, bouncing
+// through /login to "/" instead of staying on the page that was reloaded.
+let initialUsersFetchPromise: Promise<void> | null = null;
+function ensureInitialUsersFetch(): Promise<void> {
+  if (!initialUsersFetchPromise) {
+    initialUsersFetchPromise = refreshUsersFromServer();
+  }
+  return initialUsersFetchPromise;
 }
 
 function useServerUsers(): AppUser[] {
-  useEffect(() => ensureInitialUsersFetch(), []);
+  useEffect(() => {
+    void ensureInitialUsersFetch();
+  }, []);
   return useSyncExternalStore(
     (cb) => {
       userListeners.add(cb);
@@ -168,10 +181,7 @@ export const authStore = {
   // return null for a genuinely logged-in user before the server cache has loaded.
   async hydrate() {
     sessionStoreInternal.hydrate();
-    if (!initialUsersFetchTriggered) {
-      initialUsersFetchTriggered = true;
-      await refreshUsersFromServer();
-    }
+    await ensureInitialUsersFetch();
   },
 
   getCurrentUser(): AppUser | null {
