@@ -11,5 +11,8 @@ export const iconColors = {
   cyan: "bg-cyan-100 text-cyan-600",
   rose: "bg-rose-100 text-rose-600",
   slate: "bg-slate-100 text-slate-600",
+  orange: "bg-orange-100 text-orange-600",
+  teal: "bg-teal-100 text-teal-600",
+  purple: "bg-purple-100 text-purple-600",
 } as const;
 export type IconColor = keyof typeof iconColors;

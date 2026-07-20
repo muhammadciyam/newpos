@@ -37,6 +37,8 @@ import { useRegister, formatOpenSince, registerDisplayName } from "@/lib/registe
 import { useCurrentUser } from "@/lib/auth-store";
 import { hasPermission, type Permission } from "@/lib/permissions";
 import { useCustomRoles } from "@/lib/custom-roles-store";
+import { iconColors, type IconColor } from "@/lib/icon-colors";
+import { cn } from "@/lib/utils";
 
 // Leaves with no `permission` are shown to everyone — that's only correct as long as the
 // page behind them truly has no access gate of its own (e.g. the still-inert Loyalty
@@ -47,15 +49,17 @@ type NavLeaf = { title: string; url: string; permission?: Permission };
 type NavItem = {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
+  color: IconColor;
   url?: string;
   children?: NavLeaf[];
 };
 
 const items: NavItem[] = [
-  { title: "Home", url: "/", icon: Home },
+  { title: "Home", url: "/", icon: Home, color: "blue" },
   {
     title: "Point of Sale",
     icon: Monitor,
+    color: "emerald",
     children: [
       { title: "Sell", url: "/pos/sell" },
       { title: "Register", url: "/pos/register" },
@@ -65,31 +69,34 @@ const items: NavItem[] = [
       { title: "Bill History", url: "/pos/bill-history" },
     ],
   },
-  { title: "Customers", url: "/customers", icon: Users },
-  { title: "Products", url: "/products", icon: Tags },
+  { title: "Customers", url: "/customers", icon: Users, color: "pink" },
+  { title: "Products", url: "/products", icon: Tags, color: "amber" },
   {
     title: "Inventory",
     icon: Database,
+    color: "indigo",
     children: [
       { title: "Purchase Invoices", url: "/inventory" },
       { title: "Stock Count", url: "/stock-count" },
     ],
   },
-  { title: "Wholesaler", url: "/supply/home", icon: Store },
-  { title: "Expenses", url: "/expenses", icon: Wallet },
-  { title: "Reports", url: "/reports", icon: Calculator },
+  { title: "Wholesaler", url: "/supply/home", icon: Store, color: "violet" },
+  { title: "Expenses", url: "/expenses", icon: Wallet, color: "rose" },
+  { title: "Reports", url: "/reports", icon: Calculator, color: "cyan" },
   {
     title: "Analytics",
     icon: BarChart3,
+    color: "teal",
     children: [
       { title: "Sales", url: "/analytics/sales" },
       { title: "Inventory", url: "/analytics/inventory" },
     ],
   },
-  { title: "Super Admin", url: "/admin/super-admin", icon: ShieldPlus },
+  { title: "Super Admin", url: "/admin/super-admin", icon: ShieldPlus, color: "orange" },
   {
     title: "Admin",
     icon: Settings,
+    color: "slate",
     children: [
       { title: "Billing", url: "/admin/billing", permission: "settings.manage" },
       { title: "Settings", url: "/admin/settings", permission: "settings.manage" },
@@ -105,6 +112,28 @@ const items: NavItem[] = [
     ],
   },
 ];
+
+// Small colored badge behind each nav icon — same palette/meaning-per-color convention as
+// the dashboard's stat cards (see icon-colors.ts), applied here per section instead of per
+// stat so the sidebar reads as a set of distinct areas rather than one flat icon color.
+function NavIcon({
+  icon: Icon,
+  color,
+}: {
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  color: IconColor;
+}) {
+  return (
+    <span
+      className={cn(
+        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
+        iconColors[color],
+      )}
+    >
+      <Icon className="h-4 w-4" strokeWidth={2.25} />
+    </span>
+  );
+}
 
 export function AppSidebar() {
   const { state } = useSidebar();
@@ -205,7 +234,7 @@ export function AppSidebar() {
                         className="border-l-2 border-transparent data-[active=true]:border-primary"
                       >
                         <Link to={item.url!} className="flex items-center gap-2">
-                          <item.icon className="h-4 w-4" />
+                          <NavIcon icon={item.icon} color={item.color} />
                           {!collapsed && <span>{item.title}</span>}
                         </Link>
                       </SidebarMenuButton>
@@ -229,7 +258,7 @@ export function AppSidebar() {
                           tooltip={item.title}
                           className="border-l-2 border-transparent data-[active=true]:border-primary"
                         >
-                          <item.icon className="h-4 w-4" />
+                          <NavIcon icon={item.icon} color={item.color} />
                           {!collapsed && (
                             <>
                               <span>{item.title}</span>
