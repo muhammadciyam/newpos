@@ -4,10 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { BookText } from "lucide-react";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { useOutlets } from "@/lib/outlets-store";
+import { requestPasswordResetOnServer } from "@/lib/password-reset-api";
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -83,6 +91,8 @@ function LoginPage() {
     navigate({ to: "/" });
   }
 
+  const [forgotOpen, setForgotOpen] = useState(false);
+
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <Card className="w-full max-w-sm p-6">
@@ -129,11 +139,115 @@ function LoginPage() {
           <Button type="submit" className="w-full" size="lg" disabled={submitting}>
             Log In
           </Button>
-          <p className="text-center text-sm text-muted-foreground">
-            Need an account? Ask an admin to add you on Admin &gt; Users.
-          </p>
+          <button
+            type="button"
+            onClick={() => setForgotOpen(true)}
+            className="w-full text-center text-sm text-muted-foreground hover:underline"
+          >
+            Forgot password?
+          </button>
         </form>
       </Card>
+      <ForgotPasswordDialog
+        open={forgotOpen}
+        onOpenChange={setForgotOpen}
+        defaultOutletName={outletName}
+        defaultEmail={identifier}
+      />
     </div>
+  );
+}
+
+function ForgotPasswordDialog({
+  open,
+  onOpenChange,
+  defaultOutletName,
+  defaultEmail,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  defaultOutletName: string;
+  defaultEmail: string;
+}) {
+  const [outletName, setOutletName] = useState(defaultOutletName);
+  const [email, setEmail] = useState(defaultEmail);
+  const [submitting, setSubmitting] = useState(false);
+  const [result, setResult] = useState<{ ok: true } | { error: string } | null>(null);
+
+  useEffect(() => {
+    if (open) {
+      setOutletName(defaultOutletName);
+      setEmail(defaultEmail);
+      setResult(null);
+    }
+  }, [open, defaultOutletName, defaultEmail]);
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault();
+    setSubmitting(true);
+    try {
+      const response = await requestPasswordResetOnServer({
+        data: {
+          outletName: outletName.trim(),
+          email: email.trim(),
+          resetBaseUrl: window.location.origin,
+        },
+      });
+      setResult(response);
+    } catch {
+      setResult({ error: "Something went wrong — please try again." });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Reset your password</DialogTitle>
+          <DialogDescription>
+            Enter your outlet name and account email — if it matches an account, we'll send a reset
+            link to that email.
+          </DialogDescription>
+        </DialogHeader>
+        {result && "ok" in result ? (
+          <p className="text-sm text-foreground">
+            If that account exists, a password reset link has been sent to that email. It expires in
+            30 minutes.
+          </p>
+        ) : (
+          <form onSubmit={submit} className="space-y-4">
+            <div className="space-y-1.5">
+              <Label>Outlet Name</Label>
+              <Input
+                value={outletName}
+                onChange={(e) => setOutletName(e.target.value)}
+                placeholder="e.g. Seven Mart"
+                autoComplete="off"
+                required
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Email</Label>
+              <Input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                autoComplete="email"
+                required
+              />
+            </div>
+            {result && "error" in result && (
+              <p className="text-sm text-destructive">{result.error}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={submitting}>
+              Send Reset Link
+            </Button>
+          </form>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }

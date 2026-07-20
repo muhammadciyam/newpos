@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { ClipboardList, Check, Search } from "lucide-react";
+import { ClipboardList, Check, Search, Calculator } from "lucide-react";
 import { toast } from "sonner";
 import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
 import { stockAt } from "@/lib/pos-data";
@@ -29,6 +29,7 @@ import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
 import { useOutlets } from "@/lib/outlets-store";
 import { useScopeOutletId } from "@/lib/outlet-scope";
+import { CalculatorDialog } from "@/components/calculator-dialog";
 
 export const Route = createFileRoute("/stock-count")({
   head: () => ({ meta: [{ title: "Stock Count - Dhipos" }] }),
@@ -53,6 +54,7 @@ function StockCountPage() {
   const [drafts, setDrafts] = useState<Record<string, DraftRow>>({});
   const [savingId, setSavingId] = useState<string | null>(null);
   const [outletId, setOutletId] = useState("");
+  const [calculatorProductId, setCalculatorProductId] = useState<string | null>(null);
 
   useEffect(() => {
     if (scopeOutletId) {
@@ -239,6 +241,16 @@ function StockCountPage() {
                             }
                             className="w-24"
                           />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="icon"
+                            className="h-9 w-9 shrink-0"
+                            title="Open calculator"
+                            onClick={() => setCalculatorProductId(p.id)}
+                          >
+                            <Calculator className="h-4 w-4" />
+                          </Button>
                           {delta !== null && delta !== 0 && (
                             <span
                               className={
@@ -294,6 +306,20 @@ function StockCountPage() {
           </Table>
         </div>
       </div>
+
+      <CalculatorDialog
+        open={!!calculatorProductId}
+        onOpenChange={(v) => !v && setCalculatorProductId(null)}
+        title={products.find((p) => p.id === calculatorProductId)?.name}
+        onApply={(value) => {
+          if (!calculatorProductId) return;
+          const product = products.find((p) => p.id === calculatorProductId);
+          if (!product) return;
+          setDraft(calculatorProductId, stockAt(product, outletId), {
+            qty: String(Math.round(value)),
+          });
+        }}
+      />
     </AppShell>
   );
 }

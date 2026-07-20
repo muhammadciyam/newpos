@@ -162,6 +162,21 @@ export const setRoleOnServer = createServerFn({ method: "POST" })
     return { ok: true as const, email: user.email };
   });
 
+// Admin-side "Reset Password" action (Admin > Users) — the working-today fallback for
+// getting a user back into their account while email-based reset (password-reset-api.ts)
+// isn't configured yet, or simply preferred over waiting on an email.
+export const setPasswordOnServer = createServerFn({ method: "POST" })
+  .validator((data: { id: string; password: string }) => data)
+  .handler(async ({ data }) => {
+    const user = (await getServerUsers()).find((u) => u.id === data.id);
+    if (!user || user.role === "Super Admin")
+      return { error: "Cannot change this user's password" };
+    await mutateServerUsers((us) =>
+      us.map((u) => (u.id === data.id ? { ...u, password: data.password } : u)),
+    );
+    return { ok: true as const, email: user.email };
+  });
+
 export const updateProfileOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: {

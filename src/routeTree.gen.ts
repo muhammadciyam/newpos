@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as StockCountRouteImport } from './routes/stock-count'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ReportsRouteImport } from './routes/reports'
 import { Route as ReportStockMovementRouteImport } from './routes/report-stock-movement'
 import { Route as ReportStockRouteImport } from './routes/report-stock'
@@ -55,6 +56,11 @@ import { Route as AdminAuditLogsRouteImport } from './routes/admin.audit-logs'
 const StockCountRoute = StockCountRouteImport.update({
   id: '/stock-count',
   path: '/stock-count',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ReportsRoute = ReportsRouteImport.update({
@@ -283,6 +289,7 @@ export interface FileRoutesByFullPath {
   '/report-stock': typeof ReportStockRoute
   '/report-stock-movement': typeof ReportStockMovementRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/stock-count': typeof StockCountRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/billing': typeof AdminBillingRoute
@@ -327,6 +334,7 @@ export interface FileRoutesByTo {
   '/report-stock': typeof ReportStockRoute
   '/report-stock-movement': typeof ReportStockMovementRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/stock-count': typeof StockCountRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/billing': typeof AdminBillingRoute
@@ -372,6 +380,7 @@ export interface FileRoutesById {
   '/report-stock': typeof ReportStockRoute
   '/report-stock-movement': typeof ReportStockMovementRoute
   '/reports': typeof ReportsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/stock-count': typeof StockCountRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/billing': typeof AdminBillingRoute
@@ -418,6 +427,7 @@ export interface FileRouteTypes {
     | '/report-stock'
     | '/report-stock-movement'
     | '/reports'
+    | '/reset-password'
     | '/stock-count'
     | '/admin/audit-logs'
     | '/admin/billing'
@@ -462,6 +472,7 @@ export interface FileRouteTypes {
     | '/report-stock'
     | '/report-stock-movement'
     | '/reports'
+    | '/reset-password'
     | '/stock-count'
     | '/admin/audit-logs'
     | '/admin/billing'
@@ -506,6 +517,7 @@ export interface FileRouteTypes {
     | '/report-stock'
     | '/report-stock-movement'
     | '/reports'
+    | '/reset-password'
     | '/stock-count'
     | '/admin/audit-logs'
     | '/admin/billing'
@@ -551,6 +563,7 @@ export interface RootRouteChildren {
   ReportStockRoute: typeof ReportStockRoute
   ReportStockMovementRoute: typeof ReportStockMovementRoute
   ReportsRoute: typeof ReportsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   StockCountRoute: typeof StockCountRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
   AdminBillingRoute: typeof AdminBillingRoute
@@ -583,6 +596,13 @@ declare module '@tanstack/react-router' {
       path: '/stock-count'
       fullPath: '/stock-count'
       preLoaderRoute: typeof StockCountRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/reports': {
@@ -895,6 +915,7 @@ const rootRouteChildren: RootRouteChildren = {
   ReportStockRoute: ReportStockRoute,
   ReportStockMovementRoute: ReportStockMovementRoute,
   ReportsRoute: ReportsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   StockCountRoute: StockCountRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,
   AdminBillingRoute: AdminBillingRoute,

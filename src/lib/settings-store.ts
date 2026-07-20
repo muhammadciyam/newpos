@@ -118,6 +118,12 @@ export type AppSettings = {
   restaurant: {
     enabled: boolean;
   };
+  wholesale: {
+    // A wholesale catalogue product's stockQty at or below this shows as "Low Stock"
+    // instead of a plain "In Stock" everywhere it's displayed (see supply.home.tsx) — 0
+    // is always "Out of Stock" regardless of this value.
+    lowStockThreshold: number;
+  };
 };
 
 const defaults: AppSettings = {
@@ -143,7 +149,12 @@ const defaults: AppSettings = {
     methods: [
       { key: "Cash", name: "Cash", type: "manual", details: "" },
       { key: "Card", name: "Card", type: "manual", details: "" },
-      { key: "Bank Transfer", name: "Bank Transfer", type: "bank-transfer", details: "7730000639888" },
+      {
+        key: "Bank Transfer",
+        name: "Bank Transfer",
+        type: "bank-transfer",
+        details: "7730000639888",
+      },
     ],
   },
   numbering: {
@@ -211,6 +222,9 @@ const defaults: AppSettings = {
   restaurant: {
     enabled: false,
   },
+  wholesale: {
+    lowStockThreshold: 5,
+  },
 };
 
 const store = createPersistedStore<AppSettings>("dhipos-settings", defaults);
@@ -256,6 +270,9 @@ export function useSettings(): AppSettings {
       bagFeeRate: settings.tax.bagFeeRate ?? 2,
       gstTin: settings.tax.gstTin ?? "",
       taxpayerName: settings.tax.taxpayerName ?? "",
+    },
+    wholesale: {
+      lowStockThreshold: settings.wholesale?.lowStockThreshold ?? 5,
     },
   };
 }

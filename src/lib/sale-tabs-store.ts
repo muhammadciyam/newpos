@@ -100,6 +100,18 @@ export const saleTabsStore = {
     });
     return newId;
   },
+  // There must always be at least one sale window open — closing the last remaining tab
+  // just resets it in place instead, same as discarding it.
+  closeTab(id: number) {
+    store.set((s) => {
+      if (s.tabs.length <= 1) {
+        return { ...s, tabs: s.tabs.map((t) => (t.id === id ? emptySaleTab(t.id) : t)) };
+      }
+      const remaining = s.tabs.filter((t) => t.id !== id);
+      const activeTab = s.activeTab === id ? remaining[remaining.length - 1].id : s.activeTab;
+      return { ...s, tabs: remaining, activeTab };
+    });
+  },
 };
 
 // Which register the local `store` is currently known to mirror — module-level (not a

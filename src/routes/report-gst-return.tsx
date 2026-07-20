@@ -190,7 +190,11 @@ function GstReturnPage() {
         String(Math.round(box8)),
       ],
       ["9", "GST collected in excess", String(Math.round(box9))],
-      ["10", "GST liability for the period (Box 6 - Box 7 - Box 8 + Box 9)", String(Math.round(box10))],
+      [
+        "10",
+        "GST liability for the period (Box 6 - Box 7 - Box 8 + Box 9)",
+        String(Math.round(box10)),
+      ],
       ["11", "Amount of GST being paid", String(Math.round(box11))],
       ["", "Explanation if Box 10 and 11 differ", explanation],
       ["12", "Plastic bag fee collected for the period", String(Math.round(box12))],
@@ -260,10 +264,8 @@ function GstReturnPage() {
           </p>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="mb-1 text-xs font-semibold">
-                GST TIN (Taxpayer Identification Number)
-              </p>
-              <DigitBoxes value={settings.tax.gstTin || ""} length={10} />
+              <p className="mb-1 text-xs font-semibold">GST TIN (Taxpayer Identification Number)</p>
+              <DigitBoxes value={settings.tax.gstTin || ""} length={13} />
               <p className="mt-1 text-[10px] italic text-muted-foreground">
                 Your TIN as it appears on your GST Registration Certificate
               </p>
@@ -300,7 +302,11 @@ function GstReturnPage() {
             <span className="font-normal italic">(rounded off to the nearest Rufiyaa)</span>
           </p>
           <div className="divide-y divide-border/50">
-            <Box n={1} label="Sales of supplies subject to GST at 8% (inclusive of GST)" value={box1} />
+            <Box
+              n={1}
+              label="Sales of supplies subject to GST at 8% (inclusive of GST)"
+              value={box1}
+            />
             <Box
               n={2}
               label="Sales of zero-rated supplies"
@@ -375,8 +381,8 @@ function GstReturnPage() {
           placeholder=""
         />
         <p className="mt-2 text-[10px] italic">
-          * "Credit notes" here refers to credit notes issued on or after 1 January 2023 in
-          respect of tax invoices issued before 1 January 2023.
+          * "Credit notes" here refers to credit notes issued on or after 1 January 2023 in respect
+          of tax invoices issued before 1 January 2023.
         </p>
 
         <div className="mt-5">
@@ -401,9 +407,8 @@ function GstReturnPage() {
         <div className="mt-4 rounded-md border-2 border-red-300 bg-red-50 p-3 print:bg-white">
           <p className="text-xs font-bold text-red-700">IMPORTANT</p>
           <p className="text-xs italic text-red-700">
-            It is an offence to declare false information or fail to include required
-            information in tax returns. The Tax Administration Act imposes severe penalties for
-            such offences.
+            It is an offence to declare false information or fail to include required information in
+            tax returns. The Tax Administration Act imposes severe penalties for such offences.
           </p>
         </div>
 
@@ -413,8 +418,8 @@ function GstReturnPage() {
             I declare that the information in this Return is true and correct and represents my
             assessment as required under the Goods and Services Tax Act (Law Number 10/2011), and
             the Waste Management Act (Law number 24/2022), and that I have all the necessary
-            documentation to support the claims I have made in this return. I further declare
-            that I am authorised to sign this Return.
+            documentation to support the claims I have made in this return. I further declare that I
+            am authorised to sign this Return.
           </p>
         </div>
 
@@ -439,13 +444,13 @@ function GstReturnPage() {
         </div>
 
         <p className="mt-4 text-center text-[9px] text-muted-foreground">
-          Maldives Inland Revenue Authority, Ameenee Magu, Male' 20379, Maldives | H: (+960) 1415
-          | W: www.mira.gov.mv
+          Maldives Inland Revenue Authority, Ameenee Magu, Male' 20379, Maldives | H: (+960) 1415 |
+          W: www.mira.gov.mv
         </p>
         <p className="mt-1 text-center text-[9px] italic text-muted-foreground">
-          Prepared by Dhipos for {settings.tax.taxpayerName || "this business"} — not an
-          official MIRA-issued document. Verify every figure, including the manually-entered
-          boxes above, before filing.
+          Prepared by Dhipos for {settings.tax.taxpayerName || "this business"} — not an official
+          MIRA-issued document. Verify every figure, including the manually-entered boxes above,
+          before filing.
         </p>
       </div>
     </ReportPageShell>

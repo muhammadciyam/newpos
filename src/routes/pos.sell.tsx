@@ -22,6 +22,16 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Table,
   TableBody,
   TableCell,
@@ -122,7 +132,9 @@ function SellPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const slipInput = useRef<HTMLInputElement>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     pendingSaleStore.set(tabs.some((t) => t.items.length > 0));
@@ -196,6 +208,21 @@ function SellPage() {
     }));
   }
 
+  // Cash Given defaults to the exact Grand Total (so Change Due starts at 0.00 without the
+  // cashier having to type it) and re-syncs whenever that tab's total changes — e.g. after
+  // adding another item. The cashier can still overwrite it for the current total (say the
+  // customer hands over a rounded note) without it snapping back until the total changes
+  // again. Tracked per tab.id (not just the last render's total) so switching between
+  // multiple open sale tabs never clobbers a manual override on the tab you switch back to.
+  const lastSyncedCashTotal = useRef<Record<string, number>>({});
+  useEffect(() => {
+    if (tab.payMethod !== "Cash") return;
+    if (lastSyncedCashTotal.current[tab.id] === total) return;
+    lastSyncedCashTotal.current[tab.id] = total;
+    updateTab({ cashReceived: total.toFixed(2) });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total, tab.payMethod, tab.id]);
+
   function addProduct(p: Product) {
     updateTab({
       items: tab.items.some((i) => i.product.id === p.id)
@@ -239,6 +266,53 @@ function SellPage() {
     });
     setCustomerQuery("");
   }
+
+  // Closes the current sale tab outright when there are others open (so it disappears from
+  // the tab bar, not just an emptied-out tab sitting there) — with only one tab left, there's
+  // nothing to close down to, so it's reset in place instead (same end result either way).
+  function closeOrResetTab() {
+    if (tabs.length > 1) {
+      saleTabsStore.closeTab(activeTab);
+    } else {
+      discardBill();
+    }
+  }
+
+  // Nothing to lose on an empty bill, so skip asking and just close/reset straight away.
+  // Anything with items in it needs a confirmation first (see discardConfirmOpen below).
+  function requestDiscardBill() {
+    if (tab.items.length === 0) {
+      closeOrResetTab();
+      return;
+    }
+    setDiscardConfirmOpen(true);
+  }
+
+  // Wires up the shortcuts advertised right on the page (the "Discard Bill (F4)" button
+  // label and the "Keyboard Shortcuts" help panel) — previously just descriptive text with
+  // no listener behind it, so pressing the key did nothing. Skipped while a dialog is open
+  // so e.g. F4 can't blow away the cart out from under someone editing a note or a new
+  // customer.
+  useEffect(() => {
+    const dialogOpen =
+      newCustomerOpen || printOpen || noteOpen || tagsOpen || currencyOpen || discardConfirmOpen;
+    if (dialogOpen) return;
+    function handler(e: KeyboardEvent) {
+      if (e.key === "F2") {
+        e.preventDefault();
+        newTab();
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        requestDiscardBill();
+      } else if (e.key === "Escape") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newCustomerOpen, printOpen, noteOpen, tagsOpen, currencyOpen, discardConfirmOpen, activeTab]);
 
   function selectCustomer(id: string, name: string) {
     updateTab({ customerId: id });
@@ -478,6 +552,7 @@ function SellPage() {
               <div className="relative flex-1 min-w-[220px]">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
+                  ref={searchInputRef}
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   onFocus={() => setSearchFocused(true)}
@@ -506,7 +581,7 @@ function SellPage() {
                   </div>
                 )}
               </div>
-              <Button variant="outline" onClick={discardBill}>
+              <Button variant="outline" onClick={requestDiscardBill}>
                 Discard Bill (F4)
               </Button>
             </div>
@@ -939,6 +1014,30 @@ function SellPage() {
           </div>
         </div>
       </div>
+
+      <AlertDialog open={discardConfirmOpen} onOpenChange={setDiscardConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard this bill?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {tabs.length > 1
+                ? "This closes the tab and everything in it. This can't be undone."
+                : "Everything in this cart will be cleared. This can't be undone."}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                closeOrResetTab();
+                setDiscardConfirmOpen(false);
+              }}
+            >
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Dialog open={newCustomerOpen} onOpenChange={setNewCustomerOpen}>
         <DialogContent>

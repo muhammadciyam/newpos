@@ -1,5 +1,5 @@
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useRef, useState } from "react";
+import { createFileRoute } from "@tanstack/react-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { RestrictedPage } from "@/components/restricted-page";
 import { Card } from "@/components/ui/card";
@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sheet, SheetContent } from "@/components/ui/sheet";
@@ -59,8 +60,9 @@ import {
   History,
   MessageCircle,
   MessageSquare,
-  LogIn,
   Image as ImageIcon,
+  Check,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -70,6 +72,7 @@ import {
   type WholesalerCategory,
   type WholesalerProduct,
   type WholesalerProductSizeUnit,
+  type BannerAnimation,
 } from "@/lib/wholesalers-store";
 import {
   useWholesaleInventory,
@@ -78,9 +81,10 @@ import {
 } from "@/lib/wholesale-inventory-store";
 import { useCart, cartStore, type CartItem } from "@/lib/cart-store";
 import { useWholesaleOrders, wholesaleOrdersStore } from "@/lib/wholesale-orders-store";
-import { authStore, useCurrentUser } from "@/lib/auth-store";
+import { useCurrentUser } from "@/lib/auth-store";
 import { findProductPhoto } from "@/lib/product-photo-search";
 import { logAudit } from "@/lib/audit-log-store";
+import { settingsStore, useSettings } from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
 
 // Wholesaler management (add/edit/delete/enable-disable) is restricted to this one email,
@@ -107,7 +111,8 @@ const emptyForm = {
   name: "",
   subtitle: "",
   logoUrl: "",
-  bannerUrl: "",
+  bannerUrls: [] as string[],
+  bannerAnimation: "fade" as BannerAnimation,
   description: "",
   phone: "",
   email: "",
@@ -165,6 +170,107 @@ type OrderNotifyGroup = {
   smsUrl: string;
 };
 
+// Shared stock-status labeling for a WholesalerProduct — 0 is always "Out of Stock";
+// anything at or below the configured threshold (Wholesale Settings) is "Low Stock" so
+// it's visible at a glance without opening Wholesale Inventory.
+function stockStatus(qty: number, lowStockThreshold: number) {
+  if (qty <= 0) return { label: "Out of Stock", className: "text-destructive" };
+  if (qty <= lowStockThreshold)
+    return { label: `Low Stock — ${qty} left`, className: "text-amber-600" };
+  return { label: `${qty} in stock`, className: "text-emerald-600" };
+}
+
+const ADD_UNIT_VALUE = "__add_unit__";
+
+// Unit picker used everywhere a WholesalerProduct's sizeUnit is set (Add Product, Edit
+// Product, and the inline product-row editor) — a dropdown of known units plus an
+// "+ Add New Unit" option that reveals a text input for typing a brand new one.
+function UnitSelect({
+  value,
+  onChange,
+  units,
+  triggerClassName,
+}: {
+  value: string;
+  onChange: (unit: string) => void;
+  units: string[];
+  triggerClassName?: string;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState("");
+
+  function confirmDraft() {
+    const trimmed = draft.trim();
+    if (trimmed) onChange(trimmed);
+    setAdding(false);
+    setDraft("");
+  }
+
+  if (adding) {
+    return (
+      <div className="flex items-center gap-1">
+        <Input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              confirmDraft();
+            } else if (e.key === "Escape") {
+              setAdding(false);
+              setDraft("");
+            }
+          }}
+          placeholder="e.g. pcs"
+          className={triggerClassName ?? "h-9 w-24"}
+        />
+        <Button
+          type="button"
+          size="icon"
+          variant="ghost"
+          className="h-9 w-9 shrink-0"
+          onClick={confirmDraft}
+        >
+          <Check className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    );
+  }
+
+  // The current value might not be in the known-units list yet (e.g. a custom unit just
+  // typed for this product before the store round-trips) — always include it so Select
+  // doesn't fall back to a blank display.
+  const options = Array.from(new Set([value, ...units].map((u) => u?.trim()).filter(Boolean)));
+
+  return (
+    <Select
+      value={value}
+      onValueChange={(v) => {
+        if (v === ADD_UNIT_VALUE) {
+          setAdding(true);
+          return;
+        }
+        onChange(v);
+      }}
+    >
+      <SelectTrigger className={triggerClassName}>
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent>
+        {options.map((u) => (
+          <SelectItem key={u} value={u}>
+            {u}
+          </SelectItem>
+        ))}
+        <SelectItem value={ADD_UNIT_VALUE} className="font-medium text-primary">
+          + Add New Unit
+        </SelectItem>
+      </SelectContent>
+    </Select>
+  );
+}
+
 function WholesalerHomePage() {
   const currentUser = useCurrentUser();
   const wholesalers = useWholesalers();
@@ -190,6 +296,22 @@ function WholesalerHomePage() {
   const [productNewCategoryName, setProductNewCategoryName] = useState("");
   const productImageInputRef = useRef<HTMLInputElement>(null);
 
+  // The Unit field isn't a fixed list — anyone can type a new one (e.g. "pcs", "box",
+  // "dozen") and it's remembered by suggesting whatever units are already used somewhere
+  // across every wholesaler's catalogue, on top of a small starter list.
+  const settings = useSettings();
+  const [lowStockThresholdDraft, setLowStockThresholdDraft] = useState(
+    String(settings.wholesale.lowStockThreshold),
+  );
+
+  const knownUnits = useMemo(() => {
+    const starter = ["kg", "g", "l", "ml", "pcs", "box", "dozen", "carton"];
+    const used = wholesalers.flatMap((w) =>
+      w.categories.flatMap((c) => c.products.map((p) => p.sizeUnit)),
+    );
+    return Array.from(new Set([...starter, ...used].map((u) => u.trim()).filter(Boolean))).sort();
+  }, [wholesalers]);
+
   const cart = useCart();
   const [cartOpen, setCartOpen] = useState(false);
   const [orderNotifyGroups, setOrderNotifyGroups] = useState<OrderNotifyGroup[]>([]);
@@ -205,6 +327,7 @@ function WholesalerHomePage() {
   const [inventoryProductName, setInventoryProductName] = useState("");
   const [inventoryQty, setInventoryQty] = useState("");
   const [inventoryPrice, setInventoryPrice] = useState("");
+  const [inventoryIsNewStock, setInventoryIsNewStock] = useState(false);
 
   if (!currentUser) return <RestrictedPage />;
 
@@ -303,6 +426,7 @@ function WholesalerHomePage() {
     setInventoryProductName("");
     setInventoryQty("");
     setInventoryPrice("");
+    setInventoryIsNewStock(false);
   }
 
   function openEditInventoryItem(item: WholesaleInventoryItem) {
@@ -312,6 +436,11 @@ function WholesalerHomePage() {
     setInventoryProductName(item.productName);
     setInventoryQty(String(item.qty));
     setInventoryPrice(String(item.price));
+    const linkedProduct = wholesalers
+      .find((w) => w.id === item.wholesalerId)
+      ?.categories.flatMap((c) => c.products)
+      .find((p) => p.id === item.productId);
+    setInventoryIsNewStock(linkedProduct?.isNewStock ?? false);
   }
 
   function pickInventoryProduct(productId: string, wholesaler: Wholesaler) {
@@ -321,6 +450,7 @@ function WholesalerHomePage() {
       if (product) {
         setInventoryProductName(product.name);
         setInventoryPrice(String(product.price));
+        setInventoryIsNewStock(product.isNewStock);
         return;
       }
     }
@@ -352,13 +482,15 @@ function WholesalerHomePage() {
       return;
     }
 
-    // Wholesale Inventory is the only place a product's stockQty is ever set — when this
-    // entry is linked to an existing catalogue product, push the qty onto it directly.
+    // Wholesale Inventory is the only place a product's stockQty/isNewStock is ever set —
+    // when this entry is linked to an existing catalogue product, push both onto it directly.
     if (inventoryProductPickId) {
       const categories = wholesaler.categories.map((c) => ({
         ...c,
         products: c.products.map((p) =>
-          p.id === inventoryProductPickId ? { ...p, stockQty: payload.qty } : p,
+          p.id === inventoryProductPickId
+            ? { ...p, stockQty: payload.qty, isNewStock: inventoryIsNewStock }
+            : p,
         ),
       }));
       const stockResult = await wholesalersStore.update(wholesaler.id, { categories });
@@ -387,7 +519,8 @@ function WholesalerHomePage() {
       name: s.name,
       subtitle: s.subtitle,
       logoUrl: s.logoUrl,
-      bannerUrl: s.bannerUrl,
+      bannerUrls: s.bannerUrls,
+      bannerAnimation: s.bannerAnimation,
       description: s.description,
       phone: s.phone,
       email: s.email,
@@ -410,12 +543,23 @@ function WholesalerHomePage() {
     reader.readAsDataURL(file);
   }
 
+  // Accepts multiple files at once (input has `multiple`) — each gets appended to the
+  // banner list rather than replacing it, since a wholesaler can now have several banners
+  // that cycle (see bannerAnimation).
   function handleBannerUpload(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setForm((f) => ({ ...f, bannerUrl: reader.result as string }));
-    reader.readAsDataURL(file);
+    const files = Array.from(e.target.files ?? []);
+    if (files.length === 0) return;
+    for (const file of files) {
+      const reader = new FileReader();
+      reader.onload = () =>
+        setForm((f) => ({ ...f, bannerUrls: [...f.bannerUrls, reader.result as string] }));
+      reader.readAsDataURL(file);
+    }
+    e.target.value = "";
+  }
+
+  function removeBanner(index: number) {
+    setForm((f) => ({ ...f, bannerUrls: f.bannerUrls.filter((_, i) => i !== index) }));
   }
 
   function togglePaymentMethod(method: string) {
@@ -474,6 +618,7 @@ function WholesalerHomePage() {
                   size: 0,
                   sizeUnit: "kg",
                   stockQty: 0,
+                  isNewStock: false,
                 },
               ],
             }
@@ -570,6 +715,9 @@ function WholesalerHomePage() {
       // Stock is only ever set/updated via Wholesale Inventory (see submitInventoryItem) —
       // new products always start at zero.
       stockQty: 0,
+      // Not settable here — New Stock marking is managed from Wholesale Inventory once the
+      // product exists (and, since it's ultimately a stock concept, so is stockQty itself).
+      isNewStock: false,
     };
     const categories = creatingNewCategory
       ? [
@@ -618,7 +766,8 @@ function WholesalerHomePage() {
       name,
       subtitle: form.subtitle.trim(),
       logoUrl: form.logoUrl,
-      bannerUrl: form.bannerUrl,
+      bannerUrls: form.bannerUrls,
+      bannerAnimation: form.bannerAnimation,
       description: form.description.trim(),
       phone,
       email: form.email.trim(),
@@ -652,38 +801,20 @@ function WholesalerHomePage() {
   return (
     <AppShell>
       <div className="flex flex-col gap-4 p-4 md:p-6">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg bg-primary px-3 py-2.5 text-primary-foreground">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary-foreground/15">
-              <DhiposWholesalerLogo className="h-4 w-4" />
+        <div className="relative flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl bg-gradient-to-r from-primary to-primary/85 px-4 py-3.5 text-primary-foreground shadow-md shadow-primary/20">
+          <div className="pointer-events-none absolute -right-10 -top-12 h-36 w-36 rounded-full bg-primary-foreground/10 blur-2xl" />
+          <div className="relative flex items-center gap-3">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary-foreground/15 ring-1 ring-inset ring-primary-foreground/20">
+              <DhiposWholesalerLogo className="h-5 w-5" />
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-bold leading-tight">Dhipos Wholesaler</p>
-              <p className="truncate text-[11px] text-primary-foreground/70">
+              <p className="text-base font-bold leading-tight">Dhipos Wholesaler</p>
+              <p className="truncate text-xs text-primary-foreground/75">
                 Connect with wholesalers and reorder inventory
               </p>
             </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <Button
-              variant="secondary"
-              className="relative gap-1.5 rounded-full font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
-              onClick={() => setCartOpen(true)}
-            >
-              <ShoppingCart className="h-4 w-4" /> Cart
-              {cartCount > 0 && (
-                <Badge className="absolute -right-2 -top-2 h-5 min-w-5 justify-center rounded-full border-2 border-primary px-1">
-                  {cartCount}
-                </Badge>
-              )}
-            </Button>
-            <Button
-              variant="secondary"
-              className="gap-1.5 rounded-full font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
-              onClick={() => setOrderHistoryOpen(true)}
-            >
-              <History className="h-4 w-4" /> Order History
-            </Button>
+          <div className="relative flex flex-wrap items-center gap-2">
             {canManage && (
               <>
                 <Button
@@ -881,22 +1012,50 @@ function WholesalerHomePage() {
             </div>
 
             <div className="space-y-1.5">
-              <Label>Catalogue Banner</Label>
-              <div className="flex items-center gap-3">
-                <div className="h-16 w-28 shrink-0 overflow-hidden rounded-lg border border-border bg-muted">
-                  {form.bannerUrl ? (
-                    <img src={form.bannerUrl} alt="" className="h-full w-full object-cover" />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center text-muted-foreground">
-                      <ImageIcon className="h-5 w-5" />
-                    </div>
-                  )}
-                </div>
+              <Label>Catalogue Banner{form.bannerUrls.length > 1 ? "s" : ""}</Label>
+              <div className="flex flex-wrap items-center gap-2">
+                {form.bannerUrls.map((url, i) => (
+                  <div
+                    key={i}
+                    className="group relative h-16 w-28 shrink-0 overflow-hidden rounded-lg border border-border bg-muted"
+                  >
+                    <img src={url} alt="" className="h-full w-full object-cover" />
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <button
+                          type="button"
+                          className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                          title="Remove banner"
+                        >
+                          <Minus className="h-3 w-3" />
+                        </button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>Remove this banner image?</AlertDialogTitle>
+                          <AlertDialogDescription>This can't be undone.</AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => removeBanner(i)}>
+                            Remove
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                ))}
+                {form.bannerUrls.length === 0 && (
+                  <div className="flex h-16 w-28 shrink-0 items-center justify-center rounded-lg border border-border bg-muted text-muted-foreground">
+                    <ImageIcon className="h-5 w-5" />
+                  </div>
+                )}
                 <div>
                   <input
                     ref={bannerInputRef}
                     type="file"
                     accept="image/*"
+                    multiple
                     className="hidden"
                     onChange={handleBannerUpload}
                   />
@@ -907,13 +1066,36 @@ function WholesalerHomePage() {
                     className="gap-1.5"
                     onClick={() => bannerInputRef.current?.click()}
                   >
-                    <Upload className="h-3.5 w-3.5" /> Upload Banner
+                    <Upload className="h-3.5 w-3.5" />
+                    {form.bannerUrls.length > 0 ? "Add More" : "Upload Banner"}
                   </Button>
-                  <p className="mt-1 text-xs text-muted-foreground">
-                    Shown at the top of the catalogue panel.
-                  </p>
                 </div>
               </div>
+              <p className="text-xs text-muted-foreground">
+                Shown at the top of the catalogue panel — upload more than one and they'll cycle
+                automatically.
+              </p>
+              {form.bannerUrls.length > 1 && (
+                <div className="space-y-1.5 pt-1">
+                  <Label>Banner Animation</Label>
+                  <Select
+                    value={form.bannerAnimation}
+                    onValueChange={(v) =>
+                      setForm((f) => ({ ...f, bannerAnimation: v as BannerAnimation }))
+                    }
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">None (first only)</SelectItem>
+                      <SelectItem value="fade">Fade</SelectItem>
+                      <SelectItem value="slide">Slide</SelectItem>
+                      <SelectItem value="flash">Flash</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
             </div>
 
             <div className="space-y-3">
@@ -1061,15 +1243,35 @@ function WholesalerHomePage() {
                           placeholder="e.g. Basmati Rice"
                           className="h-9"
                         />
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-9 w-9 shrink-0"
-                          onClick={() => removeCategory(c.id)}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-9 w-9 shrink-0"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>
+                                Delete category "{c.name || "this category"}"?
+                              </AlertDialogTitle>
+                              <AlertDialogDescription>
+                                This removes the category and all {c.products.length} product
+                                {c.products.length === 1 ? "" : "s"} in it. This can't be undone.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction onClick={() => removeCategory(c.id)}>
+                                Delete
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
                       </div>
 
                       <div className="flex flex-col gap-2 border-t border-border pl-4 pt-2">
@@ -1130,15 +1332,34 @@ function WholesalerHomePage() {
                                 placeholder="Price"
                                 className="h-9 w-24 shrink-0"
                               />
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="icon"
-                                className="h-9 w-9 shrink-0"
-                                onClick={() => removeProduct(c.id, p.id)}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 shrink-0"
+                                  >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Delete "{p.name || "this product"}"?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      This can't be undone.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction onClick={() => removeProduct(c.id, p.id)}>
+                                      Delete
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                             <div className="flex items-center gap-2 pl-11">
                               <Input
@@ -1160,27 +1381,25 @@ function WholesalerHomePage() {
                                 placeholder="Size"
                                 className="h-9 w-20 shrink-0"
                               />
-                              <Select
+                              <UnitSelect
                                 value={p.sizeUnit}
-                                onValueChange={(v) =>
-                                  updateProduct(c.id, p.id, {
-                                    sizeUnit: v as WholesalerProductSizeUnit,
-                                  })
-                                }
-                              >
-                                <SelectTrigger className="h-9 w-20 shrink-0">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="kg">kg</SelectItem>
-                                  <SelectItem value="ml">ml</SelectItem>
-                                </SelectContent>
-                              </Select>
+                                onChange={(v) => updateProduct(c.id, p.id, { sizeUnit: v })}
+                                units={knownUnits}
+                                triggerClassName="h-9 w-20 shrink-0"
+                              />
                               <span
-                                className="flex h-9 w-24 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs text-muted-foreground"
+                                className={cn(
+                                  "flex h-9 w-24 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-xs font-medium",
+                                  stockStatus(p.stockQty, settings.wholesale.lowStockThreshold)
+                                    .className,
+                                )}
                                 title="Stock is only updated from Wholesale Inventory"
                               >
-                                Stock: {p.stockQty}
+                                {p.stockQty <= 0
+                                  ? "No Stock"
+                                  : p.stockQty <= settings.wholesale.lowStockThreshold
+                                    ? `Low: ${p.stockQty}`
+                                    : `Stock: ${p.stockQty}`}
                               </span>
                             </div>
                           </div>
@@ -1332,23 +1551,17 @@ function WholesalerHomePage() {
                 </div>
                 <div className="col-span-1 space-y-1.5">
                   <Label>Unit</Label>
-                  <Select
+                  <UnitSelect
                     value={productSizeUnit}
-                    onValueChange={(v) => setProductSizeUnit(v as WholesalerProductSizeUnit)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="kg">kg</SelectItem>
-                      <SelectItem value="ml">ml</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onChange={setProductSizeUnit}
+                    units={knownUnits}
+                  />
                 </div>
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Stock starts at 0 — set it afterward from Wholesale Inventory.
+                Stock starts at 0 — set it (and New Stock marking) afterward from Wholesale
+                Inventory.
               </p>
             </div>
             <DialogFooter>
@@ -1462,15 +1675,31 @@ function WholesalerHomePage() {
                         maximumFractionDigits: 2,
                       })}
                     </p>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                      onClick={() => removeFromCart(item.productId)}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Remove "{item.productName}" from cart?
+                          </AlertDialogTitle>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={() => removeFromCart(item.productId)}>
+                            Remove
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
                   </div>
                 ))}
                 <div className="flex items-center justify-between border-t border-border pt-3">
@@ -1576,170 +1805,220 @@ function WholesalerHomePage() {
 
         {/* Wholesale Inventory — manually-tracked list, backed by its own Supabase table */}
         <Dialog open={inventoryOpen} onOpenChange={setInventoryOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
+          <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 p-0">
+            <DialogHeader className="shrink-0 border-b border-border px-6 py-4">
               <DialogTitle>Wholesale Inventory</DialogTitle>
             </DialogHeader>
-            <div className="space-y-3 rounded-lg border border-border p-3">
-              <p className="text-sm font-semibold text-foreground">
-                {editingInventoryId ? "Edit Item" : "Add Item"}
-              </p>
-              <div className="space-y-1.5">
-                <Label>
-                  <span className="text-destructive">*</span> Wholesaler
-                </Label>
-                <Select
-                  value={inventoryWholesalerId}
-                  onValueChange={(v) => {
-                    setInventoryWholesalerId(v);
-                    setInventoryProductPickId("");
+            <div className="flex-1 space-y-4 overflow-y-auto px-6 py-4">
+              <div className="flex items-end gap-2 rounded-lg border border-border p-3">
+                <div className="flex-1 space-y-1.5">
+                  <Label>Low Stock Threshold</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    value={lowStockThresholdDraft}
+                    onChange={(e) => setLowStockThresholdDraft(e.target.value)}
+                    placeholder="e.g. 5"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    A product shows as "Low Stock" once its stock falls to this number or below (0
+                    is always "Out of Stock").
+                  </p>
+                </div>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    const parsed = parseInt(lowStockThresholdDraft, 10);
+                    settingsStore.updateSection("wholesale", {
+                      lowStockThreshold: Number.isFinite(parsed) && parsed >= 0 ? parsed : 0,
+                    });
+                    toast.success("Low stock threshold saved");
                   }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a wholesaler" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {wholesalers.map((w) => (
-                      <SelectItem key={w.id} value={w.id}>
-                        {w.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {(() => {
-                const selectedWholesaler = wholesalers.find((w) => w.id === inventoryWholesalerId);
-                const catalogueProducts =
-                  selectedWholesaler?.categories.flatMap((c) =>
-                    c.products.map((p) => ({ categoryName: c.name, product: p })),
-                  ) ?? [];
-                if (!selectedWholesaler || catalogueProducts.length === 0) return null;
-                return (
-                  <div className="space-y-1.5">
-                    <Label>Pick from Catalogue (optional)</Label>
-                    <Select
-                      value={inventoryProductPickId}
-                      onValueChange={(v) => pickInventoryProduct(v, selectedWholesaler)}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Choose an existing product" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {catalogueProducts.map(({ categoryName, product }) => (
-                          <SelectItem key={product.id} value={product.id}>
-                            {categoryName} — {product.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                );
-              })()}
-              <div className="space-y-1.5">
-                <Label>
-                  <span className="text-destructive">*</span> Product Name
-                </Label>
-                <Input
-                  value={inventoryProductName}
-                  onChange={(e) => setInventoryProductName(e.target.value)}
-                  placeholder="e.g. Basmati Rice"
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1.5">
-                  <Label>Qty</Label>
-                  <Input
-                    type="number"
-                    value={inventoryQty}
-                    onChange={(e) => setInventoryQty(e.target.value)}
-                    placeholder="0"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Price</Label>
-                  <Input
-                    type="number"
-                    value={inventoryPrice}
-                    onChange={(e) => setInventoryPrice(e.target.value)}
-                    placeholder="0.00"
-                  />
-                </div>
-              </div>
-              <div className="flex justify-end gap-2">
-                {editingInventoryId && (
-                  <Button variant="outline" onClick={openAddInventoryItem}>
-                    Cancel Edit
-                  </Button>
-                )}
-                <Button onClick={submitInventoryItem}>
-                  {editingInventoryId ? "Save Changes" : "Add Item"}
+                  Save
                 </Button>
               </div>
-            </div>
-
-            {wholesaleInventory.length === 0 ? (
-              <p className="py-4 text-center text-sm text-muted-foreground">
-                No wholesale inventory items yet.
-              </p>
-            ) : (
-              <div className="flex max-h-64 flex-col gap-2 overflow-y-auto">
-                {wholesaleInventory.map((item) => (
-                  <div
-                    key={item.id}
-                    className="flex items-center gap-2 rounded-lg border border-border p-2"
+              <div className="space-y-3 rounded-lg border border-border p-3">
+                <p className="text-sm font-semibold text-foreground">
+                  {editingInventoryId ? "Edit Item" : "Add Item"}
+                </p>
+                <div className="space-y-1.5">
+                  <Label>
+                    <span className="text-destructive">*</span> Wholesaler
+                  </Label>
+                  <Select
+                    value={inventoryWholesalerId}
+                    onValueChange={(v) => {
+                      setInventoryWholesalerId(v);
+                      setInventoryProductPickId("");
+                    }}
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {item.productName}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {item.wholesalerName} · Qty {item.qty} ·{" "}
-                        {item.price.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </p>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a wholesaler" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wholesalers.map((w) => (
+                        <SelectItem key={w.id} value={w.id}>
+                          {w.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(() => {
+                  const selectedWholesaler = wholesalers.find(
+                    (w) => w.id === inventoryWholesalerId,
+                  );
+                  const catalogueProducts =
+                    selectedWholesaler?.categories.flatMap((c) =>
+                      c.products.map((p) => ({ categoryName: c.name, product: p })),
+                    ) ?? [];
+                  if (!selectedWholesaler || catalogueProducts.length === 0) return null;
+                  return (
+                    <div className="space-y-1.5">
+                      <Label>Pick from Catalogue (optional)</Label>
+                      <Select
+                        value={inventoryProductPickId}
+                        onValueChange={(v) => pickInventoryProduct(v, selectedWholesaler)}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Choose an existing product" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {catalogueProducts.map(({ categoryName, product }) => (
+                            <SelectItem key={product.id} value={product.id}>
+                              {categoryName} — {product.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => openEditInventoryItem(item)}
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Delete "{item.productName}"?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This removes the item from Wholesale Inventory. This can't be undone.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => removeInventoryItem(item.id)}>
-                            Delete
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
+                  );
+                })()}
+                <div className="space-y-1.5">
+                  <Label>
+                    <span className="text-destructive">*</span> Product Name
+                  </Label>
+                  <Input
+                    value={inventoryProductName}
+                    onChange={(e) => setInventoryProductName(e.target.value)}
+                    placeholder="e.g. Basmati Rice"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1.5">
+                    <Label>Qty</Label>
+                    <Input
+                      type="number"
+                      value={inventoryQty}
+                      onChange={(e) => setInventoryQty(e.target.value)}
+                      placeholder="0"
+                    />
                   </div>
-                ))}
+                  <div className="space-y-1.5">
+                    <Label>Price</Label>
+                    <Input
+                      type="number"
+                      value={inventoryPrice}
+                      onChange={(e) => setInventoryPrice(e.target.value)}
+                      placeholder="0.00"
+                    />
+                  </div>
+                </div>
+                {inventoryProductPickId && (
+                  <label className="flex items-center gap-2 text-sm text-foreground">
+                    <Checkbox
+                      checked={inventoryIsNewStock}
+                      onCheckedChange={(v) => setInventoryIsNewStock(v === true)}
+                    />
+                    Mark as New Stock — shows a "New" badge on the catalogue card
+                  </label>
+                )}
+                <div className="flex justify-end gap-2">
+                  {editingInventoryId && (
+                    <Button variant="outline" onClick={openAddInventoryItem}>
+                      Cancel Edit
+                    </Button>
+                  )}
+                  <Button onClick={submitInventoryItem}>
+                    {editingInventoryId ? "Save Changes" : "Add Item"}
+                  </Button>
+                </div>
               </div>
-            )}
-            <DialogFooter>
+
+              {wholesaleInventory.length === 0 ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  No wholesale inventory items yet.
+                </p>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  {wholesaleInventory.map((item) => (
+                    <div
+                      key={item.id}
+                      className="flex items-center gap-2 rounded-lg border border-border p-2"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {item.productName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {item.wholesalerName} ·{" "}
+                          <span
+                            className={cn(
+                              "font-medium",
+                              stockStatus(item.qty, settings.wholesale.lowStockThreshold).className,
+                            )}
+                          >
+                            {stockStatus(item.qty, settings.wholesale.lowStockThreshold).label}
+                          </span>{" "}
+                          ·{" "}
+                          {item.price.toLocaleString(undefined, {
+                            minimumFractionDigits: 2,
+                            maximumFractionDigits: 2,
+                          })}
+                        </p>
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7"
+                        onClick={() => openEditInventoryItem(item)}
+                      >
+                        <Pencil className="h-3.5 w-3.5" />
+                      </Button>
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete "{item.productName}"?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              This removes the item from Wholesale Inventory. This can't be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => removeInventoryItem(item.id)}>
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <DialogFooter className="shrink-0 border-t border-border px-6 py-4">
               <Button variant="outline" onClick={() => setInventoryOpen(false)}>
                 Close
               </Button>
@@ -1752,6 +2031,11 @@ function WholesalerHomePage() {
           canManage={canManage}
           onClose={() => setCatalogueWholesalerId(null)}
           onAddToCart={addToCart}
+          knownUnits={knownUnits}
+          lowStockThreshold={settings.wholesale.lowStockThreshold}
+          cartCount={cartCount}
+          onOpenCart={() => setCartOpen(true)}
+          onOpenOrderHistory={() => setOrderHistoryOpen(true)}
         />
       </div>
     </AppShell>
@@ -1762,19 +2046,85 @@ function WholesalerHomePage() {
 // Catalogue panel — Shop (categories) / About (status, delivery, payment)
 // ---------------------------------------------------------------------------
 
+const BANNER_ROTATE_MS = 4500;
+
+// Cycles through a wholesaler's banner images (Add/Edit Wholesaler > Catalogue Banner).
+// With 0-1 images or animation "none" it just shows the first one, static. "flash" needs a
+// one-shot keyframe the Tailwind build doesn't ship, so it's declared inline once here
+// rather than touching the global stylesheet for a single component's effect.
+function BannerCarousel({ urls, animation }: { urls: string[]; animation: BannerAnimation }) {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    setIndex(0);
+  }, [urls]);
+
+  useEffect(() => {
+    if (animation === "none" || urls.length <= 1) return;
+    const id = setInterval(() => setIndex((i) => (i + 1) % urls.length), BANNER_ROTATE_MS);
+    return () => clearInterval(id);
+  }, [animation, urls.length]);
+
+  if (urls.length === 0) return null;
+
+  const frames = animation === "none" ? [urls[0]] : urls;
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <style>{`
+        @keyframes banner-flash {
+          0% { opacity: 0; filter: brightness(2.5); }
+          40% { opacity: 1; filter: brightness(1.3); }
+          100% { opacity: 1; filter: brightness(1); }
+        }
+      `}</style>
+      {frames.map((url, i) => (
+        <img
+          key={url + i}
+          src={url}
+          alt=""
+          className={cn(
+            "absolute inset-0 h-full w-full object-cover",
+            i === index ? "opacity-100" : "opacity-0",
+            animation === "fade" && "transition-opacity duration-1000",
+            animation === "slide" &&
+              cn(
+                "transition-transform duration-700",
+                i === index ? "translate-x-0" : "translate-x-full",
+              ),
+          )}
+          style={
+            animation === "flash" && i === index
+              ? { animation: "banner-flash 0.6s ease-out" }
+              : undefined
+          }
+        />
+      ))}
+    </div>
+  );
+}
+
 function CatalogueSheet({
   wholesaler,
   canManage,
   onClose,
   onAddToCart,
+  knownUnits,
+  lowStockThreshold,
+  cartCount,
+  onOpenCart,
+  onOpenOrderHistory,
 }: {
   wholesaler: Wholesaler | null;
   canManage: boolean;
   onClose: () => void;
   onAddToCart: (wholesaler: Wholesaler, product: WholesalerProduct) => void;
+  knownUnits: string[];
+  lowStockThreshold: number;
+  cartCount: number;
+  onOpenCart: () => void;
+  onOpenOrderHistory: () => void;
 }) {
-  const navigate = useNavigate();
-  const currentUser = useCurrentUser();
   const [query, setQuery] = useState("");
   const [fullScreen, setFullScreen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<{
@@ -1782,15 +2132,6 @@ function CatalogueSheet({
     product: WholesalerProduct;
   } | null>(null);
   const [editForm, setEditForm] = useState<WholesalerProduct | null>(null);
-
-  // Reaching this page at all requires being logged in already (see WholesalerHomePage),
-  // so "Login" here means switching accounts — log out first, then land on the actual
-  // login form, since /login auto-redirects away if a session is still active.
-  async function handleLoginClick() {
-    if (currentUser) logAudit(currentUser.name, "logout", "Session");
-    await authStore.logout();
-    navigate({ to: "/login" });
-  }
 
   const categories = (wholesaler?.categories ?? []).filter(
     (c) =>
@@ -1863,15 +2204,6 @@ function CatalogueSheet({
                 <Button
                   type="button"
                   variant="secondary"
-                  size="sm"
-                  className="absolute left-4 top-4 z-10 gap-1.5"
-                  onClick={handleLoginClick}
-                >
-                  <LogIn className="h-4 w-4" /> Login
-                </Button>
-                <Button
-                  type="button"
-                  variant="secondary"
                   size="icon"
                   className="absolute right-14 top-4 z-10 h-8 w-8"
                   onClick={() => setFullScreen((v) => !v)}
@@ -1883,40 +2215,72 @@ function CatalogueSheet({
                     <Maximize2 className="h-4 w-4" />
                   )}
                 </Button>
-                {wholesaler.bannerUrl ? (
-                  <img src={wholesaler.bannerUrl} alt="" className="h-full w-full object-cover" />
+                {wholesaler.bannerUrls.length > 0 ? (
+                  <BannerCarousel
+                    urls={wholesaler.bannerUrls}
+                    animation={wholesaler.bannerAnimation}
+                  />
                 ) : (
                   <div
                     className="h-full w-full"
                     style={{ backgroundColor: avatarColor(wholesaler.name) }}
                   />
                 )}
-                <div className="absolute inset-x-0 bottom-0 flex items-center gap-3 bg-gradient-to-t from-black/75 to-transparent p-4 pt-10">
-                  {wholesaler.logoUrl ? (
-                    <img
-                      src={wholesaler.logoUrl}
-                      alt=""
-                      className="h-10 w-10 shrink-0 rounded-md border border-white/40 object-cover"
-                    />
-                  ) : (
-                    <div
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white"
-                      style={{ backgroundColor: avatarColor(wholesaler.name) }}
-                    >
-                      {initials(wholesaler.name) || "?"}
-                    </div>
-                  )}
-                  <div>
-                    <p className="font-bold leading-tight text-white">{wholesaler.name}</p>
-                    <span className="flex items-center gap-1 text-xs text-white/90">
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full",
-                          wholesaler.openNow ? "bg-emerald-400" : "bg-white/50",
-                        )}
+                <div className="absolute inset-0 flex items-center justify-between gap-3 bg-black/35 p-4">
+                  <div className="flex min-w-0 items-center gap-3">
+                    {wholesaler.logoUrl ? (
+                      <img
+                        src={wholesaler.logoUrl}
+                        alt=""
+                        className="h-10 w-10 shrink-0 rounded-md border border-white/40 object-cover"
                       />
-                      {wholesaler.openNow ? "Open now" : "Currently closed"}
-                    </span>
+                    ) : (
+                      <div
+                        className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-sm font-bold text-white"
+                        style={{ backgroundColor: avatarColor(wholesaler.name) }}
+                      >
+                        {initials(wholesaler.name) || "?"}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate font-bold leading-tight text-white">
+                        {wholesaler.name}
+                      </p>
+                      <span className="flex items-center gap-1 text-xs text-white/90">
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full",
+                            wholesaler.openNow ? "bg-emerald-400" : "bg-white/50",
+                          )}
+                        />
+                        {wholesaler.openNow ? "Open now" : "Currently closed"}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 flex-wrap items-end justify-end gap-1.5 self-end pb-1">
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="relative gap-1.5 border border-white/30 bg-primary/30 text-white backdrop-blur-md hover:bg-primary/40"
+                      onClick={onOpenCart}
+                    >
+                      <ShoppingCart className="h-4 w-4" /> Cart
+                      {cartCount > 0 && (
+                        <Badge className="absolute -right-2 -top-2 h-5 min-w-5 justify-center rounded-full border-2 border-background bg-primary px-1">
+                          {cartCount}
+                        </Badge>
+                      )}
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      className="gap-1.5 border border-white/30 bg-primary/30 text-white backdrop-blur-md hover:bg-primary/40"
+                      onClick={onOpenOrderHistory}
+                    >
+                      <History className="h-4 w-4" /> Order History
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -1983,8 +2347,13 @@ function CatalogueSheet({
                                 {c.products.map((p) => (
                                   <div
                                     key={p.id}
-                                    className="flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card p-2.5 shadow-sm transition-shadow hover:shadow-md"
+                                    className="relative flex flex-col gap-2 overflow-hidden rounded-xl border border-border bg-card p-2.5 shadow-sm transition-shadow hover:shadow-md"
                                   >
+                                    {p.isNewStock && (
+                                      <Badge className="absolute left-2 top-2 z-10 gap-1 bg-emerald-500 text-white hover:bg-emerald-500">
+                                        <Sparkles className="h-3 w-3" /> New
+                                      </Badge>
+                                    )}
                                     <div className="aspect-square overflow-hidden rounded-lg bg-muted">
                                       {p.imageUrl ? (
                                         <img
@@ -2018,10 +2387,10 @@ function CatalogueSheet({
                                       <p
                                         className={cn(
                                           "text-xs font-medium",
-                                          p.stockQty > 0 ? "text-emerald-600" : "text-destructive",
+                                          stockStatus(p.stockQty, lowStockThreshold).className,
                                         )}
                                       >
-                                        {p.stockQty > 0 ? `${p.stockQty} in stock` : "Out of stock"}
+                                        {stockStatus(p.stockQty, lowStockThreshold).label}
                                       </p>
                                     </div>
                                     <Button
@@ -2225,27 +2594,17 @@ function CatalogueSheet({
                 </div>
                 <div className="col-span-1 space-y-1.5">
                   <Label>Unit</Label>
-                  <Select
+                  <UnitSelect
                     value={editForm.sizeUnit}
-                    onValueChange={(v) =>
-                      setEditForm((f) =>
-                        f ? { ...f, sizeUnit: v as WholesalerProductSizeUnit } : f,
-                      )
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="kg">kg</SelectItem>
-                      <SelectItem value="ml">ml</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    onChange={(v) => setEditForm((f) => (f ? { ...f, sizeUnit: v } : f))}
+                    units={knownUnits}
+                  />
                 </div>
               </div>
 
               <p className="text-xs text-muted-foreground">
-                Stock: {editForm.stockQty} — only updated from Wholesale Inventory.
+                Stock: {editForm.stockQty} — stock and New Stock marking are only updated from
+                Wholesale Inventory.
               </p>
             </div>
             <DialogFooter>

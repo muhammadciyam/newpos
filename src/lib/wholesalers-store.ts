@@ -10,7 +10,10 @@ import {
   setWholesalerActiveOnServer,
 } from "@/lib/wholesalers-api";
 
-export type WholesalerProductSizeUnit = "kg" | "ml";
+// Free text (not a fixed list) — the Wholesale page lets you type any unit (e.g. "kg", "pcs",
+// "box", "dozen") and remembers it for future products by suggesting whatever units are
+// already in use across all wholesalers' catalogues (see supply.home.tsx's knownUnits).
+export type WholesalerProductSizeUnit = string;
 
 export type WholesalerProduct = {
   id: string;
@@ -21,6 +24,9 @@ export type WholesalerProduct = {
   size: number; // paired with sizeUnit, e.g. 5 + "kg" = "5kg"
   sizeUnit: WholesalerProductSizeUnit;
   stockQty: number; // available quantity the wholesaler currently has on hand
+  // Manually toggled (Add/Edit Product) — shows a "New" badge on the catalogue card so
+  // buyers can spot recently added or freshly restocked items. Doesn't clear on its own.
+  isNewStock: boolean;
 };
 
 export type WholesalerCategory = {
@@ -30,12 +36,17 @@ export type WholesalerCategory = {
   products: WholesalerProduct[];
 };
 
+export type BannerAnimation = "none" | "fade" | "slide" | "flash";
+
 export type Wholesaler = {
   id: string;
   name: string;
   subtitle: string; // e.g. "by RED BROTHERS"
   logoUrl: string; // optional uploaded logo; falls back to an initials badge
-  bannerUrl: string; // optional cover image shown at the top of the catalogue panel
+  bannerUrls: string[]; // cover image(s) shown at the top of the catalogue panel
+  // How multiple banners cycle over time — irrelevant with 0-1 banners, since there's
+  // nothing to transition to/from.
+  bannerAnimation: BannerAnimation;
   description: string;
   phone: string;
   email: string; // used to notify this wholesaler when an order is placed
@@ -50,7 +61,8 @@ export type Wholesaler = {
 };
 
 const defaults = {
-  bannerUrl: "",
+  bannerUrls: [] as string[],
+  bannerAnimation: "fade" as BannerAnimation,
   email: "",
   openNow: true,
   deliveryAvailable: false,
@@ -86,18 +98,30 @@ function backfillCategories(categories: WholesalerCategory[] | undefined): Whole
         size: 0,
         sizeUnit: "kg" as const,
         stockQty: 0,
+        isNewStock: false,
         ...p,
       }),
     ),
   }));
 }
 
+// Backfill for records persisted before `bannerUrls` (plural) existed — older records only
+// ever had a single `bannerUrl` string, so wrap it into the new array shape.
+function backfillWholesaler(
+  w: Partial<Wholesaler> & { bannerUrl?: string } & Pick<Wholesaler, "id" | "name">,
+): Wholesaler {
+  return {
+    ...defaults,
+    ...w,
+    bannerUrls: w.bannerUrls ?? (w.bannerUrl ? [w.bannerUrl] : []),
+    categories: backfillCategories(w.categories),
+  } as Wholesaler;
+}
+
 async function refreshFromServer() {
   const result = await safeServerCall(() => fetchWholesalers());
   if (!("networkError" in result)) {
-    setWholesalers(
-      result.map((w) => ({ ...defaults, ...w, categories: backfillCategories(w.categories) })),
-    );
+    setWholesalers(result.map(backfillWholesaler));
   }
 }
 

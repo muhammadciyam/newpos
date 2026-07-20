@@ -33,7 +33,7 @@ const COLUMNS = [
   "Price",
   "Packing Details",
   "Size",
-  "Size Unit (kg/ml)",
+  "Size Unit (e.g. kg, ml, pcs)",
 ];
 
 const SAMPLE_ROWS = [
@@ -99,10 +99,7 @@ function parseRows(csvText: string, wholesalers: Wholesaler[]): ParsedRow[] {
       return { ...base, price, error: "Size must be a number" };
     }
 
-    const sizeUnitTrim = sizeUnitRaw.trim().toLowerCase();
-    if (sizeUnitTrim && sizeUnitTrim !== "kg" && sizeUnitTrim !== "ml") {
-      return { ...base, price, error: 'Size Unit must be "kg" or "ml"' };
-    }
+    const sizeUnitTrim = sizeUnitRaw.trim();
 
     return {
       ...base,
@@ -190,6 +187,7 @@ export function WholesaleProductImportDialog({
         sizeUnit: r.sizeUnit ?? "kg",
         // Stock is only ever set/updated via Wholesale Inventory — new products always start at zero.
         stockQty: 0,
+        isNewStock: false,
       });
       group.addedCount++;
       setImportProgress((p) => ({ ...p, done: p.done + 1 }));

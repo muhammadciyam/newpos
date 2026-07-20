@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Plus, Trash2, Pencil, LogOut, ShieldPlus } from "lucide-react";
+import { Plus, Trash2, Pencil, LogOut, ShieldPlus, KeyRound } from "lucide-react";
 import { toast } from "sonner";
 import {
   authStore,
@@ -128,6 +128,9 @@ function UsersPage() {
   const [editingRoleId, setEditingRoleId] = useState<string | null>(null);
   const [roleForm, setRoleForm] = useState(emptyRoleForm);
   const [roleError, setRoleError] = useState("");
+
+  const [resetPasswordUser, setResetPasswordUser] = useState<AppUser | null>(null);
+  const [newPassword, setNewPassword] = useState("");
 
   if (!canManageUsers) return <RestrictedPage />;
 
@@ -234,6 +237,22 @@ function UsersPage() {
   function openEdit(user: AppUser) {
     setEditingId(user.id);
     setEditForm(toEditForm(user));
+  }
+
+  async function saveNewPassword() {
+    if (!resetPasswordUser) return;
+    if (newPassword.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+    const result = await authStore.setPassword(resetPasswordUser.id, newPassword);
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`${resetPasswordUser.name}'s password has been reset`);
+    setResetPasswordUser(null);
+    setNewPassword("");
   }
 
   async function saveEdit() {
@@ -397,6 +416,14 @@ function UsersPage() {
                           <Button variant="outline" size="icon" onClick={() => openEdit(u)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            title="Reset Password"
+                            onClick={() => setResetPasswordUser(u)}
+                          >
+                            <KeyRound className="h-4 w-4" />
+                          </Button>
                           {u.id !== currentUser?.id && (
                             <Button variant="outline" size="sm" onClick={() => toggleSuspend(u)}>
                               {u.status === "Suspended" ? "Reactivate" : "Suspend"}
@@ -528,6 +555,39 @@ function UsersPage() {
             >
               Create User
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reset Password */}
+      <Dialog
+        open={!!resetPasswordUser}
+        onOpenChange={(v) => {
+          if (!v) {
+            setResetPasswordUser(null);
+            setNewPassword("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset password for {resetPasswordUser?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-1.5">
+            <Label>New Password</Label>
+            <Input
+              type="password"
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+              placeholder="New password"
+              autoComplete="new-password"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setResetPasswordUser(null)}>
+              Cancel
+            </Button>
+            <Button onClick={saveNewPassword}>Reset Password</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

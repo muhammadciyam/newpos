@@ -18,6 +18,7 @@ import {
   createSuperAdminOnServer,
   setStatusOnServer,
   setRoleOnServer,
+  setPasswordOnServer,
   updateProfileOnServer,
   removeUserOnServer,
 } from "@/lib/users-api";
@@ -310,6 +311,15 @@ export const authStore = {
     if ("error" in result) return result;
     await refreshUsersFromServer();
     logAudit(actor(), "update", `User / ${result.email} role changed to ${role}`);
+    return { ok: true };
+  },
+
+  // Admin-side password reset (Admin > Users) — doesn't require Resend to be configured.
+  async setPassword(id: string, password: string): Promise<{ ok: true } | { error: string }> {
+    const result = await safeServerCall(() => setPasswordOnServer({ data: { id, password } }));
+    if ("error" in result) return result;
+    await refreshUsersFromServer();
+    logAudit(actor(), "update", `User / ${result.email} password reset by admin`);
     return { ok: true };
   },
 

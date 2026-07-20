@@ -156,11 +156,19 @@ function SettingsPage() {
   const [addMethodOpen, setAddMethodOpen] = useState(false);
 
   const [addWebhookOpen, setAddWebhookOpen] = useState(false);
-  const [webhookDraft, setWebhookDraft] = useState({ url: "", event: "bill.created", authHeader: "" });
+  const [webhookDraft, setWebhookDraft] = useState({
+    url: "",
+    event: "bill.created",
+    authHeader: "",
+  });
 
   const [editingTax, setEditingTax] = useState<CustomTaxConfig | null>(null);
   const [addTaxOpen, setAddTaxOpen] = useState(false);
-  const [taxDraft, setTaxDraft] = useState({ name: "", type: "percent" as "percent" | "unit", value: "" });
+  const [taxDraft, setTaxDraft] = useState({
+    name: "",
+    type: "percent" as "percent" | "unit",
+    value: "",
+  });
 
   if (!canManage) return <RestrictedPage />;
 
@@ -954,7 +962,11 @@ function SettingsPage() {
                         </TableCell>
                         <TableCell>{h.active ? "Active" : "Disabled"}</TableCell>
                         <TableCell>
-                          <Button variant="destructive" size="sm" onClick={() => removeWebhook(h.id)}>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => removeWebhook(h.id)}
+                          >
                             Delete
                           </Button>
                         </TableCell>
@@ -1163,7 +1175,7 @@ function SettingsPage() {
                     onChange={(e) =>
                       setDraft((d) => ({ ...d, tax: { ...d.tax, gstTin: e.target.value } }))
                     }
-                    placeholder="e.g. 1234567"
+                    placeholder="e.g. 1000000GST501"
                   />
                 </SettingRow>
                 <SettingRow
@@ -1192,7 +1204,9 @@ function SettingsPage() {
                 </SettingRow>
                 <SettingRow
                   label={`Plastic Bag Charge (${draft.general.currency} per bag)`}
-                  desc={'Charged when the cashier ticks "Plastic Bag" on the Sell page, per bag provided.'}
+                  desc={
+                    'Charged when the cashier ticks "Plastic Bag" on the Sell page, per bag provided.'
+                  }
                 >
                   <Input
                     type="number"
@@ -1220,8 +1234,8 @@ function SettingsPage() {
                 <div>
                   <p className="text-xl font-bold text-foreground">Other Taxes</p>
                   <p className="text-sm text-muted-foreground">
-                    Additional named tax rates, separate from GST above — a reference list for
-                    now, not yet applied automatically at checkout.
+                    Additional named tax rates, separate from GST above — a reference list for now,
+                    not yet applied automatically at checkout.
                   </p>
                 </div>
                 <Button
@@ -1459,8 +1473,8 @@ function SettingsPage() {
           </DialogHeader>
           {editingMethod?.key && (
             <p className="text-xs text-muted-foreground">
-              Renaming this updates its label on the Sell page immediately — the underlying
-              record it saves against on bills/reports doesn't change.
+              Renaming this updates its label on the Sell page immediately — the underlying record
+              it saves against on bills/reports doesn't change.
             </p>
           )}
           <div className="space-y-3">
@@ -1504,9 +1518,9 @@ function SettingsPage() {
             <DialogTitle>Add Payment Method</DialogTitle>
           </DialogHeader>
           <p className="text-xs text-muted-foreground">
-            Cash, Card, and Bank Transfer are the only methods with a full collection workflow
-            (cash tendered, card slip #, transfer slip) on the Sell page. A custom name here is
-            saved as a reference/record but won't appear as a selectable option at Sell.
+            Cash, Card, and Bank Transfer are the only methods with a full collection workflow (cash
+            tendered, card slip #, transfer slip) on the Sell page. A custom name here is saved as a
+            reference/record but won't appear as a selectable option at Sell.
           </p>
           <div className="space-y-3">
             <div className="space-y-1.5">
@@ -1571,7 +1585,9 @@ function SettingsPage() {
                 <SelectContent>
                   <SelectItem value="bill.created">Bill Created</SelectItem>
                   <SelectItem value="bill.voided">Bill Voided</SelectItem>
-                  <SelectItem value="purchase_invoice.approved">Purchase Invoice Approved</SelectItem>
+                  <SelectItem value="purchase_invoice.approved">
+                    Purchase Invoice Approved
+                  </SelectItem>
                   <SelectItem value="product.created">Product Created</SelectItem>
                 </SelectContent>
               </Select>
@@ -1615,7 +1631,9 @@ function SettingsPage() {
               <div className="flex gap-2">
                 <Select
                   value={taxDraft.type}
-                  onValueChange={(v) => setTaxDraft((t) => ({ ...t, type: v as "percent" | "unit" }))}
+                  onValueChange={(v) =>
+                    setTaxDraft((t) => ({ ...t, type: v as "percent" | "unit" }))
+                  }
                 >
                   <SelectTrigger className="w-40">
                     <SelectValue />
@@ -1665,7 +1683,9 @@ function SettingsPage() {
               <div className="flex gap-2">
                 <Select
                   value={taxDraft.type}
-                  onValueChange={(v) => setTaxDraft((t) => ({ ...t, type: v as "percent" | "unit" }))}
+                  onValueChange={(v) =>
+                    setTaxDraft((t) => ({ ...t, type: v as "percent" | "unit" }))
+                  }
                 >
                   <SelectTrigger className="w-40">
                     <SelectValue />
