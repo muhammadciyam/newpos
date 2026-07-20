@@ -11,11 +11,30 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { BookText } from "lucide-react";
+import { BookText, MessageCircle, Smartphone } from "lucide-react";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { useOutlets } from "@/lib/outlets-store";
-import { requestPasswordResetOnServer } from "@/lib/password-reset-api";
+
+// Same support number as the app-sidebar's "Chat on Viber" link. Kept as one constant here
+// since the forgot-password contact links below all point at it.
+const SUPPORT_PHONE = "+9607799190";
+const SUPPORT_MESSAGE = "Hi, I forgot my Dhipos password. Can you help me reset it?";
+
+function buildWhatsAppLink(phone: string, message: string): string {
+  const digitsOnly = phone.replace(/\D/g, "");
+  return `https://wa.me/${digitsOnly}?text=${encodeURIComponent(message)}`;
+}
+
+function buildViberLink(phone: string): string {
+  const digitsOnly = phone.replace(/\D/g, "");
+  return `viber://chat?number=%2B${digitsOnly}`;
+}
+
+function buildSmsLink(phone: string, message: string): string {
+  const digitsOnly = phone.replace(/\D/g, "");
+  return `sms:${digitsOnly}?body=${encodeURIComponent(message)}`;
+}
 
 export const Route = createFileRoute("/login")({
   head: () => ({
@@ -148,105 +167,57 @@ function LoginPage() {
           </button>
         </form>
       </Card>
-      <ForgotPasswordDialog
-        open={forgotOpen}
-        onOpenChange={setForgotOpen}
-        defaultOutletName={outletName}
-        defaultEmail={identifier}
-      />
+      <ForgotPasswordDialog open={forgotOpen} onOpenChange={setForgotOpen} />
     </div>
   );
 }
 
+// Email-based reset (requestPasswordResetOnServer) needs Resend configured (RESEND_API_KEY /
+// RESEND_FROM_EMAIL in .env) to actually deliver anything — this shop hasn't set that up, so
+// rather than a dialog that always claims success while silently never sending an email, this
+// points staff straight at direct contact with support (WhatsApp/Viber/SMS) — same as an
+// Admin/Super Admin resetting it for them from Admin > Users.
 function ForgotPasswordDialog({
   open,
   onOpenChange,
-  defaultOutletName,
-  defaultEmail,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  defaultOutletName: string;
-  defaultEmail: string;
 }) {
-  const [outletName, setOutletName] = useState(defaultOutletName);
-  const [email, setEmail] = useState(defaultEmail);
-  const [submitting, setSubmitting] = useState(false);
-  const [result, setResult] = useState<{ ok: true } | { error: string } | null>(null);
-
-  useEffect(() => {
-    if (open) {
-      setOutletName(defaultOutletName);
-      setEmail(defaultEmail);
-      setResult(null);
-    }
-  }, [open, defaultOutletName, defaultEmail]);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setSubmitting(true);
-    try {
-      const response = await requestPasswordResetOnServer({
-        data: {
-          outletName: outletName.trim(),
-          email: email.trim(),
-          resetBaseUrl: window.location.origin,
-        },
-      });
-      setResult(response);
-    } catch {
-      setResult({ error: "Something went wrong — please try again." });
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-sm">
         <DialogHeader>
-          <DialogTitle>Reset your password</DialogTitle>
+          <DialogTitle>Forgot your password?</DialogTitle>
           <DialogDescription>
-            Enter your outlet name and account email — if it matches an account, we'll send a reset
-            link to that email.
+            Message us on WhatsApp, Viber, or SMS at {SUPPORT_PHONE} and we'll reset it for you.
           </DialogDescription>
         </DialogHeader>
-        {result && "ok" in result ? (
-          <p className="text-sm text-foreground">
-            If that account exists, a password reset link has been sent to that email. It expires in
-            30 minutes.
-          </p>
-        ) : (
-          <form onSubmit={submit} className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Outlet Name</Label>
-              <Input
-                value={outletName}
-                onChange={(e) => setOutletName(e.target.value)}
-                placeholder="e.g. Seven Mart"
-                autoComplete="off"
-                required
-              />
-            </div>
-            <div className="space-y-1.5">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                autoComplete="email"
-                required
-              />
-            </div>
-            {result && "error" in result && (
-              <p className="text-sm text-destructive">{result.error}</p>
-            )}
-            <Button type="submit" className="w-full" disabled={submitting}>
-              Send Reset Link
-            </Button>
-          </form>
-        )}
+        <div className="space-y-2">
+          <a
+            href={buildWhatsAppLink(SUPPORT_PHONE, SUPPORT_MESSAGE)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 rounded-lg border border-border p-2.5 text-left transition hover:bg-accent"
+          >
+            <MessageCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <p className="flex-1 text-sm font-medium text-emerald-600">WhatsApp {SUPPORT_PHONE}</p>
+          </a>
+          <a
+            href={buildViberLink(SUPPORT_PHONE)}
+            className="flex items-center gap-2 rounded-lg border border-border p-2.5 text-left transition hover:bg-accent"
+          >
+            <MessageCircle className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <p className="flex-1 text-sm font-medium text-purple-600">Viber {SUPPORT_PHONE}</p>
+          </a>
+          <a
+            href={buildSmsLink(SUPPORT_PHONE, SUPPORT_MESSAGE)}
+            className="flex items-center gap-2 rounded-lg border border-border p-2.5 text-left transition hover:bg-accent"
+          >
+            <Smartphone className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <p className="flex-1 text-sm font-medium text-blue-600">SMS {SUPPORT_PHONE}</p>
+          </a>
+        </div>
       </DialogContent>
     </Dialog>
   );
