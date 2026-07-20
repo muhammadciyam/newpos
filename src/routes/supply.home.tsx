@@ -20,7 +20,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DhiposWholesalerLogo } from "@/components/dhipos-wholesaler-logo";
-import { WholesaleProductImportDialog } from "@/components/wholesale-product-import-dialog";
 import {
   Dialog,
   DialogContent,
@@ -284,7 +283,6 @@ function WholesalerHomePage() {
 
   const [productDialogOpen, setProductDialogOpen] = useState(false);
   const [submittingProduct, setSubmittingProduct] = useState(false);
-  const [productImportOpen, setProductImportOpen] = useState(false);
   const [productWholesalerId, setProductWholesalerId] = useState("");
   const [productCategoryId, setProductCategoryId] = useState("");
   const [productName, setProductName] = useState("");
@@ -833,13 +831,6 @@ function WholesalerHomePage() {
                   onClick={openAddProduct}
                 >
                   <Plus className="h-4 w-4" /> Add Product
-                </Button>
-                <Button
-                  variant="secondary"
-                  className="gap-1.5 rounded-full font-semibold shadow-sm transition-all hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
-                  onClick={() => setProductImportOpen(true)}
-                >
-                  <Upload className="h-4 w-4" /> Import Products
                 </Button>
                 <Button
                   variant="secondary"
@@ -1574,12 +1565,6 @@ function WholesalerHomePage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        <WholesaleProductImportDialog
-          open={productImportOpen}
-          onOpenChange={setProductImportOpen}
-          wholesalers={wholesalers}
-        />
 
         {/* Cart — session-only running list built while browsing catalogues */}
         <Dialog
