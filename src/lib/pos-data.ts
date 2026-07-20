@@ -140,6 +140,10 @@ export type BillLineItem = {
   price: number;
   qty: number;
   refundedQty?: number;
+  // Snapshotted from the product at sale time (like `price`) — whether GST applies to this
+  // line. Undefined counts as true (bills created before this field existed default to
+  // taxable) — only an explicit `false` marks it exempt, same convention as Product.gstApplicable.
+  gstApplicable?: boolean;
 };
 
 export type BillRefund = {

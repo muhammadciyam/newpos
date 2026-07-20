@@ -478,6 +478,7 @@ function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
               name: product.name,
               price: product.price,
               qty: 1,
+              gstApplicable: product.gstApplicable,
             },
           ],
     );

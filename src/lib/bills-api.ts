@@ -141,7 +141,13 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
     for (const [productId, delta] of stockDeltas) await adjustStock(productId, delta);
 
     const subtotal = data.items.reduce((s, i) => s + i.price * i.qty, 0);
-    const gst = subtotal * (data.gstPercent / 100);
+    // Same exemption rule as at sale time (pos.sell.tsx) — only items whose gstApplicable
+    // snapshot isn't explicitly false contribute to GST.
+    const gstableSubtotal = data.items.reduce(
+      (s, i) => s + (i.gstApplicable !== false ? i.price * i.qty : 0),
+      0,
+    );
+    const gst = gstableSubtotal * (data.gstPercent / 100);
     // The Plastic Bag charge isn't tied to line items, so editing them doesn't change it —
     // carry the bill's existing bagCharge forward rather than silently dropping it here.
     const total = subtotal - bill.discount + gst + (bill.bagCharge ?? 0);

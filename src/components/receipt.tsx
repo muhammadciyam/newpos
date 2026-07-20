@@ -81,7 +81,9 @@ export function Receipt({
               <td className="py-1 text-right">{i.price.toFixed(2)}</td>
               {template.showItemizedTax && (
                 <td className="py-1 text-right">
-                  {(i.price * i.qty * (gstPercent / 100)).toFixed(2)}
+                  {i.gstApplicable !== false
+                    ? (i.price * i.qty * (gstPercent / 100)).toFixed(2)
+                    : "—"}
                 </td>
               )}
               <td className="py-1 text-right">{(i.price * i.qty).toFixed(2)}</td>

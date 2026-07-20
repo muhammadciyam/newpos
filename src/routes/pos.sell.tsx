@@ -203,7 +203,14 @@ function SellPage() {
     customerFocused && customerQuery.trim().length > 0 && filteredCustomers.length > 0;
 
   const subtotal = tab.items.reduce((s, i) => s + linePrice(i) * i.qty, 0);
-  const gst = subtotal * (settings.tax.gstPercent / 100);
+  // Only items marked GST-applicable on the product itself contribute to GST — an exempt
+  // item (gstApplicable === false) is sold tax-free, not taxed at the same flat rate as
+  // everything else in the cart.
+  const gstableSubtotal = tab.items.reduce(
+    (s, i) => s + (i.product.gstApplicable !== false ? linePrice(i) * i.qty : 0),
+    0,
+  );
+  const gst = gstableSubtotal * (settings.tax.gstPercent / 100);
   // The Sell page's "Plastic Bag" checkbox — cashier-entered bag count * the configured
   // per-bag rate. Not itself subject to GST.
   const bagQtyNum = tab.bagEnabled ? parseInt(tab.bagQty, 10) || 0 : 0;
@@ -472,6 +479,7 @@ function SellPage() {
         name: i.product.name,
         price: linePrice(i),
         qty: i.qty,
+        gstApplicable: i.product.gstApplicable,
       })),
       subtotal,
       discount,
