@@ -32,11 +32,11 @@ export function StatCard({
         {Icon && (
           <div
             className={cn(
-              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg shadow-sm ring-1 ring-black/5",
               iconColors[color],
             )}
           >
-            <Icon className="h-4.5 w-4.5" />
+            <Icon className="h-4.5 w-4.5" strokeWidth={2.25} />
           </div>
         )}
       </div>

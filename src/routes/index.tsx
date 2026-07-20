@@ -33,6 +33,10 @@ import {
   Ban,
   BarChart3,
   Eye,
+  Store,
+  X,
+  Apple,
+  PlayCircle,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -101,9 +105,12 @@ function DashboardChart({
     <Card className="p-4">
       <div className="flex items-center gap-2">
         <div
-          className={cn("flex h-7 w-7 items-center justify-center rounded-md", iconColors[color])}
+          className={cn(
+            "flex h-7 w-7 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
+            iconColors[color],
+          )}
         >
-          <Icon className="h-4 w-4" />
+          <Icon className="h-4 w-4" strokeWidth={2.25} />
         </div>
         <p className="text-xs font-bold uppercase tracking-wider text-primary">{title}</p>
       </div>
@@ -164,7 +171,15 @@ function DashboardPage() {
                 toast.success(`Showing ${v === "all" ? "All Outlets" : "Seven Mart"}`)
               }
             >
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-44 gap-2">
+                <span
+                  className={cn(
+                    "flex h-6 w-6 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
+                    iconColors.violet,
+                  )}
+                >
+                  <Store className="h-3.5 w-3.5" strokeWidth={2.25} />
+                </span>
                 <SelectValue placeholder="All Outlets" />
               </SelectTrigger>
               <SelectContent>
@@ -179,11 +194,11 @@ function DashboardPage() {
             >
               <span
                 className={cn(
-                  "flex h-6 w-6 items-center justify-center rounded-md",
+                  "flex h-6 w-6 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
                   iconColors.indigo,
                 )}
               >
-                <CalendarDays className="h-3.5 w-3.5" />
+                <CalendarDays className="h-3.5 w-3.5" strokeWidth={2.25} />
               </span>
               13 Jun 2026 <span className="text-muted-foreground">~</span> 13 Jul 2026
             </Button>
@@ -215,23 +230,26 @@ function DashboardPage() {
               </p>
               <button
                 onClick={() => setShowPromo(false)}
-                className="text-sm text-primary underline underline-offset-2"
+                className="mt-1 flex items-center gap-1 text-sm font-medium text-primary hover:underline"
               >
-                Dismiss.
+                <X className="h-3.5 w-3.5" />
+                Dismiss
               </button>
             </div>
             <div className="flex shrink-0 gap-2">
               <button
                 onClick={() => toast("The Dhipos app isn't available in this demo")}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-black text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-black text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                title="Download on the App Store"
               >
-                <span className="text-lg"></span>
+                <Apple className="h-5 w-5" />
               </button>
               <button
                 onClick={() => toast("The Dhipos app isn't available in this demo")}
-                className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 via-sky-400 to-fuchsia-400 text-white"
+                className="flex h-11 w-11 items-center justify-center rounded-xl bg-gradient-to-br from-emerald-400 via-sky-400 to-fuchsia-400 text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
+                title="Get it on Google Play"
               >
-                <span className="text-lg">▶</span>
+                <PlayCircle className="h-5 w-5" />
               </button>
             </div>
           </Card>
@@ -322,11 +340,11 @@ function DashboardPage() {
           <div className="flex items-center gap-2">
             <div
               className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-lg",
+                "flex h-8 w-8 items-center justify-center rounded-lg shadow-sm ring-1 ring-black/5",
                 iconColors.amber,
               )}
             >
-              <Package className="h-4 w-4" />
+              <Package className="h-4 w-4" strokeWidth={2.25} />
             </div>
             <p className="font-semibold text-foreground">Top Selling Products</p>
           </div>
