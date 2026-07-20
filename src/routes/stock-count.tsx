@@ -134,7 +134,7 @@ function StockCountPage() {
               each change is saved with a reason.
             </p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
             <Badge variant="outline" className="bg-emerald-100 text-emerald-700">
               {countableCount} of {productsForOutlet.length} countable
             </Badge>

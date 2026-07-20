@@ -109,7 +109,10 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
     <SidebarProvider>
       <div className="flex min-h-screen w-full bg-muted/40">
         <AppSidebar />
-        <div className="flex flex-1 flex-col">
+        {/* min-w-0 overrides the flex item's default min-width:auto — without it, a wide
+            table/content on any page forces this whole column (and the page) to overflow
+            horizontally instead of letting that page's own overflow-x-auto wrapper scroll it. */}
+        <div className="flex min-w-0 flex-1 flex-col">
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-3">
             <SidebarTrigger />
             <div className="ml-auto flex items-center gap-3">

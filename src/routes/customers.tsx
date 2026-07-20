@@ -200,7 +200,7 @@ function CustomersPage() {
             <h1 className="text-2xl font-bold text-foreground">Customers</h1>
             <p className="text-sm text-muted-foreground">All your customers in one place</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <Input
               value={search}
               onChange={(e) => setSearch(e.target.value)}

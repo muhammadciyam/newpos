@@ -64,7 +64,7 @@ function RegisterSessionsPage() {
                 </TableRow>
               )}
               {registerSessions.map((s) => (
-                <TableRow key={s.no}>
+                <TableRow key={s.id}>
                   <TableCell className="font-medium">{s.no}</TableCell>
                   <TableCell>
                     {registerDisplayName(registers, s.register)}
