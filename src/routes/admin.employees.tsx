@@ -123,6 +123,7 @@ function EmployeesPage() {
   useUsersPolling();
   const users = useUsers();
   const currentUser = useCurrentUser();
+  const isSuperAdmin = currentUser?.role === "Super Admin";
   const customRoles = useCustomRoles();
   const allRoles = [...roles, ...customRoles.map((r) => r.name)];
   const outlets = useOutlets();
@@ -226,7 +227,18 @@ function EmployeesPage() {
               Manage job details, pay, ID, and documents.
             </p>
           </div>
-          <Button onClick={() => setOpen(true)} className="gap-1.5">
+          <Button
+            onClick={() => {
+              // Non-Super-Admin can only ever staff their own outlet — see the Outlet field
+              // below, same lock as Admin > Users.
+              setForm({
+                ...emptyCreateForm,
+                outletId: isSuperAdmin ? "" : (currentUser?.outletId ?? ""),
+              });
+              setOpen(true);
+            }}
+            className="gap-1.5"
+          >
             <Plus className="h-4 w-4" /> New Employee
           </Button>
         </div>
@@ -418,26 +430,33 @@ function EmployeesPage() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="space-y-1.5">
-                <Label>
-                  <span className="text-destructive">*</span> Outlet
-                </Label>
-                <Select
-                  value={form.outletId}
-                  onValueChange={(v) => setForm((f) => ({ ...f, outletId: v }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select an outlet" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {outlets.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isSuperAdmin ? (
+                <div className="space-y-1.5">
+                  <Label>
+                    <span className="text-destructive">*</span> Outlet
+                  </Label>
+                  <Select
+                    value={form.outletId}
+                    onValueChange={(v) => setForm((f) => ({ ...f, outletId: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select an outlet" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {outlets.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground">
+                  Outlet: {outlets.find((o) => o.id === form.outletId)?.name ?? "—"} (your own
+                  outlet)
+                </p>
+              )}
             </section>
 
             <section className="space-y-3 border-t border-border pt-4">

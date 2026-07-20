@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { getDeviceId } from "@/lib/device-id";
@@ -173,6 +173,14 @@ function currentRole(): string {
   return serverUsers.find((u) => u.email === email)?.role ?? "";
 }
 
+// Passed alongside `role` on every user-management server call so the server can enforce
+// "an outlet's staff directory is that outlet's own" (mirrors canManageProduct in
+// products-api.ts) — Super Admin's own outletId is always null and bypasses the check there.
+function callerOutletId(): string | null {
+  const email = sessionStoreInternal.get().email;
+  return serverUsers.find((u) => u.email === email)?.outletId ?? null;
+}
+
 export const authStore = {
   sessionSubscribe: sessionStoreInternal.subscribe,
   getSession: sessionStoreInternal.get,
@@ -263,7 +271,9 @@ export const authStore = {
   // UI-level guard consistent with the rest of the app's all-client-trust permission model.
   async forceLogout(email: string): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() =>
-      forceLogoutOnServer({ data: { email, role: currentRole() } }),
+      forceLogoutOnServer({
+        data: { email, role: currentRole(), callerOutletId: callerOutletId() },
+      }),
     );
     if ("error" in result) return result;
     logAudit(actor(), "update", `User / ${email} force-logged-out`);
@@ -282,7 +292,11 @@ export const authStore = {
       outletId: string | null;
     } & Partial<EmployeeProfile>,
   ): Promise<AppUser | { error: string }> {
-    const result = await safeServerCall(() => createUserOnServer({ data: input }));
+    const result = await safeServerCall(() =>
+      createUserOnServer({
+        data: { ...input, callerRole: currentRole(), callerOutletId: callerOutletId() },
+      }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return { error: result.error as string };
     await refreshUsersFromServer();
@@ -308,7 +322,11 @@ export const authStore = {
   },
 
   async setStatus(id: string, status: UserStatus): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => setStatusOnServer({ data: { id, status } }));
+    const result = await safeServerCall(() =>
+      setStatusOnServer({
+        data: { id, status, role: currentRole(), callerOutletId: callerOutletId() },
+      }),
+    );
     if ("error" in result) return result;
     await refreshUsersFromServer();
     logAudit(actor(), "update", `User / ${result.email} set to ${status}`);
@@ -317,7 +335,11 @@ export const authStore = {
 
   // Super Admin can't be assigned to anyone, and the Super Admin's own role can't be changed.
   async setRole(id: string, role: Role): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => setRoleOnServer({ data: { id, role } }));
+    const result = await safeServerCall(() =>
+      setRoleOnServer({
+        data: { id, role, callerRole: currentRole(), callerOutletId: callerOutletId() },
+      }),
+    );
     if ("error" in result) return result;
     await refreshUsersFromServer();
     logAudit(actor(), "update", `User / ${result.email} role changed to ${role}`);
@@ -326,7 +348,11 @@ export const authStore = {
 
   // Admin-side password reset (Admin > Users) — doesn't require Resend to be configured.
   async setPassword(id: string, password: string): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => setPasswordOnServer({ data: { id, password } }));
+    const result = await safeServerCall(() =>
+      setPasswordOnServer({
+        data: { id, password, role: currentRole(), callerOutletId: callerOutletId() },
+      }),
+    );
     if ("error" in result) return result;
     await refreshUsersFromServer();
     logAudit(actor(), "update", `User / ${result.email} password reset by admin`);
@@ -343,7 +369,11 @@ export const authStore = {
       outletId?: string | null;
     },
   ): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => updateProfileOnServer({ data: { id, patch } }));
+    const result = await safeServerCall(() =>
+      updateProfileOnServer({
+        data: { id, patch, role: currentRole(), callerOutletId: callerOutletId() },
+      }),
+    );
     if ("error" in result) return result;
     await refreshUsersFromServer();
     logAudit(actor(), "update", `User / ${result.email} profile updated`);
@@ -351,7 +381,9 @@ export const authStore = {
   },
 
   async removeUser(id: string): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => removeUserOnServer({ data: { id } }));
+    const result = await safeServerCall(() =>
+      removeUserOnServer({ data: { id, role: currentRole(), callerOutletId: callerOutletId() } }),
+    );
     if ("error" in result) return result;
     await refreshUsersFromServer();
     logAudit(actor(), "delete", `User / ${result.email}`);
@@ -373,8 +405,20 @@ export function useCurrentOutletId(): string | null {
   return session.outletId;
 }
 
-export function useUsers() {
-  return useServerUsers();
+// Scoped the same way as every other outlet-owned list (products, customers, purchase
+// invoices) — an outlet's staff directory is that outlet's own. Super Admin (whose own
+// outletId is always null) sees everyone, unrestricted. Deliberately not implemented via
+// outlet-scope.ts's useScopeOutletId(), since that module imports useCurrentUser from here —
+// importing back from it would be circular; the two-line check is duplicated inline instead.
+export function useUsers(): AppUser[] {
+  const allUsers = useServerUsers();
+  const currentUser = useCurrentUser();
+  const scopeOutletId =
+    currentUser && currentUser.role !== "Super Admin" ? (currentUser.outletId ?? null) : null;
+  return useMemo(
+    () => (scopeOutletId ? allUsers.filter((u) => u.outletId === scopeOutletId) : allUsers),
+    [allUsers, scopeOutletId],
+  );
 }
 
 // Which user emails currently hold a claimed login session (for the Admin Users page's

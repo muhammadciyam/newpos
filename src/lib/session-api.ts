@@ -44,7 +44,7 @@ export const releaseSessionOnServer = createServerFn({ method: "POST" })
   });
 
 export const forceLogoutOnServer = createServerFn({ method: "POST" })
-  .validator((data: { email: string; role: string }) => data)
+  .validator((data: { email: string; role: string; callerOutletId: string | null }) => data)
   .handler(async ({ data }) => {
     // `role` is a client-supplied claim — this app has no server-verified auth/session
     // anywhere (src/lib/auth-store.ts checks passwords entirely in the browser). This is
@@ -55,11 +55,15 @@ export const forceLogoutOnServer = createServerFn({ method: "POST" })
     }
     // Super Admin can never be force-logged-out by a regular Admin — matches the singleton
     // owner-account protections in users-api.ts (can't be created/edited/suspended/removed
-    // by anyone but itself).
+    // by anyone but itself). A regular Admin is further restricted to their own outlet's
+    // staff, same as every other user-management action.
     if (data.role !== "Super Admin") {
       const target = (await getServerUsers()).find((u) => u.email === data.email);
       if (target?.role === "Super Admin") {
         return { error: "Cannot force-logout the Super Admin account" };
+      }
+      if (!target || target.outletId === null || target.outletId !== data.callerOutletId) {
+        return { error: "Cannot force-logout a user from another outlet" };
       }
     }
     await mutateServerSessionState((s) => {

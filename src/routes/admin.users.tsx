@@ -101,9 +101,11 @@ function UsersPage() {
   const customRoles = useCustomRoles();
   const allRoles = [...roles, ...customRoles.map((r) => r.name)];
   const outlets = useOutlets();
-  // Super Admin is invisible to regular Admins on this page — matches the singleton
-  // owner-account protections elsewhere (can't be created/edited/suspended/removed/
-  // force-logged-out by anyone but itself).
+  // useUsers() already scopes to the caller's own outlet for non-Super-Admin, which
+  // incidentally excludes Super Admin too (its outletId is always null). This explicit
+  // check is kept as a second layer — matches the singleton owner-account protections
+  // elsewhere (can't be created/edited/suspended/removed/force-logged-out by anyone but
+  // itself) — and is what actually matters if that ever changes.
   const visibleUsers = isSuperAdmin ? users : users.filter((u) => u.role !== "Super Admin");
   const { sessions, refresh: refreshSessions } = useActiveSessions();
   const registerState = useRegister();
@@ -295,7 +297,18 @@ function UsersPage() {
                 <ShieldPlus className="h-4 w-4" /> Create Role
               </Button>
             )}
-            <Button onClick={() => setOpen(true)} className="gap-1.5">
+            <Button
+              onClick={() => {
+                // Non-Super-Admin can only ever staff their own outlet, so it's pre-filled
+                // and never shown as a choice — see the Outlet field below.
+                setForm({
+                  ...emptyCreateForm,
+                  outletId: isSuperAdmin ? "" : (currentUser?.outletId ?? ""),
+                });
+                setOpen(true);
+              }}
+              className="gap-1.5"
+            >
               <Plus className="h-4 w-4" /> New User
             </Button>
           </div>
@@ -514,26 +527,32 @@ function UsersPage() {
                 </Select>
               </div>
             </div>
-            <div className="space-y-1.5">
-              <Label>
-                <span className="text-destructive">*</span> Outlet
-              </Label>
-              <Select
-                value={form.outletId}
-                onValueChange={(v) => setForm((f) => ({ ...f, outletId: v }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select an outlet" />
-                </SelectTrigger>
-                <SelectContent>
-                  {outlets.map((o) => (
-                    <SelectItem key={o.id} value={o.id}>
-                      {o.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isSuperAdmin ? (
+              <div className="space-y-1.5">
+                <Label>
+                  <span className="text-destructive">*</span> Outlet
+                </Label>
+                <Select
+                  value={form.outletId}
+                  onValueChange={(v) => setForm((f) => ({ ...f, outletId: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an outlet" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {outlets.map((o) => (
+                      <SelectItem key={o.id} value={o.id}>
+                        {o.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                Outlet: {outlets.find((o) => o.id === form.outletId)?.name ?? "—"} (your own outlet)
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               Job details, pay, ID, and documents can be filled in later from Admin &gt; Employees.
             </p>
@@ -646,42 +665,52 @@ function UsersPage() {
                   </Select>
                 </div>
               </div>
-              <div className="space-y-1.5">
-                <Label>Outlet</Label>
-                <Select
-                  value={editForm.outletId}
-                  onValueChange={(v) =>
-                    setEditForm(
-                      (f) =>
-                        f && {
-                          ...f,
-                          outletId: v,
-                          // Drop an authorized register that belonged to the outlet being
-                          // switched away from — registers don't cross outlets, so keeping
-                          // it selected would silently authorize them on another outlet's
-                          // register.
-                          authorizedRegister: registersForOutlet(v).includes(
-                            f.authorizedRegister as RegisterName,
-                          )
-                            ? f.authorizedRegister
-                            : "none",
-                        },
-                    )
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">Unassigned</SelectItem>
-                    {outlets.map((o) => (
-                      <SelectItem key={o.id} value={o.id}>
-                        {o.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
+              {isSuperAdmin ? (
+                <div className="space-y-1.5">
+                  <Label>Outlet</Label>
+                  <Select
+                    value={editForm.outletId}
+                    onValueChange={(v) =>
+                      setEditForm(
+                        (f) =>
+                          f && {
+                            ...f,
+                            outletId: v,
+                            // Drop an authorized register that belonged to the outlet being
+                            // switched away from — registers don't cross outlets, so keeping
+                            // it selected would silently authorize them on another outlet's
+                            // register.
+                            authorizedRegister: registersForOutlet(v).includes(
+                              f.authorizedRegister as RegisterName,
+                            )
+                              ? f.authorizedRegister
+                              : "none",
+                          },
+                      )
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Unassigned</SelectItem>
+                      {outlets.map((o) => (
+                        <SelectItem key={o.id} value={o.id}>
+                          {o.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              ) : (
+                // Only Super Admin can move a user to a different outlet (enforced again
+                // server-side in users-api.ts) — an outlet-scoped Admin reassigning their own
+                // staff elsewhere would just be moving them out from under themselves.
+                <p className="text-xs text-muted-foreground">
+                  Outlet: {outlets.find((o) => o.id === editForm.outletId)?.name ?? "Unassigned"}{" "}
+                  (can't be changed)
+                </p>
+              )}
             </div>
           )}
           <DialogFooter>
