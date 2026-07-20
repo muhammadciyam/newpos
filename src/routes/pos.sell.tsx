@@ -318,11 +318,12 @@ function SellPage() {
     setDiscardConfirmOpen(true);
   }
 
-  // Wires up the shortcuts advertised right on the page (the "Discard Bill (F4)" button
+  // Wires up the shortcuts advertised right on the page (the "Discard Bill (F2)" button
   // label and the "Keyboard Shortcuts" help panel) — previously just descriptive text with
   // no listener behind it, so pressing the key did nothing. Skipped while a dialog is open
-  // so e.g. F4 can't blow away the cart out from under someone editing a note or a new
-  // customer.
+  // so e.g. F2 can't blow away the cart out from under someone editing a note or a new
+  // customer. Note: F1 is intercepted by some browsers/OSes for their own help before it
+  // ever reaches this handler — this covers the cases where it does get through.
   useEffect(() => {
     const dialogOpen =
       newCustomerOpen ||
@@ -334,10 +335,10 @@ function SellPage() {
       refreshConfirmOpen;
     if (dialogOpen) return;
     function handler(e: KeyboardEvent) {
-      if (e.key === "F2") {
+      if (e.key === "F1") {
         e.preventDefault();
         newTab();
-      } else if (e.key === "F4") {
+      } else if (e.key === "F2") {
         e.preventDefault();
         requestDiscardBill();
       } else if (e.key === "Escape") {
@@ -576,7 +577,7 @@ function SellPage() {
             onClick={newTab}
             className="flex items-center gap-1 py-3 text-sm font-semibold text-foreground"
           >
-            <Plus className="h-4 w-4" /> New Sale (F2)
+            <Plus className="h-4 w-4" /> New Sale (F1)
           </button>
         </div>
 
@@ -628,7 +629,7 @@ function SellPage() {
                 )}
               </div>
               <Button variant="outline" onClick={requestDiscardBill}>
-                Discard Bill (F4)
+                Discard Bill (F2)
               </Button>
             </div>
 
@@ -853,10 +854,10 @@ function SellPage() {
               <div className="mt-4 text-sm font-semibold text-foreground">Keyboard Shortcuts</div>
               <div className="mt-1 space-y-1 text-sm text-muted-foreground">
                 <div className="flex gap-3">
-                  <span className="w-8 font-mono text-foreground">F2</span> New sale window
+                  <span className="w-8 font-mono text-foreground">F1</span> New sale window
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-8 font-mono text-foreground">F4</span> Dismiss Bill
+                  <span className="w-8 font-mono text-foreground">F2</span> Dismiss Bill
                 </div>
                 <div className="flex gap-3">
                   <span className="w-8 font-mono text-foreground">ESC</span> Focus Product Search
