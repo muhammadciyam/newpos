@@ -77,11 +77,15 @@ type NavItem = {
   icon: React.ComponentType<{ className?: string }>;
   color: IconColor;
   url?: string;
+  permission?: Permission;
   children?: NavLeaf[];
 };
 
 const items: NavItem[] = [
-  { title: "Home", url: "/", icon: Home, color: "blue" },
+  // Sales figures aren't a Cashier's business — same permission that already gates
+  // Reports/Analytics, so Home is hidden here too and index.tsx redirects a Cashier who
+  // still lands on "/" (e.g. as the post-login default) straight to the Sell page instead.
+  { title: "Home", url: "/", icon: Home, color: "blue", permission: "reports.view" },
   {
     title: "Point of Sale",
     icon: Monitor,
@@ -228,6 +232,7 @@ export function AppSidebar() {
   // children are all hidden is dropped entirely rather than showing an empty dropdown.
   const visibleItems = items
     .filter((item) => item.title !== "Super Admin" || currentUser?.role === "Super Admin")
+    .filter((item) => !item.permission || hasPermission(currentUser?.role, item.permission))
     .map((item) =>
       item.children
         ? {

@@ -1,5 +1,5 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -61,6 +61,7 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import { useSettings } from "@/lib/settings-store";
+import { useHasPermission } from "@/lib/permissions";
 import type { SalesPoint } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/")({
@@ -162,6 +163,11 @@ function DashboardChart({
 }
 
 function DashboardPage() {
+  // Sales figures aren't a Cashier's business — same permission gate as Reports/Analytics
+  // (the sidebar already hides "Home" for them; this covers landing here directly, e.g. as
+  // the post-login default route).
+  const canView = useHasPermission("reports.view");
+  const navigate = useNavigate();
   // Actively refetches so a sale rung up on another device/register shows up here within
   // a few seconds too, not just when it happens in this same browser tab.
   useBillsPolling();
@@ -176,6 +182,12 @@ function DashboardPage() {
   const [showPromo, setShowPromo] = useState(true);
   const [detailProduct, setDetailProduct] = useState<string | null>(null);
   const currency = useSettings().general.currency;
+
+  useEffect(() => {
+    if (!canView) navigate({ to: "/pos/sell" });
+  }, [canView, navigate]);
+
+  if (!canView) return null;
 
   return (
     <AppShell>
