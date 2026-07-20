@@ -50,12 +50,9 @@ import {
   CartesianGrid,
 } from "recharts";
 import { toast } from "sonner";
-import {
-  netSalesSeries,
-  salesCountSeries,
-  dashboardStats,
-  topSellingProducts,
-} from "@/lib/pos-data";
+import { useDashboardStats } from "@/lib/dashboard-stats";
+import { useBillsPolling } from "@/lib/bills-store";
+import type { SalesPoint } from "@/lib/pos-data";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -96,7 +93,7 @@ function DashboardChart({
   color = "blue",
 }: {
   title: string;
-  data: typeof netSalesSeries;
+  data: SalesPoint[];
   prefix?: string;
   icon: LucideIcon;
   color?: IconColor;
@@ -156,7 +153,10 @@ function DashboardChart({
 }
 
 function DashboardPage() {
-  const s = dashboardStats;
+  // Actively refetches so a sale rung up on another device/register shows up here within
+  // a few seconds too, not just when it happens in this same browser tab.
+  useBillsPolling();
+  const { stats: s, netSalesSeries, salesCountSeries, topSellingProducts } = useDashboardStats();
   const [showPromo, setShowPromo] = useState(true);
 
   return (
