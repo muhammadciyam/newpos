@@ -12,7 +12,6 @@ import {
   BarChart3,
   Settings,
   ShieldPlus,
-  BookText,
   ChevronDown,
   LifeBuoy,
   ChevronRight,
@@ -147,15 +146,19 @@ export function AppSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-sidebar-border">
         <div className="flex items-center gap-2 px-2 py-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground shadow-[var(--shadow-elegant)]">
-            <BookText className="h-5 w-5" />
-          </div>
-          {!collapsed && (
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-sm font-bold tracking-tight text-sidebar-foreground">
-                Dhipos
+          {collapsed ? (
+            // Rail too narrow for the wordmark — same compact mark used for the favicon.
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center">
+              <img src="/icon.png" alt="Dhipos" className="h-8 w-8 object-contain" />
+            </div>
+          ) : (
+            // Full wordmark, same as the login screen — it already reads "Dhipos", so no
+            // separate text label next to it.
+            <div className="flex flex-1 items-center justify-between gap-2">
+              <img src="/logo.png" alt="Dhipos" className="h-7 w-auto" />
+              <span className="shrink-0 rounded-full bg-sidebar-accent px-2 py-0.5 text-[10px] font-medium text-sidebar-foreground/60">
+                v1.0
               </span>
-              <span className="text-xs text-sidebar-foreground/60">/ v14.35</span>
             </div>
           )}
         </div>

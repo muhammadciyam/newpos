@@ -4,7 +4,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card } from "@/components/ui/card";
-import { BookText } from "lucide-react";
 import { resetPasswordOnServer } from "@/lib/password-reset-api";
 
 const validateSearch = (search: Record<string, unknown>): { token?: string } => ({
@@ -63,10 +62,7 @@ function ResetPasswordPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <Card className="w-full max-w-sm p-6">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <BookText className="h-6 w-6" />
-          </div>
-          <p className="text-lg font-bold text-foreground">Dhipos</p>
+          <img src="/logo.png" alt="Dhipos" className="h-14 w-auto" />
           <p className="text-sm text-muted-foreground">Set a new password</p>
         </div>
         {done ? (

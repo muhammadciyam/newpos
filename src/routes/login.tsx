@@ -11,7 +11,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from "@/components/ui/dialog";
-import { BookText, MessageCircle, Smartphone } from "lucide-react";
+import { MessageCircle, Smartphone } from "lucide-react";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { useOutlets } from "@/lib/outlets-store";
@@ -116,10 +116,7 @@ function LoginPage() {
     <div className="flex min-h-screen items-center justify-center bg-muted/40 px-4">
       <Card className="w-full max-w-sm p-6">
         <div className="mb-6 flex flex-col items-center gap-2 text-center">
-          <div className="flex h-11 w-11 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <BookText className="h-6 w-6" />
-          </div>
-          <p className="text-lg font-bold text-foreground">Dhipos</p>
+          <img src="/logo.png" alt="Dhipos" className="h-14 w-auto" />
           <p className="text-sm text-muted-foreground">Log in to your account</p>
         </div>
         <form onSubmit={submit} className="space-y-4">
