@@ -1,6 +1,7 @@
-import { ArrowDown, ArrowUp } from "lucide-react";
+import { ArrowDown, ArrowUp, type LucideIcon } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
+import { iconColors, type IconColor } from "@/lib/icon-colors";
 
 export function StatCard({
   label,
@@ -8,6 +9,8 @@ export function StatCard({
   change,
   changeSuffix = "%",
   neutral,
+  icon: Icon,
+  color = "blue",
   className,
 }: {
   label: string;
@@ -15,6 +18,8 @@ export function StatCard({
   change?: number;
   changeSuffix?: string;
   neutral?: boolean;
+  icon?: LucideIcon;
+  color?: IconColor;
   className?: string;
 }) {
   const positive = (change ?? 0) > 0;
@@ -22,7 +27,19 @@ export function StatCard({
 
   return (
     <Card className={cn("p-5", className)}>
-      <p className="text-sm text-muted-foreground">{label}</p>
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-sm text-muted-foreground">{label}</p>
+        {Icon && (
+          <div
+            className={cn(
+              "flex h-9 w-9 shrink-0 items-center justify-center rounded-lg",
+              iconColors[color],
+            )}
+          >
+            <Icon className="h-4.5 w-4.5" />
+          </div>
+        )}
+      </div>
       <div className="mt-2 flex items-baseline gap-2">
         <span className="text-2xl font-bold text-foreground">{value}</span>
         {change !== undefined && !neutral && (
@@ -32,7 +49,12 @@ export function StatCard({
               isZero ? "text-muted-foreground" : positive ? "text-emerald-600" : "text-destructive",
             )}
           >
-            {!isZero && (positive ? <ArrowUp className="h-3.5 w-3.5" /> : <ArrowDown className="h-3.5 w-3.5" />)}
+            {!isZero &&
+              (positive ? (
+                <ArrowUp className="h-3.5 w-3.5" />
+              ) : (
+                <ArrowDown className="h-3.5 w-3.5" />
+              ))}
             {isZero ? "—" : `${Math.abs(change!).toFixed(1)}${changeSuffix}`}
           </span>
         )}

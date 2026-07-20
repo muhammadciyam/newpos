@@ -4,6 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatCard } from "@/components/stat-card";
+import { iconColors, type IconColor } from "@/lib/icon-colors";
 import {
   Table,
   TableBody,
@@ -19,7 +20,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CalendarDays } from "lucide-react";
+import {
+  CalendarDays,
+  Wallet,
+  TrendingUp,
+  CreditCard,
+  History,
+  CalendarRange,
+  Users,
+  Package,
+  RotateCcw,
+  Ban,
+  BarChart3,
+  Eye,
+  type LucideIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Line,
   LineChart,
@@ -72,14 +88,25 @@ function DashboardChart({
   title,
   data,
   prefix = "",
+  icon: Icon,
+  color = "blue",
 }: {
   title: string;
   data: typeof netSalesSeries;
   prefix?: string;
+  icon: LucideIcon;
+  color?: IconColor;
 }) {
   return (
     <Card className="p-4">
-      <p className="text-xs font-bold uppercase tracking-wider text-primary">{title}</p>
+      <div className="flex items-center gap-2">
+        <div
+          className={cn("flex h-7 w-7 items-center justify-center rounded-md", iconColors[color])}
+        >
+          <Icon className="h-4 w-4" />
+        </div>
+        <p className="text-xs font-bold uppercase tracking-wider text-primary">{title}</p>
+      </div>
       <div className="mt-3 h-64">
         {data.length === 0 ? (
           <div className="flex h-full flex-col items-center justify-center gap-1 text-sm text-muted-foreground">
@@ -150,15 +177,32 @@ function DashboardPage() {
               className="gap-2 font-normal text-foreground"
               onClick={() => toast("Date range picker coming soon")}
             >
+              <span
+                className={cn(
+                  "flex h-6 w-6 items-center justify-center rounded-md",
+                  iconColors.indigo,
+                )}
+              >
+                <CalendarDays className="h-3.5 w-3.5" />
+              </span>
               13 Jun 2026 <span className="text-muted-foreground">~</span> 13 Jul 2026
-              <CalendarDays className="h-4 w-4 text-muted-foreground" />
             </Button>
           </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-          <DashboardChart title="Net Sales" data={netSalesSeries} />
-          <DashboardChart title="Sales Count" data={salesCountSeries} />
+          <DashboardChart
+            title="Net Sales"
+            data={netSalesSeries}
+            icon={TrendingUp}
+            color="emerald"
+          />
+          <DashboardChart
+            title="Sales Count"
+            data={salesCountSeries}
+            icon={BarChart3}
+            color="blue"
+          />
         </div>
 
         {showPromo && (
@@ -201,6 +245,8 @@ function DashboardPage() {
               maximumFractionDigits: 2,
             })}
             change={s.todayTotalSalesChange}
+            icon={Wallet}
+            color="blue"
           />
           <StatCard
             label="Today's Net Sales"
@@ -209,6 +255,8 @@ function DashboardPage() {
               maximumFractionDigits: 2,
             })}
             change={s.todayNetSalesChange}
+            icon={TrendingUp}
+            color="emerald"
           />
           <StatCard
             label="Today's Credit Sales"
@@ -217,6 +265,8 @@ function DashboardPage() {
               maximumFractionDigits: 2,
             })}
             neutral
+            icon={CreditCard}
+            color="amber"
           />
           <StatCard
             label="Yesterday's Net Sales"
@@ -225,6 +275,8 @@ function DashboardPage() {
               maximumFractionDigits: 2,
             })}
             change={s.yesterdayNetSalesChange}
+            icon={History}
+            color="violet"
           />
           <StatCard
             label="This month Net sales"
@@ -233,32 +285,54 @@ function DashboardPage() {
               maximumFractionDigits: 2,
             })}
             change={s.monthNetSalesChange}
+            icon={CalendarRange}
+            color="indigo"
           />
           <StatCard
             label="Customers this month"
             value={String(s.customersThisMonth)}
             change={s.customersThisMonthChange}
+            icon={Users}
+            color="pink"
           />
           <StatCard
             label="Products sold this month"
             value={String(s.productsSoldThisMonth)}
             change={s.productsSoldThisMonthChange}
+            icon={Package}
+            color="cyan"
           />
           <StatCard
             label="Refunds this month"
             value={String(s.refundsThisMonth)}
             change={s.refundsThisMonthChange}
+            icon={RotateCcw}
+            color="rose"
           />
           <StatCard
             label="Voids This month"
             value={String(s.voidsThisMonth)}
             change={s.voidsThisMonthChange}
+            icon={Ban}
+            color="slate"
           />
         </div>
 
         <Card className="overflow-hidden p-5">
-          <p className="font-semibold text-foreground">Top Selling Products</p>
-          <p className="text-sm text-muted-foreground">Your best moving products in the period.</p>
+          <div className="flex items-center gap-2">
+            <div
+              className={cn(
+                "flex h-8 w-8 items-center justify-center rounded-lg",
+                iconColors.amber,
+              )}
+            >
+              <Package className="h-4 w-4" />
+            </div>
+            <p className="font-semibold text-foreground">Top Selling Products</p>
+          </div>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Your best moving products in the period.
+          </p>
           <div className="mt-4 overflow-x-auto">
             <Table>
               <TableHeader>
@@ -291,12 +365,14 @@ function DashboardPage() {
                       <Button
                         variant="outline"
                         size="sm"
+                        className="gap-1.5 text-blue-600 hover:text-blue-700"
                         onClick={() =>
                           toast(
                             `${p.name}: ${p.sold.toLocaleString()} sold, ${p.revenue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} revenue`,
                           )
                         }
                       >
+                        <Eye className="h-3.5 w-3.5" />
                         Details
                       </Button>
                     </TableCell>
