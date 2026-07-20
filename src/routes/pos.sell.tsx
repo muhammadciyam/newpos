@@ -136,6 +136,8 @@ function SellPage() {
   const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
   const slipInput = useRef<HTMLInputElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const customerInputRef = useRef<HTMLInputElement>(null);
+  const cashGivenRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     pendingSaleStore.set(tabs.some((t) => t.items.length > 0));
@@ -319,11 +321,13 @@ function SellPage() {
   }
 
   // Wires up the shortcuts advertised right on the page (the "Discard Bill (F2)" button
-  // label and the "Keyboard Shortcuts" help panel) — previously just descriptive text with
-  // no listener behind it, so pressing the key did nothing. Skipped while a dialog is open
-  // so e.g. F2 can't blow away the cart out from under someone editing a note or a new
-  // customer. Note: F1 is intercepted by some browsers/OSes for their own help before it
-  // ever reaches this handler — this covers the cases where it does get through.
+  // label, "New Sale (Alt+N)", the Alt+C/Alt+R/Alt+S input hints, and the "Keyboard
+  // Shortcuts" help panel) — previously just descriptive text with no listener behind any
+  // of it, so pressing the key did nothing. Skipped while a dialog is open so e.g. F2 can't
+  // blow away the cart out from under someone editing a note or a new customer.
+  // F1 deliberately isn't used here — every major browser reserves it for their own Help
+  // page and won't let a website's preventDefault() stop that, so New Sale uses Alt+N
+  // instead (same Alt+<letter> convention as the other three), which browsers don't reserve.
   useEffect(() => {
     const dialogOpen =
       newCustomerOpen ||
@@ -335,7 +339,7 @@ function SellPage() {
       refreshConfirmOpen;
     if (dialogOpen) return;
     function handler(e: KeyboardEvent) {
-      if (e.key === "F1") {
+      if (e.altKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
         newTab();
       } else if (e.key === "F2") {
@@ -344,6 +348,15 @@ function SellPage() {
       } else if (e.key === "Escape") {
         e.preventDefault();
         searchInputRef.current?.focus();
+      } else if (e.altKey && e.key.toLowerCase() === "c") {
+        e.preventDefault();
+        customerInputRef.current?.focus();
+      } else if (e.altKey && e.key.toLowerCase() === "r") {
+        e.preventDefault();
+        cashGivenRef.current?.focus();
+      } else if (e.altKey && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        void saveBill();
       }
     }
     window.addEventListener("keydown", handler);
@@ -577,7 +590,7 @@ function SellPage() {
             onClick={newTab}
             className="flex items-center gap-1 py-3 text-sm font-semibold text-foreground"
           >
-            <Plus className="h-4 w-4" /> New Sale (F1)
+            <Plus className="h-4 w-4" /> New Sale (Alt+N)
           </button>
         </div>
 
@@ -854,13 +867,23 @@ function SellPage() {
               <div className="mt-4 text-sm font-semibold text-foreground">Keyboard Shortcuts</div>
               <div className="mt-1 space-y-1 text-sm text-muted-foreground">
                 <div className="flex gap-3">
-                  <span className="w-8 font-mono text-foreground">F1</span> New sale window
+                  <span className="w-14 font-mono text-foreground">Alt+N</span> New sale window
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-8 font-mono text-foreground">F2</span> Dismiss Bill
+                  <span className="w-14 font-mono text-foreground">F2</span> Dismiss Bill
                 </div>
                 <div className="flex gap-3">
-                  <span className="w-8 font-mono text-foreground">ESC</span> Focus Product Search
+                  <span className="w-14 font-mono text-foreground">ESC</span> Focus Product Search
+                </div>
+                <div className="flex gap-3">
+                  <span className="w-14 font-mono text-foreground">Alt+C</span> Focus Customer
+                  Search
+                </div>
+                <div className="flex gap-3">
+                  <span className="w-14 font-mono text-foreground">Alt+R</span> Focus Cash Given
+                </div>
+                <div className="flex gap-3">
+                  <span className="w-14 font-mono text-foreground">Alt+S</span> Save Bill
                 </div>
               </div>
             </div>
@@ -877,6 +900,7 @@ function SellPage() {
             <div className="relative">
               <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
+                ref={customerInputRef}
                 value={selectedCustomer ? selectedCustomer.name : customerQuery}
                 onChange={(e) => {
                   setCustomerQuery(e.target.value);
@@ -960,6 +984,7 @@ function SellPage() {
                     <p className="text-xs text-muted-foreground">(Alt+R)</p>
                   </div>
                   <Input
+                    ref={cashGivenRef}
                     value={tab.cashReceived}
                     onChange={(e) => updateTab({ cashReceived: e.target.value })}
                     className="w-28 text-right"
