@@ -16,6 +16,26 @@ import {
   LifeBuoy,
   ChevronRight,
   MessageCircle,
+  ShoppingCart,
+  CircleDollarSign,
+  History,
+  FileText,
+  CreditCard,
+  Receipt,
+  ClipboardList,
+  ClipboardCheck,
+  TrendingUp,
+  Package,
+  Percent,
+  Gift,
+  Printer,
+  Plug,
+  Bell,
+  ScrollText,
+  IdCard,
+  MapPin,
+  UserCog,
+  SlidersHorizontal,
 } from "lucide-react";
 import {
   Sidebar,
@@ -45,7 +65,13 @@ import { cn } from "@/lib/utils";
 // Programs / Integrations / Notification placeholders). Any leaf whose page calls
 // useHasPermission(...) or checks role directly must list that same permission here, or
 // it'll show in the sidebar for users the page itself then blocks with RestrictedPage.
-type NavLeaf = { title: string; url: string; permission?: Permission };
+type NavLeaf = {
+  title: string;
+  url: string;
+  icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
+  color: IconColor;
+  permission?: Permission;
+};
 type NavItem = {
   title: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -61,12 +87,12 @@ const items: NavItem[] = [
     icon: Monitor,
     color: "emerald",
     children: [
-      { title: "Sell", url: "/pos/sell" },
-      { title: "Register", url: "/pos/register" },
-      { title: "Register Sessions", url: "/pos/register-sessions" },
-      { title: "Quotations", url: "/pos/quotations" },
-      { title: "Online Payments", url: "/pos/online-payments" },
-      { title: "Bill History", url: "/pos/bill-history" },
+      { title: "Sell", url: "/pos/sell", icon: ShoppingCart, color: "emerald" },
+      { title: "Register", url: "/pos/register", icon: CircleDollarSign, color: "blue" },
+      { title: "Register Sessions", url: "/pos/register-sessions", icon: History, color: "violet" },
+      { title: "Quotations", url: "/pos/quotations", icon: FileText, color: "amber" },
+      { title: "Online Payments", url: "/pos/online-payments", icon: CreditCard, color: "cyan" },
+      { title: "Bill History", url: "/pos/bill-history", icon: Receipt, color: "rose" },
     ],
   },
   { title: "Customers", url: "/customers", icon: Users, color: "pink" },
@@ -76,8 +102,8 @@ const items: NavItem[] = [
     icon: Database,
     color: "indigo",
     children: [
-      { title: "Purchase Invoices", url: "/inventory" },
-      { title: "Stock Count", url: "/stock-count" },
+      { title: "Purchase Invoices", url: "/inventory", icon: ClipboardList, color: "indigo" },
+      { title: "Stock Count", url: "/stock-count", icon: ClipboardCheck, color: "teal" },
     ],
   },
   { title: "Wholesaler", url: "/supply/home", icon: Store, color: "violet" },
@@ -88,8 +114,8 @@ const items: NavItem[] = [
     icon: BarChart3,
     color: "teal",
     children: [
-      { title: "Sales", url: "/analytics/sales" },
-      { title: "Inventory", url: "/analytics/inventory" },
+      { title: "Sales", url: "/analytics/sales", icon: TrendingUp, color: "emerald" },
+      { title: "Inventory", url: "/analytics/inventory", icon: Package, color: "amber" },
     ],
   },
   { title: "Super Admin", url: "/admin/super-admin", icon: ShieldPlus, color: "orange" },
@@ -98,17 +124,65 @@ const items: NavItem[] = [
     icon: Settings,
     color: "slate",
     children: [
-      { title: "Billing", url: "/admin/billing", permission: "settings.manage" },
-      { title: "Settings", url: "/admin/settings", permission: "settings.manage" },
-      { title: "Users", url: "/admin/users", permission: "users.manage" },
-      { title: "Employees", url: "/admin/employees", permission: "users.manage" },
-      { title: "Locations", url: "/admin/locations", permission: "outlets.manage" },
-      { title: "Taxes", url: "/admin/taxes", permission: "settings.manage" },
-      { title: "Loyalty Programs", url: "/admin/loyalty-programs" },
-      { title: "Print Templates", url: "/admin/print-templates", permission: "settings.manage" },
-      { title: "Integrations", url: "/admin/integrations" },
-      { title: "Notification", url: "/admin/notification" },
-      { title: "Audit Logs", url: "/admin/audit-logs", permission: "settings.manage" },
+      {
+        title: "Billing",
+        url: "/admin/billing",
+        icon: CreditCard,
+        color: "cyan",
+        permission: "settings.manage",
+      },
+      {
+        title: "Settings",
+        url: "/admin/settings",
+        icon: SlidersHorizontal,
+        color: "slate",
+        permission: "settings.manage",
+      },
+      {
+        title: "Users",
+        url: "/admin/users",
+        icon: UserCog,
+        color: "blue",
+        permission: "users.manage",
+      },
+      {
+        title: "Employees",
+        url: "/admin/employees",
+        icon: IdCard,
+        color: "pink",
+        permission: "users.manage",
+      },
+      {
+        title: "Locations",
+        url: "/admin/locations",
+        icon: MapPin,
+        color: "rose",
+        permission: "outlets.manage",
+      },
+      {
+        title: "Taxes",
+        url: "/admin/taxes",
+        icon: Percent,
+        color: "amber",
+        permission: "settings.manage",
+      },
+      { title: "Loyalty Programs", url: "/admin/loyalty-programs", icon: Gift, color: "violet" },
+      {
+        title: "Print Templates",
+        url: "/admin/print-templates",
+        icon: Printer,
+        color: "indigo",
+        permission: "settings.manage",
+      },
+      { title: "Integrations", url: "/admin/integrations", icon: Plug, color: "teal" },
+      { title: "Notification", url: "/admin/notification", icon: Bell, color: "orange" },
+      {
+        title: "Audit Logs",
+        url: "/admin/audit-logs",
+        icon: ScrollText,
+        color: "purple",
+        permission: "settings.manage",
+      },
     ],
   },
 ];
@@ -119,18 +193,21 @@ const items: NavItem[] = [
 function NavIcon({
   icon: Icon,
   color,
+  size = "md",
 }: {
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: IconColor;
+  size?: "sm" | "md";
 }) {
   return (
     <span
       className={cn(
-        "flex h-7 w-7 shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
+        "flex shrink-0 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
+        size === "md" ? "h-7 w-7" : "h-6 w-6",
         iconColors[color],
       )}
     >
-      <Icon className="h-4 w-4" strokeWidth={2.25} />
+      <Icon className={size === "md" ? "h-4 w-4" : "h-3.5 w-3.5"} strokeWidth={2.25} />
     </span>
   );
 }
@@ -276,7 +353,10 @@ export function AppSidebar() {
                             {item.children.map((child) => (
                               <SidebarMenuSubItem key={child.url}>
                                 <SidebarMenuSubButton asChild isActive={isActive(child.url)}>
-                                  <Link to={child.url}>{child.title}</Link>
+                                  <Link to={child.url} className="flex items-center gap-2">
+                                    <NavIcon icon={child.icon} color={child.color} size="sm" />
+                                    <span>{child.title}</span>
+                                  </Link>
                                 </SidebarMenuSubButton>
                               </SidebarMenuSubItem>
                             ))}
