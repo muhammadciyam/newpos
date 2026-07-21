@@ -126,6 +126,7 @@ function SellPage() {
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerMobile, setNewCustomerMobile] = useState("");
+  const [newCustomerAddress, setNewCustomerAddress] = useState("");
   // Tracked by number rather than a static snapshot, since Save Bill now saves locally and
   // returns instantly with a placeholder number — resolveBillNumber() follows the swap to
   // the real, server-assigned bill once the background sync completes, so the still-open
@@ -419,6 +420,7 @@ function SellPage() {
     const customer = await customersStore.create({
       name: newCustomerName.trim(),
       mobile: newCustomerMobile.trim(),
+      address: newCustomerAddress.trim(),
       limit: 0,
     });
     if ("error" in customer) {
@@ -428,6 +430,7 @@ function SellPage() {
     selectCustomer(customer.id, customer.name);
     setNewCustomerName("");
     setNewCustomerMobile("");
+    setNewCustomerAddress("");
     setNewCustomerOpen(false);
     toast.success(`Customer "${customer.name}" added`);
   }
@@ -1233,6 +1236,14 @@ function SellPage() {
                 value={newCustomerMobile}
                 onChange={(e) => setNewCustomerMobile(e.target.value)}
                 placeholder="Mobile number"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Address</Label>
+              <Input
+                value={newCustomerAddress}
+                onChange={(e) => setNewCustomerAddress(e.target.value)}
+                placeholder="Address"
               />
             </div>
           </div>
