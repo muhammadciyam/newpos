@@ -23,6 +23,7 @@ import { settingsStore } from "@/lib/settings-store";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { accentColors, setAccentColor, useAccentColor } from "@/lib/theme-store";
 import { cn } from "@/lib/utils";
+import { LiveClock } from "@/components/live-clock";
 
 // Per-device — just remembers the newest activity timestamp already seen, so the dot only
 // shows when something happened since the last time this device's inbox was opened.
@@ -126,6 +127,7 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-3">
             <SidebarTrigger />
             <div className="ml-auto flex items-center gap-3">
+              <LiveClock />
               {pendingBills.length > 0 && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

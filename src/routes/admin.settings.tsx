@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
 import { Trash2, Plus } from "lucide-react";
 import { toast } from "sonner";
 import { cashDenominations } from "@/lib/pos-data";
+import { listTimezones, detectDeviceTimezone } from "@/lib/timezones";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
 import {
@@ -178,6 +179,23 @@ function SettingsPage() {
     type: "percent" as "percent" | "amount",
     value: "",
   });
+
+  const timezoneOptions = useMemo(() => listTimezones(), []);
+
+  // Auto-detects this device's OS-level timezone once per visit to this page and, if it
+  // doesn't match what's saved, corrects it automatically (both the draft shown here and the
+  // saved setting itself) — this field is a display-only label used to format dates/the
+  // header clock, not anything financial, so there's no real downside to trusting the
+  // device's own clock over a manually-picked value that may have gone stale.
+  useEffect(() => {
+    if (!canManage) return;
+    const detected = detectDeviceTimezone();
+    if (detected === settings.general.timezone) return;
+    setDraft((d) => ({ ...d, general: { ...d.general, timezone: detected } }));
+    settingsStore.updateSection("general", { timezone: detected });
+    toast.info(`Timezone auto-detected as ${detected} and updated`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   if (!canManage) return <RestrictedPage />;
 
@@ -428,7 +446,7 @@ function SettingsPage() {
                 </SettingRow>
                 <SettingRow
                   label="Timezone"
-                  desc="Timezone your shop is set up at. By default all dates will be shown in this timezone"
+                  desc={`Timezone your shop is set up at. By default all dates will be shown in this timezone. Auto-detected from this device as ${detectDeviceTimezone()} — kept in sync automatically.`}
                 >
                   <Select
                     value={draft.general.timezone}
@@ -439,8 +457,12 @@ function SettingsPage() {
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="maldives">Indian/Maldives</SelectItem>
+                    <SelectContent className="max-h-72">
+                      {timezoneOptions.map((tz) => (
+                        <SelectItem key={tz} value={tz}>
+                          {tz}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </SettingRow>
