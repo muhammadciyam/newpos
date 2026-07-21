@@ -111,10 +111,20 @@ function setServerUsers(next: AppUser[]) {
   userListeners.forEach((l) => l());
 }
 
+// A local-only mirror of the last successfully fetched user directory, so a device that's
+// already logged in (its own email persisted in sessionStoreInternal) can still resolve
+// getCurrentUser() — and keep selling — after a reload with no network, instead of finding
+// an empty in-memory serverUsers and getting bounced to /login. Never used to verify a
+// password (login() always requires a live server round trip for that), so the password
+// field is stripped before it's written here — no reason to keep it on disk any longer than
+// the live in-memory copy already does.
+const usersCacheStore = createPersistedStore<AppUser[]>("dhipos-users-cache", []);
+
 async function refreshUsersFromServer() {
   try {
     const result = await fetchUsersOnServer();
     setServerUsers(result);
+    usersCacheStore.set(result.map((u) => ({ ...u, password: "" })));
   } catch (err) {
     // Network hiccup — keep the last known snapshot; individual actions surface their own errors.
     console.error("refreshUsersFromServer failed:", err);
@@ -134,6 +144,12 @@ async function refreshUsersFromServer() {
 let initialUsersFetchPromise: Promise<void> | null = null;
 function ensureInitialUsersFetch(): Promise<void> {
   if (!initialUsersFetchPromise) {
+    // Seed from the offline cache first (synchronous) so getCurrentUser() already has
+    // something to match against the instant this runs — the live fetch right after either
+    // confirms/refreshes it, or (if offline) just leaves this seed in place.
+    usersCacheStore.hydrate();
+    const cached = usersCacheStore.get();
+    if (cached.length > 0 && serverUsers.length === 0) setServerUsers(cached);
     initialUsersFetchPromise = refreshUsersFromServer();
   }
   return initialUsersFetchPromise;
