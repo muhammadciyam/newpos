@@ -374,9 +374,13 @@ export const billsStore = {
     number: string,
     amount: number,
     method: string,
+    slipNumber?: string,
+    transferSlip?: string,
   ): Promise<{ ok: true; remaining: number } | { error: string }> {
     const result = await safeServerCall(() =>
-      settleCreditOnServer({ data: { number, actor: actor(), amount, method } }),
+      settleCreditOnServer({
+        data: { number, actor: actor(), amount, method, slipNumber, transferSlip },
+      }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;

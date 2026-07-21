@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -20,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CircleDollarSign, ArrowLeft } from "lucide-react";
+import { CircleDollarSign, ArrowLeft, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { billsStore } from "@/lib/bills-store";
 import { type Bill, type Customer } from "@/lib/pos-data";
@@ -63,7 +63,17 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
   const [step, setStep] = useState<"select" | "pay">("select");
   const [method, setMethod] = useState<(typeof PAYMENT_METHODS)[number]>("Cash");
   const [amountInput, setAmountInput] = useState("");
+  const [slipNumber, setSlipNumber] = useState("");
+  const [transferSlip, setTransferSlip] = useState("");
   const [settling, setSettling] = useState(false);
+  const slipInputRef = useRef<HTMLInputElement>(null);
+
+  function readSlip(file: File | undefined) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setTransferSlip(reader.result as string);
+    reader.readAsDataURL(file);
+  }
 
   function toggle(number: string, checked: boolean) {
     setSelected((s) => {
@@ -86,25 +96,37 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
   function openPaymentStep() {
     if (selected.size === 0) return;
     setAmountInput(selectedRemaining.toFixed(2));
+    setMethod("Cash");
+    setSlipNumber("");
+    setTransferSlip("");
     setStep("pay");
   }
 
   const amount = parseFloat(amountInput) || 0;
   const allocation = allocate(amount, selectedBills);
+  const needsSlip = method === "Card" || method === "Bank Transfer";
 
   async function confirmPayment() {
-    if (amount <= 0) return;
+    if (amount <= 0 || (needsSlip && !slipNumber.trim())) return;
     setSettling(true);
     let succeeded = 0;
     let failed = 0;
     for (const [number, amt] of allocation) {
-      const result = await billsStore.settleCredit(number, amt, method);
+      const result = await billsStore.settleCredit(
+        number,
+        amt,
+        method,
+        needsSlip ? slipNumber.trim() : undefined,
+        method === "Bank Transfer" ? transferSlip || undefined : undefined,
+      );
       if ("error" in result) failed++;
       else succeeded++;
     }
     setSettling(false);
     setSelected(new Set());
     setStep("select");
+    setSlipNumber("");
+    setTransferSlip("");
     if (succeeded > 0) {
       toast.success(
         `Payment of ${amount.toFixed(2)} recorded for ${succeeded} bill${succeeded === 1 ? "" : "s"}`,
@@ -154,7 +176,11 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
             <Label>Payment Method</Label>
             <Select
               value={method}
-              onValueChange={(v) => setMethod(v as (typeof PAYMENT_METHODS)[number])}
+              onValueChange={(v) => {
+                setMethod(v as (typeof PAYMENT_METHODS)[number]);
+                setSlipNumber("");
+                setTransferSlip("");
+              }}
             >
               <SelectTrigger>
                 <SelectValue />
@@ -183,12 +209,59 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
               a partial payment.
             </p>
           </div>
+          {method === "Bank Transfer" && (
+            <div className="space-y-1.5">
+              <Label>Transfer Slip</Label>
+              <div className="flex items-center gap-3">
+                {transferSlip ? (
+                  <img
+                    src={transferSlip}
+                    alt="Transfer slip"
+                    className="h-14 w-20 rounded border border-border object-cover"
+                  />
+                ) : (
+                  <div className="flex h-14 w-20 items-center justify-center rounded border border-dashed border-border text-xs text-muted-foreground">
+                    No slip
+                  </div>
+                )}
+                <input
+                  ref={slipInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => readSlip(e.target.files?.[0])}
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => slipInputRef.current?.click()}
+                >
+                  <Upload className="h-3.5 w-3.5" /> {transferSlip ? "Replace" : "Upload"}
+                </Button>
+              </div>
+            </div>
+          )}
+          {needsSlip && (
+            <div className="space-y-1.5">
+              <Label>Slip Number / Transfer ID</Label>
+              <Input
+                value={slipNumber}
+                onChange={(e) => setSlipNumber(e.target.value)}
+                placeholder="e.g. 000123 or TXN-9F2C"
+              />
+            </div>
+          )}
         </div>
         <DialogFooter className="sm:justify-between">
           <Button variant="outline" className="gap-1.5" onClick={() => setStep("select")}>
             <ArrowLeft className="h-3.5 w-3.5" /> Back
           </Button>
-          <Button disabled={amount <= 0 || settling} onClick={confirmPayment}>
+          <Button
+            disabled={amount <= 0 || (needsSlip && !slipNumber.trim()) || settling}
+            onClick={confirmPayment}
+          >
             {settling ? "Recording..." : `Confirm Payment (${amount.toFixed(2)})`}
           </Button>
         </DialogFooter>

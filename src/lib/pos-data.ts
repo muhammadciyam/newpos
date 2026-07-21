@@ -165,6 +165,11 @@ export type CreditPayment = {
   by: string;
   amount: number;
   method: "Cash" | "Card" | "Bank Transfer" | (string & {});
+  // Required proof-of-payment reference for Card/Bank Transfer, same as a regular sale's
+  // cardSlipNumber. Not applicable to Cash.
+  slipNumber?: string;
+  // Uploaded slip image (data URL) — Bank Transfer only, same as a regular sale's transferSlip.
+  transferSlip?: string;
 };
 
 export type Bill = {

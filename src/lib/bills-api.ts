@@ -272,7 +272,16 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
   });
 
 export const settleCreditOnServer = createServerFn({ method: "POST" })
-  .validator((data: { number: string; actor: string; amount: number; method: string }) => data)
+  .validator(
+    (data: {
+      number: string;
+      actor: string;
+      amount: number;
+      method: string;
+      slipNumber?: string;
+      transferSlip?: string;
+    }) => data,
+  )
   .handler(async ({ data }) => {
     const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
@@ -283,12 +292,17 @@ export const settleCreditOnServer = createServerFn({ method: "POST" })
     if (data.amount > remaining + 0.005) {
       return { error: `Amount can't exceed the remaining balance of ${remaining.toFixed(2)}` };
     }
+    if ((data.method === "Card" || data.method === "Bank Transfer") && !data.slipNumber?.trim()) {
+      return { error: "Enter the slip number for this payment" };
+    }
     const payment: CreditPayment = {
       id: `credit-payment-${Date.now()}`,
       at: formatBillTimestamp(),
       by: data.actor,
       amount: data.amount,
       method: data.method,
+      slipNumber: data.slipNumber || undefined,
+      transferSlip: data.method === "Bank Transfer" ? data.transferSlip : undefined,
     };
     const fullyPaid = alreadyPaid + data.amount >= bill.total - 0.005;
     await mutateServerBills((bs) =>
