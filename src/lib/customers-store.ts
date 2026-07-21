@@ -69,6 +69,7 @@ export const customersStore = {
     const existing = customers.find((c) => c.id === id);
     const result = await safeServerCall(() => removeCustomerOnServer({ data: { id } }));
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setCustomers(customers.filter((c) => c.id !== id));
     logAudit(actor(), "delete", `Customer / ${existing?.name ?? id}`);
     return { ok: true };

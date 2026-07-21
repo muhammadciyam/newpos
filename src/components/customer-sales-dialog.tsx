@@ -3,6 +3,15 @@ import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/compon
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -11,15 +20,49 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { CircleDollarSign } from "lucide-react";
+import { CircleDollarSign, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
 import { billsStore } from "@/lib/bills-store";
 import { type Bill, type Customer } from "@/lib/pos-data";
+
+const PAYMENT_METHODS = ["Cash", "Card", "Bank Transfer"] as const;
+
+// Sum of what's actually still owed on a bill — `total` stays the original sale amount even
+// after one or more partial payments (see CreditPayment), so this is what a payment's amount
+// is actually validated/capped against.
+function remainingOf(b: Bill): number {
+  const paid = (b.payments ?? []).reduce((s, p) => s + p.amount, 0);
+  return Math.max(0, b.total - paid);
+}
+
+// Same sequence-number parsing bills-api.ts uses server-side for ordering — used here only
+// to decide which selected bill a payment gets applied to first (oldest debt first), not as
+// an authoritative sort anywhere else.
+function billSeq(number: string): number {
+  const seq = parseInt(number.split("/")[1] ?? "0", 10);
+  return Number.isFinite(seq) ? seq : 0;
+}
+
+// Applies `amount` to `bills` oldest-first, fully paying off each in turn until it runs out —
+// the last bill it reaches may only get a partial share. Bills beyond that get nothing.
+function allocate(amount: number, bills: Bill[]): Map<string, number> {
+  let left = amount;
+  const result = new Map<string, number>();
+  for (const b of bills) {
+    const pay = Math.min(remainingOf(b), Math.max(0, left));
+    if (pay > 0.005) result.set(b.number, pay);
+    left -= pay;
+  }
+  return result;
+}
 
 export function CustomerSalesDialog({ customer, bills }: { customer: Customer; bills: Bill[] }) {
   const total = bills.filter((b) => b.status !== "Void").reduce((s, b) => s + b.total, 0);
   const pendingBills = bills.filter((b) => b.paymentStatus === "Pending");
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [step, setStep] = useState<"select" | "pay">("select");
+  const [method, setMethod] = useState<(typeof PAYMENT_METHODS)[number]>("Cash");
+  const [amountInput, setAmountInput] = useState("");
   const [settling, setSettling] = useState(false);
 
   function toggle(number: string, checked: boolean) {
@@ -35,24 +78,122 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
     setSelected(checked ? new Set(pendingBills.map((b) => b.number)) : new Set());
   }
 
-  async function settleSelected() {
+  const selectedBills = bills
+    .filter((b) => selected.has(b.number))
+    .sort((a, b) => billSeq(a.number) - billSeq(b.number));
+  const selectedRemaining = selectedBills.reduce((s, b) => s + remainingOf(b), 0);
+
+  function openPaymentStep() {
     if (selected.size === 0) return;
+    setAmountInput(selectedRemaining.toFixed(2));
+    setStep("pay");
+  }
+
+  const amount = parseFloat(amountInput) || 0;
+  const allocation = allocate(amount, selectedBills);
+
+  async function confirmPayment() {
+    if (amount <= 0) return;
     setSettling(true);
     let succeeded = 0;
     let failed = 0;
-    for (const number of selected) {
-      const result = await billsStore.settleCredit(number);
+    for (const [number, amt] of allocation) {
+      const result = await billsStore.settleCredit(number, amt, method);
       if ("error" in result) failed++;
       else succeeded++;
     }
     setSettling(false);
     setSelected(new Set());
+    setStep("select");
     if (succeeded > 0) {
-      toast.success(`${succeeded} bill${succeeded === 1 ? "" : "s"} marked as paid`);
+      toast.success(
+        `Payment of ${amount.toFixed(2)} recorded for ${succeeded} bill${succeeded === 1 ? "" : "s"}`,
+      );
     }
     if (failed > 0) {
-      toast.error(`${failed} bill${failed === 1 ? "" : "s"} couldn't be marked as paid`);
+      toast.error(`${failed} payment${failed === 1 ? "" : "s"} couldn't be recorded`);
     }
+  }
+
+  if (step === "pay") {
+    return (
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Record Payment — {customer.name}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4">
+          <div className="rounded-lg border border-border">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Bill Number</TableHead>
+                  <TableHead>Due</TableHead>
+                  <TableHead>Applied</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {selectedBills.map((b) => (
+                  <TableRow key={b.number}>
+                    <TableCell className="font-medium">{b.number}</TableCell>
+                    <TableCell>{remainingOf(b).toFixed(2)}</TableCell>
+                    <TableCell
+                      className={
+                        (allocation.get(b.number) ?? 0) > 0
+                          ? "font-medium text-emerald-600"
+                          : "text-muted-foreground"
+                      }
+                    >
+                      {(allocation.get(b.number) ?? 0).toFixed(2)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Payment Method</Label>
+            <Select
+              value={method}
+              onValueChange={(v) => setMethod(v as (typeof PAYMENT_METHODS)[number])}
+            >
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAYMENT_METHODS.map((m) => (
+                  <SelectItem key={m} value={m}>
+                    {m}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-1.5">
+            <Label>Amount</Label>
+            <Input
+              type="number"
+              min={0.01}
+              max={selectedRemaining}
+              step={0.01}
+              value={amountInput}
+              onChange={(e) => setAmountInput(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Total due for selected bills: {selectedRemaining.toFixed(2)}. Enter less than that for
+              a partial payment.
+            </p>
+          </div>
+        </div>
+        <DialogFooter className="sm:justify-between">
+          <Button variant="outline" className="gap-1.5" onClick={() => setStep("select")}>
+            <ArrowLeft className="h-3.5 w-3.5" /> Back
+          </Button>
+          <Button disabled={amount <= 0 || settling} onClick={confirmPayment}>
+            {settling ? "Recording..." : `Confirm Payment (${amount.toFixed(2)})`}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    );
   }
 
   return (
@@ -121,7 +262,14 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
                     </Badge>
                   )}
                 </TableCell>
-                <TableCell>{b.total.toFixed(2)}</TableCell>
+                <TableCell>
+                  {b.total.toFixed(2)}
+                  {b.payments && b.payments.length > 0 && (
+                    <span className="block text-xs text-muted-foreground">
+                      {remainingOf(b).toFixed(2)} due
+                    </span>
+                  )}
+                </TableCell>
                 <TableCell>{b.created}</TableCell>
               </TableRow>
             ))}
@@ -138,13 +286,11 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
             <Button
               size="sm"
               className="gap-1.5"
-              disabled={selected.size === 0 || settling}
-              onClick={settleSelected}
+              disabled={selected.size === 0}
+              onClick={openPaymentStep}
             >
               <CircleDollarSign className="h-3.5 w-3.5" />
-              {settling
-                ? "Marking as paid..."
-                : `Payment${selected.size > 0 ? ` (${selected.size})` : ""}`}
+              {`Payment${selected.size > 0 ? ` (${selected.size})` : ""}`}
             </Button>
           )}
         </div>

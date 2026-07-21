@@ -2,7 +2,7 @@ import { createServerFn } from "@tanstack/react-start";
 import { getServerBills, mutateServerBills, formatBillTimestamp } from "@/lib/bills-server-store";
 import { adjustStock, getServerProducts } from "@/lib/products-server-store";
 import { getOrCreateDefaultOutlet } from "@/lib/outlets-server-store";
-import type { Bill, BillLineItem } from "@/lib/pos-data";
+import type { Bill, BillLineItem, CreditPayment } from "@/lib/pos-data";
 
 async function stockPatchesFor(productIds: Iterable<string>) {
   const products = await getServerProducts();
@@ -272,19 +272,43 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
   });
 
 export const settleCreditOnServer = createServerFn({ method: "POST" })
-  .validator((data: { number: string; actor: string }) => data)
+  .validator((data: { number: string; actor: string; amount: number; method: string }) => data)
   .handler(async ({ data }) => {
     const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
     if (bill.paymentStatus !== "Pending") return { error: "This bill has no pending payment" };
+    const alreadyPaid = (bill.payments ?? []).reduce((s, p) => s + p.amount, 0);
+    const remaining = bill.total - alreadyPaid;
+    if (data.amount <= 0) return { error: "Enter an amount greater than 0" };
+    if (data.amount > remaining + 0.005) {
+      return { error: `Amount can't exceed the remaining balance of ${remaining.toFixed(2)}` };
+    }
+    const payment: CreditPayment = {
+      id: `credit-payment-${Date.now()}`,
+      at: formatBillTimestamp(),
+      by: data.actor,
+      amount: data.amount,
+      method: data.method,
+    };
+    const fullyPaid = alreadyPaid + data.amount >= bill.total - 0.005;
     await mutateServerBills((bs) =>
       bs.map((b) =>
         b.number === data.number
-          ? { ...b, paymentStatus: "Paid", settledBy: data.actor, settledAt: formatBillTimestamp() }
+          ? {
+              ...b,
+              payments: [...(b.payments ?? []), payment],
+              ...(fullyPaid
+                ? {
+                    paymentStatus: "Paid" as const,
+                    settledBy: data.actor,
+                    settledAt: formatBillTimestamp(),
+                  }
+                : {}),
+            }
           : b,
       ),
     );
-    return { ok: true as const };
+    return { ok: true as const, remaining: remaining - data.amount };
   });
 
 // Silent — just remembers which template a bill was last printed with.

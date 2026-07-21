@@ -332,17 +332,26 @@ export const billsStore = {
     return { ok: true };
   },
 
-  // Marks a Credit sale's outstanding balance as collected. Available to any user —
-  // recording a customer's payment is routine, not a correction.
-  async settleCredit(number: string): Promise<{ ok: true } | { error: string }> {
+  // Records a payment (full or partial) toward a Credit sale's outstanding balance —
+  // paymentStatus only flips to "Paid" once enough of these add up to cover the total.
+  // Available to any user — recording a customer's payment is routine, not a correction.
+  async settleCredit(
+    number: string,
+    amount: number,
+    method: string,
+  ): Promise<{ ok: true; remaining: number } | { error: string }> {
     const result = await safeServerCall(() =>
-      settleCreditOnServer({ data: { number, actor: actor() } }),
+      settleCreditOnServer({ data: { number, actor: actor(), amount, method } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     await refreshFromServer();
-    logAudit(actor(), "update", `Bill / ${number} payment settled`);
-    return { ok: true };
+    logAudit(
+      actor(),
+      "update",
+      `Bill / ${number} payment of ${amount.toFixed(2)} recorded via ${method}`,
+    );
+    return { ok: true, remaining: result.remaining };
   },
 
   // Silent — just remembers which template a bill was last printed with.

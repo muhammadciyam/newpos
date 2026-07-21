@@ -155,6 +155,18 @@ export type BillRefund = {
   reason?: string;
 };
 
+// One installment toward a Credit sale's outstanding balance — a Credit bill can be settled
+// across more than one of these (see settleCreditOnServer) before its paymentStatus flips
+// from "Pending" to "Paid", same as a partial refund can take more than one BillRefund entry
+// before status flips to "Refunded".
+export type CreditPayment = {
+  id: string;
+  at: string;
+  by: string;
+  amount: number;
+  method: "Cash" | "Card" | "Bank Transfer" | (string & {});
+};
+
 export type Bill = {
   number: string;
   customer: string;
@@ -185,6 +197,10 @@ export type Bill = {
   paymentStatus: "Paid" | "Pending";
   settledBy?: string;
   settledAt?: string;
+  // Installments recorded against a Credit sale's outstanding balance — see CreditPayment.
+  // `paymentStatus` only flips to "Paid" once these sum to at least `total`; until then it
+  // stays "Pending" even after one or more partial payments.
+  payments?: CreditPayment[];
   cashGiven?: number;
   changeGiven?: number;
   transferSlip?: string;

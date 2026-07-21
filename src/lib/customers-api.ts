@@ -1,5 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { getServerCustomers, mutateServerCustomers } from "@/lib/customers-server-store";
+import { getServerBills } from "@/lib/bills-server-store";
 import type { Customer } from "@/lib/pos-data";
 
 export const fetchCustomers = createServerFn({ method: "GET" }).handler(async () => {
@@ -66,7 +67,11 @@ export const updateCustomerOnServer = createServerFn({ method: "POST" })
 
 export const removeCustomerOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string }) => data)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<{ error: string } | { ok: true }> => {
+    const hasBills = (await getServerBills()).some((b) => b.customerId === data.id);
+    if (hasBills) {
+      return { error: "This customer has sales on record and can't be deleted." };
+    }
     await mutateServerCustomers((cs) => cs.filter((c) => c.id !== data.id));
     return { ok: true as const };
   });
