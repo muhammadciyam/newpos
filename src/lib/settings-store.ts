@@ -43,7 +43,6 @@ export type WebhookConfig = {
 export type AppSettings = {
   general: {
     currency: string;
-    timezone: string;
     uniqueCustomerMobile: boolean;
     optimizeBillHistoryLoading: boolean;
     smsShortCode: string;
@@ -138,7 +137,6 @@ export type AppSettings = {
 const defaults: AppSettings = {
   general: {
     currency: "MVR",
-    timezone: "Indian/Maldives",
     uniqueCustomerMobile: true,
     optimizeBillHistoryLoading: true,
     smsShortCode: "SEVENMART",
@@ -272,14 +270,6 @@ export function useSettings(): AppSettings {
     // Backfills fields for anyone with settings persisted before they existed —
     // createPersistedStore replaces state wholesale on read rather than deep-merging with
     // defaults, so an old blob would otherwise be missing them entirely.
-    general: {
-      ...settings.general,
-      // Was a custom internal slug that only ever meant one thing — migrated to the real
-      // IANA zone name so it can be compared directly against Intl's timezone detection
-      // (see timezones.ts) and the Timezone dropdown's now-full IANA option list.
-      timezone:
-        settings.general.timezone === "maldives" ? "Indian/Maldives" : settings.general.timezone,
-    },
     tax: {
       ...settings.tax,
       customTaxes: settings.tax.customTaxes ?? [],

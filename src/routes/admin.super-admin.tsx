@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { RestrictedPage } from "@/components/restricted-page";
 import { Button } from "@/components/ui/button";
@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { authStore, useUsers, useUsersPolling, useCurrentUser } from "@/lib/auth-store";
 import { outletsStore, useOutlets, type Outlet } from "@/lib/outlets-store";
 import { useRegister, registerStore } from "@/lib/register-store";
+import { listTimezones } from "@/lib/timezones";
 
 export const Route = createFileRoute("/admin/super-admin")({
   head: () => ({ meta: [{ title: "Super Admin — Dhipos" }] }),
@@ -40,13 +41,14 @@ export const Route = createFileRoute("/admin/super-admin")({
 });
 
 const emptyForm = { name: "", email: "", username: "", password: "" };
-const emptyOutletForm = { name: "", address: "", phone: "" };
+const emptyOutletForm = { name: "", address: "", phone: "", timezone: "Indian/Maldives" };
 
 function SuperAdminPage() {
   const currentUser = useCurrentUser();
   useUsersPolling();
   const users = useUsers();
   const outlets = useOutlets();
+  const timezoneOptions = useMemo(() => listTimezones(), []);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState("");
@@ -84,6 +86,7 @@ function SuperAdminPage() {
       address: outletForm.address.trim(),
       phone: outletForm.phone.trim(),
       active: true,
+      timezone: outletForm.timezone,
     });
     if ("error" in result) {
       toast.error(result.error);
@@ -107,7 +110,12 @@ function SuperAdminPage() {
 
   function openEditOutlet(outlet: Outlet) {
     setEditingOutletId(outlet.id);
-    setEditOutletForm({ name: outlet.name, address: outlet.address, phone: outlet.phone });
+    setEditOutletForm({
+      name: outlet.name,
+      address: outlet.address,
+      phone: outlet.phone,
+      timezone: outlet.timezone ?? "Indian/Maldives",
+    });
   }
 
   async function saveOutletEdit() {
@@ -120,6 +128,7 @@ function SuperAdminPage() {
       name: editOutletForm.name.trim(),
       address: editOutletForm.address.trim(),
       phone: editOutletForm.phone.trim(),
+      timezone: editOutletForm.timezone,
     });
     if ("error" in result) {
       toast.error(result.error);
@@ -254,6 +263,7 @@ function SuperAdminPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Address</TableHead>
                 <TableHead>Phone</TableHead>
+                <TableHead>Timezone</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Action</TableHead>
               </TableRow>
@@ -261,7 +271,7 @@ function SuperAdminPage() {
             <TableBody>
               {outlets.length === 0 && (
                 <TableRow>
-                  <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  <TableCell colSpan={6} className="py-8 text-center text-muted-foreground">
                     No outlets yet — create one to get started.
                   </TableCell>
                 </TableRow>
@@ -271,6 +281,7 @@ function SuperAdminPage() {
                   <TableCell className="font-medium text-foreground">{o.name}</TableCell>
                   <TableCell>{o.address || "—"}</TableCell>
                   <TableCell>{o.phone || "—"}</TableCell>
+                  <TableCell>{o.timezone ?? "Indian/Maldives"}</TableCell>
                   <TableCell>
                     <Badge
                       className={
@@ -461,6 +472,24 @@ function SuperAdminPage() {
                 placeholder="e.g. 7777777"
               />
             </div>
+            <div className="space-y-1.5">
+              <Label>Timezone</Label>
+              <Select
+                value={outletForm.timezone}
+                onValueChange={(v) => setOutletForm((f) => ({ ...f, timezone: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {timezoneOptions.map((tz) => (
+                    <SelectItem key={tz} value={tz}>
+                      {tz}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setOutletOpen(false)}>
@@ -500,6 +529,24 @@ function SuperAdminPage() {
                 value={editOutletForm.phone}
                 onChange={(e) => setEditOutletForm((f) => ({ ...f, phone: e.target.value }))}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Timezone</Label>
+              <Select
+                value={editOutletForm.timezone}
+                onValueChange={(v) => setEditOutletForm((f) => ({ ...f, timezone: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-72">
+                  {timezoneOptions.map((tz) => (
+                    <SelectItem key={tz} value={tz}>
+                      {tz}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
           </div>
           <DialogFooter>

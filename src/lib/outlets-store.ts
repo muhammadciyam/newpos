@@ -16,6 +16,9 @@ export type Outlet = {
   phone: string;
   active: boolean;
   createdAt: string;
+  // Which timezone this outlet's header clock/date displays use — Super Admin only (see
+  // admin.locations.tsx). Undefined for outlets created before this field existed.
+  timezone?: string;
 };
 
 function actor() {

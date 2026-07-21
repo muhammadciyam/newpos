@@ -26,13 +26,3 @@ export function listTimezones(): string[] {
   }
   return FALLBACK_TIMEZONES;
 }
-
-// This device's own OS-level timezone — used to auto-fill Settings > General > Timezone and
-// to format the header's live clock.
-export function detectDeviceTimezone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone;
-  } catch {
-    return "UTC";
-  }
-}

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { useSettings } from "@/lib/settings-store";
+import { useCurrentOutletId } from "@/lib/auth-store";
+import { useOutlets } from "@/lib/outlets-store";
 
 function formatClock(date: Date, timeZone: string): string {
   try {
@@ -22,12 +23,14 @@ function formatClock(date: Date, timeZone: string): string {
   }
 }
 
-// Always visible in the header (see AppShell) — the shop's configured timezone (Settings >
-// General > Timezone, auto-detected/kept in sync from this device) drives the displayed
-// time, not just this device's own clock, so every device in the shop shows the same time
-// regardless of what timezone that particular device happens to be set to.
+// Always visible in the header (see AppShell) — driven by the current outlet's own timezone
+// (Admin > Locations, Super Admin only — each outlet can be set differently), not just this
+// device's own clock, so every device at that outlet shows the same time regardless of what
+// timezone that particular device happens to be set to.
 export function LiveClock() {
-  const timezone = useSettings().general.timezone;
+  const outletId = useCurrentOutletId();
+  const outlets = useOutlets();
+  const timezone = outlets.find((o) => o.id === outletId)?.timezone ?? "Indian/Maldives";
   const [now, setNow] = useState(() => new Date());
 
   useEffect(() => {
