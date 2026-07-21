@@ -143,11 +143,55 @@ function applyOptimisticStock(items: BillLineItem[]) {
   productsStore.applyStockPatches(patches);
 }
 
+// Once a placeholder's real bill lands, this remembers "PENDING-xxx now means 1/234" — so
+// anything still holding onto the placeholder number (e.g. the Sell page's Print dialog,
+// opened the instant Save Bill was clicked) can resolve to the live bill via
+// resolveBillNumber below instead of looking up a number that no longer exists.
+const billNumberRedirects = new Map<string, string>();
+
+export function resolveBillNumber(number: string): string {
+  let current = number;
+  while (billNumberRedirects.has(current)) current = billNumberRedirects.get(current)!;
+  return current;
+}
+
+// Guards a single pending bill against being synced twice at once — e.g. the immediate
+// fire-and-forget attempt right after Save Bill racing the periodic background loop, both
+// picking up the same still-queued entry. Without this, both requests would reach
+// createBillOnServer and create two real bills for one sale.
+const inFlight = new Set<string>();
+
+async function trySyncOne(pending: PendingBill): Promise<"synced" | "failed" | "skipped"> {
+  if (inFlight.has(pending.bill.number)) return "skipped";
+  inFlight.add(pending.bill.number);
+  try {
+    const result = await safeServerCall(() => createBillOnServer({ data: pending.input }));
+    if ("networkError" in result) {
+      pendingStore.set((queue) =>
+        queue.map((p) =>
+          p.bill.number === pending.bill.number
+            ? { ...p, attempts: p.attempts + 1, lastError: result.error }
+            : p,
+        ),
+      );
+      return "failed";
+    }
+    billNumberRedirects.set(pending.bill.number, result.bill.number);
+    setBills([result.bill, ...bills.filter((b) => b.number !== pending.bill.number)]);
+    productsStore.applyStockPatches(result.updatedStock);
+    logAudit(actor(), "create", `Bill / ${result.bill.number} (synced)`);
+    pendingStore.set((queue) => queue.filter((p) => p.bill.number !== pending.bill.number));
+    return "synced";
+  } finally {
+    inFlight.delete(pending.bill.number);
+  }
+}
+
 let syncing = false;
 
-// Pushes every queued offline bill to Supabase, oldest first. Stops at the first one that
-// still fails (network's presumably still down) rather than reordering later ones ahead of
-// it. Safe to call as often as needed — no-ops while empty or already running.
+// Pushes every queued bill to Supabase, oldest first. Stops at the first one that fails
+// (network's presumably down) rather than reordering later ones ahead of it. Safe to call as
+// often as needed — no-ops while empty or already running.
 export async function syncPendingBills(): Promise<void> {
   if (syncing) return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
@@ -155,21 +199,8 @@ export async function syncPendingBills(): Promise<void> {
   syncing = true;
   try {
     for (const pending of pendingStore.get()) {
-      const result = await safeServerCall(() => createBillOnServer({ data: pending.input }));
-      if ("networkError" in result) {
-        pendingStore.set((queue) =>
-          queue.map((p) =>
-            p.bill.number === pending.bill.number
-              ? { ...p, attempts: p.attempts + 1, lastError: result.error }
-              : p,
-          ),
-        );
-        break;
-      }
-      setBills([result.bill, ...bills.filter((b) => b.number !== pending.bill.number)]);
-      productsStore.applyStockPatches(result.updatedStock);
-      logAudit(actor(), "create", `Bill / ${result.bill.number} (synced from offline)`);
-      pendingStore.set((queue) => queue.filter((p) => p.bill.number !== pending.bill.number));
+      const outcome = await trySyncOne(pending);
+      if (outcome === "failed") break;
     }
   } finally {
     syncing = false;
@@ -228,27 +259,29 @@ export function useBillsPolling(intervalMs = 5000) {
 export const billsStore = {
   get: () => bills,
 
-  async create(input: CreateBillInput): Promise<Bill | { error: string }> {
+  // Always saves on this device first and returns immediately — Save Bill never waits on
+  // Supabase. The real, server-assigned bill number is filled in moments later by the
+  // background sync below (see trySyncOne), which is normally well under a second: anything
+  // reading the bill reactively (useBills(), resolveBillNumber()) picks up the swap
+  // automatically, so by the time a cashier actually hits Print it's almost always already
+  // showing the real number rather than the placeholder.
+  async create(input: CreateBillInput): Promise<Bill> {
     const normalized: NormalizedBillInput = { ...input, customerId: input.customerId ?? null };
-    const result = await safeServerCall(() => createBillOnServer({ data: normalized }));
-    if ("networkError" in result) {
-      // Supabase is unreachable — never lose the sale. Save it on this device with a
-      // placeholder number and let the background loop (see syncPendingBills) push it to
-      // Supabase the moment the connection is back, instead of surfacing an error here.
-      const placeholder = buildPlaceholderBill(normalized);
-      setBills([placeholder, ...bills]);
-      applyOptimisticStock(normalized.items);
-      pendingStore.set((queue) => [
-        ...queue,
-        { bill: placeholder, input: normalized, queuedAt: new Date().toISOString(), attempts: 0 },
-      ]);
-      logAudit(actor(), "create", `Bill / ${placeholder.number} (offline, pending sync)`);
-      return placeholder;
+    const placeholder = buildPlaceholderBill(normalized);
+    setBills([placeholder, ...bills]);
+    applyOptimisticStock(normalized.items);
+    const pendingEntry: PendingBill = {
+      bill: placeholder,
+      input: normalized,
+      queuedAt: new Date().toISOString(),
+      attempts: 0,
+    };
+    pendingStore.set((queue) => [...queue, pendingEntry]);
+    logAudit(actor(), "create", `Bill / ${placeholder.number} (saved on device)`);
+    if (typeof navigator === "undefined" || navigator.onLine !== false) {
+      void trySyncOne(pendingEntry);
     }
-    setBills([result.bill, ...bills]);
-    productsStore.applyStockPatches(result.updatedStock);
-    logAudit(actor(), "create", `Bill / ${result.bill.number}`);
-    return result.bill;
+    return placeholder;
   },
 
   // Full edit of a sale's line items. Recomputes subtotal/GST/total from the current GST

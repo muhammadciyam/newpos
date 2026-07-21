@@ -56,9 +56,19 @@ export function PrintBillDialog({
   }
 
   useEffect(() => {
-    if (open && autoPrint && bill) doPrint();
+    if (!open || !autoPrint || !bill) return;
+    if (!bill.pendingSync) {
+      doPrint();
+      return;
+    }
+    // Bill was just saved locally and is still syncing (see billsStore.create) — its real,
+    // server-assigned number isn't known yet. Give the background sync a brief head start
+    // rather than auto-printing the throwaway placeholder number; if it lands in time this
+    // effect re-runs (bill.pendingSync flips to false) and cancels the fallback below.
+    const timeout = setTimeout(doPrint, 1500);
+    return () => clearTimeout(timeout);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open]);
+  }, [open, bill?.pendingSync]);
 
   if (!bill) return null;
   const template = printTemplatesStore.getTemplate(templateId);

@@ -58,7 +58,7 @@ import {
 import { type Product, type Bill } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useCategories } from "@/lib/categories-store";
-import { billsStore } from "@/lib/bills-store";
+import { billsStore, useBills, resolveBillNumber } from "@/lib/bills-store";
 import { onlinePaymentsStore } from "@/lib/online-payments-store";
 import { useCustomers, customersStore } from "@/lib/customers-store";
 import { useRegister } from "@/lib/register-store";
@@ -126,7 +126,16 @@ function SellPage() {
   const [newCustomerOpen, setNewCustomerOpen] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState("");
   const [newCustomerMobile, setNewCustomerMobile] = useState("");
-  const [savedBill, setSavedBill] = useState<Bill | null>(null);
+  // Tracked by number rather than a static snapshot, since Save Bill now saves locally and
+  // returns instantly with a placeholder number — resolveBillNumber() follows the swap to
+  // the real, server-assigned bill once the background sync completes, so the still-open
+  // Print dialog picks up the real invoice number itself rather than showing the throwaway
+  // placeholder that was true only for the first moment after saving.
+  const [savedBillNumber, setSavedBillNumber] = useState<string | null>(null);
+  const allBills = useBills();
+  const savedBill = savedBillNumber
+    ? (allBills.find((b) => b.number === resolveBillNumber(savedBillNumber)) ?? null)
+    : null;
   const [printOpen, setPrintOpen] = useState(false);
   // Blocks a second Save Bill click (double-click, Alt+S repeat) from creating a duplicate
   // bill while the save request is in flight.
@@ -563,11 +572,6 @@ function SellPage() {
       currencyRate: tab.currencyRate ?? undefined,
       currencyTotal: currencyTotal ?? undefined,
     });
-    if ("error" in bill) {
-      toast.error(bill.error);
-      setIsSaving(false);
-      return;
-    }
     if (payMethod === "Bank Transfer") {
       onlinePaymentsStore.create({
         billNumber: bill.number,
@@ -577,18 +581,12 @@ function SellPage() {
         by: currentUser?.name ?? "Unknown",
       });
     }
-    if (bill.pendingSync) {
-      toast.warning(
-        `Bill ${bill.number} saved on this device (offline) — will sync to Supabase once the connection is back`,
-      );
-    } else {
-      toast.success(
-        payMethod === "Credit"
-          ? `Bill ${bill.number} saved for ${total.toFixed(2)} on credit`
-          : `Bill ${bill.number} saved for ${total.toFixed(2)} via ${methodsByKey.get(payMethod)?.name ?? payMethod}`,
-      );
-    }
-    setSavedBill(bill);
+    toast.success(
+      payMethod === "Credit"
+        ? `Bill saved for ${total.toFixed(2)} on credit`
+        : `Bill saved for ${total.toFixed(2)} via ${methodsByKey.get(payMethod)?.name ?? payMethod}`,
+    );
+    setSavedBillNumber(bill.number);
     setPrintOpen(true);
     // Unfreeze Save Bill as soon as the bill is safely in the database — the Print dialog
     // that just opened is a modal, so it already blocks another click from reaching this
@@ -1256,7 +1254,7 @@ function SellPage() {
           setPrintOpen(v);
           if (!v) {
             discardBill();
-            setSavedBill(null);
+            setSavedBillNumber(null);
             setIsSaving(false);
           }
         }}
