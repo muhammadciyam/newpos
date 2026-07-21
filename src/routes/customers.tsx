@@ -263,7 +263,15 @@ function CustomersPage() {
                   <TableCell className="font-medium">{c.name}</TableCell>
                   <TableCell>{c.mobile}</TableCell>
                   <TableCell>
-                    {liveOutstanding(c.id).toFixed(2)}
+                    <span
+                      className={
+                        liveOutstanding(c.id) > 0
+                          ? "font-semibold text-destructive"
+                          : "text-emerald-600"
+                      }
+                    >
+                      {liveOutstanding(c.id).toFixed(2)}
+                    </span>
                     <span className="block text-xs text-muted-foreground">
                       Limit {c.limit.toFixed(2)}
                     </span>
