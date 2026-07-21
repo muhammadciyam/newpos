@@ -52,6 +52,7 @@ export function PrintBillDialog({
     void billsStore.recordPrint(bill.number, templateId);
     printTemplatesStore.setDefault(templateId);
     window.print();
+    onOpenChange(false);
   }
 
   useEffect(() => {

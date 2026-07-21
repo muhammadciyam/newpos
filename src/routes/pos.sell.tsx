@@ -128,6 +128,9 @@ function SellPage() {
   const [newCustomerMobile, setNewCustomerMobile] = useState("");
   const [savedBill, setSavedBill] = useState<Bill | null>(null);
   const [printOpen, setPrintOpen] = useState(false);
+  // Blocks a second Save Bill click (double-click, Alt+S repeat) from creating a duplicate
+  // bill while the save request is in flight.
+  const [isSaving, setIsSaving] = useState(false);
   const [noteOpen, setNoteOpen] = useState(false);
   const [noteDraft, setNoteDraft] = useState("");
   const [tagsOpen, setTagsOpen] = useState(false);
@@ -503,6 +506,7 @@ function SellPage() {
   }
 
   async function saveBill() {
+    if (isSaving) return;
     const payMethod = tab.payMethod;
     if (!register.register) return toast.error("Open a register before selling");
     if (!tab.items.length) return toast.error("Cart is empty");
@@ -520,6 +524,7 @@ function SellPage() {
     const isCustomPayMethod = customPayMethods.some((m) => m.name === payMethod);
     if (isCustomPayMethod && !tab.customReceiptNumber.trim())
       return toast.error("Enter the receipt number");
+    setIsSaving(true);
     // Stock is decremented atomically on the server as part of creating the bill (see
     // createBillOnServer in bills-api.ts) — no separate client-side stock call needed.
     const bill = await billsStore.create({
@@ -560,6 +565,7 @@ function SellPage() {
     });
     if ("error" in bill) {
       toast.error(bill.error);
+      setIsSaving(false);
       return;
     }
     if (payMethod === "Bank Transfer") {
@@ -578,6 +584,10 @@ function SellPage() {
     );
     setSavedBill(bill);
     setPrintOpen(true);
+    // Unfreeze Save Bill as soon as the bill is safely in the database — the Print dialog
+    // that just opened is a modal, so it already blocks another click from reaching this
+    // button. Waiting any longer to unfreeze would just make the button look stuck.
+    setIsSaving(false);
   }
 
   if (!register.register) {
@@ -1145,13 +1155,14 @@ function SellPage() {
               size="lg"
               onClick={saveBill}
               disabled={
+                isSaving ||
                 !tab.items.length ||
                 (tab.payMethod === "Credit" && !tab.customerId) ||
                 (customPayMethods.some((m) => m.name === tab.payMethod) &&
                   !tab.customReceiptNumber.trim())
               }
             >
-              Save Bill (Alt+S)
+              {isSaving ? "Saving..." : "Save Bill (Alt+S)"}
             </Button>
           </div>
         </div>
@@ -1240,6 +1251,7 @@ function SellPage() {
           if (!v) {
             discardBill();
             setSavedBill(null);
+            setIsSaving(false);
           }
         }}
         autoPrint={settings.printing.autoPrintOnSave}
