@@ -53,6 +53,7 @@ import {
   Store,
   Upload,
   X,
+  Percent,
 } from "lucide-react";
 import { type Product, type Bill } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
@@ -132,6 +133,9 @@ function SellPage() {
   const [tagsOpen, setTagsOpen] = useState(false);
   const [tagDraft, setTagDraft] = useState("");
   const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [discountOpen, setDiscountOpen] = useState(false);
+  const [discountDraftType, setDiscountDraftType] = useState<"percent" | "amount">("percent");
+  const [discountDraftValue, setDiscountDraftValue] = useState("");
   const [discardConfirmOpen, setDiscardConfirmOpen] = useState(false);
   const [refreshConfirmOpen, setRefreshConfirmOpen] = useState(false);
   const slipInput = useRef<HTMLInputElement>(null);
@@ -217,9 +221,19 @@ function SellPage() {
   // per-bag rate. Not itself subject to GST.
   const bagQtyNum = tab.bagEnabled ? parseInt(tab.bagQty, 10) || 0 : 0;
   const bagCharge = bagQtyNum * settings.tax.bagFeeRate;
+  // Manually-applied discount (Discount quick action) — percent is off the subtotal, amount
+  // is a flat deduction. Capped so it can never push the total below zero on its own.
+  const manualDiscount =
+    !tab.foc && tab.discountType && tab.discountValue
+      ? tab.discountType === "percent"
+        ? subtotal * ((parseFloat(tab.discountValue) || 0) / 100)
+        : parseFloat(tab.discountValue) || 0
+      : 0;
   // Free of Charge — the discount is set to cover the full subtotal+gst+bagCharge so total
   // lands on exactly 0, rather than being a separate code path through the totals below.
-  const discount = tab.foc ? subtotal + gst + bagCharge : 0;
+  const discount = tab.foc
+    ? subtotal + gst + bagCharge
+    : Math.min(manualDiscount, subtotal + gst + bagCharge);
   const total = subtotal - discount + gst + bagCharge;
   // Display-only conversion for the Currency quick action — `rate` is MVR (base) per 1
   // unit of the alternate currency, so dividing converts base -> alternate.
@@ -335,6 +349,7 @@ function SellPage() {
       noteOpen ||
       tagsOpen ||
       currencyOpen ||
+      discountOpen ||
       discardConfirmOpen ||
       refreshConfirmOpen;
     if (dialogOpen) return;
@@ -368,6 +383,7 @@ function SellPage() {
     noteOpen,
     tagsOpen,
     currencyOpen,
+    discountOpen,
     discardConfirmOpen,
     refreshConfirmOpen,
     activeTab,
@@ -413,6 +429,30 @@ function SellPage() {
     updateTab({ note: noteDraft.trim() });
     setNoteOpen(false);
     toast.success(noteDraft.trim() ? "Note saved" : "Note cleared");
+  }
+
+  function openDiscount() {
+    setDiscountDraftType(tab.discountType ?? "percent");
+    setDiscountDraftValue(tab.discountValue || "");
+    setDiscountOpen(true);
+  }
+
+  function applyDiscount(type: "percent" | "amount", value: string) {
+    if (!value || (parseFloat(value) || 0) <= 0) {
+      updateTab({ discountType: null, discountValue: "" });
+      setDiscountOpen(false);
+      toast.success("Discount removed");
+      return;
+    }
+    updateTab({ discountType: type, discountValue: value });
+    setDiscountOpen(false);
+    toast.success("Discount applied");
+  }
+
+  function clearDiscount() {
+    updateTab({ discountType: null, discountValue: "" });
+    setDiscountOpen(false);
+    toast.success("Discount removed");
   }
 
   function toggleFoc() {
@@ -745,11 +785,21 @@ function SellPage() {
                     </TableCell>
                     <TableCell className="font-semibold">{subtotal.toFixed(2)}</TableCell>
                   </TableRow>
-                  <TableRow>
+                  <TableRow
+                    className={tab.foc ? undefined : "cursor-pointer hover:bg-muted/50"}
+                    onClick={tab.foc ? undefined : openDiscount}
+                  >
                     <TableCell colSpan={4} className="text-right font-semibold">
-                      Discount
+                      <span className="inline-flex items-center justify-end gap-1.5">
+                        Discount
+                        {!tab.foc && <Percent className="h-3 w-3 text-muted-foreground" />}
+                      </span>
                     </TableCell>
-                    <TableCell className="font-semibold">{discount.toFixed(2)}</TableCell>
+                    <TableCell
+                      className={`font-semibold ${!tab.foc && discount > 0 ? "text-emerald-600" : ""}`}
+                    >
+                      {discount.toFixed(2)}
+                    </TableCell>
                   </TableRow>
                   <TableRow>
                     <TableCell colSpan={4} className="text-right font-semibold">
@@ -787,11 +837,19 @@ function SellPage() {
                 </TableBody>
               </Table>
 
-              {(tab.note || tab.tags.length > 0) && (
+              {(tab.note || tab.tags.length > 0 || (!tab.foc && tab.discountType)) && (
                 <div className="mt-3 flex flex-wrap items-center gap-1.5">
                   {tab.note && (
                     <Badge variant="outline" className="gap-1">
                       <StickyNote className="h-3 w-3" /> {tab.note}
+                    </Badge>
+                  )}
+                  {!tab.foc && tab.discountType && (
+                    <Badge variant="outline" className="gap-1 text-emerald-600">
+                      <Percent className="h-3 w-3" />
+                      {tab.discountType === "percent"
+                        ? `${tab.discountValue}% off`
+                        : `${settings.general.currency} ${tab.discountValue} off`}
                     </Badge>
                   )}
                   {tab.tags.map((t) => (
@@ -822,6 +880,12 @@ function SellPage() {
                   label="Tags"
                   active={tab.tags.length > 0}
                   onClick={() => setTagsOpen(true)}
+                />
+                <IconAction
+                  icon={Percent}
+                  label="Discount"
+                  active={!tab.foc && !!tab.discountType}
+                  onClick={openDiscount}
                 />
               </div>
 
@@ -1231,6 +1295,98 @@ function SellPage() {
           )}
           <DialogFooter>
             <Button onClick={() => setTagsOpen(false)}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={discountOpen} onOpenChange={setDiscountOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Apply Discount</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {settings.discounts.presets.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>
+                  {settings.discounts.onlyFixedDiscounts
+                    ? "Choose a discount"
+                    : "Quick pick, or enter a custom amount below"}
+                </Label>
+                <div className="flex flex-wrap gap-1.5">
+                  {settings.discounts.presets.map((p) => (
+                    <Button
+                      key={p.id}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyDiscount(p.type, String(p.value))}
+                    >
+                      {p.name} ({p.type === "percent" ? `${p.value}%` : p.value.toFixed(2)})
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            )}
+            {!settings.discounts.onlyFixedDiscounts && (
+              <div className="space-y-1.5">
+                <Label>Custom Discount</Label>
+                <div className="flex gap-2">
+                  <Select
+                    value={discountDraftType}
+                    onValueChange={(v) => setDiscountDraftType(v as "percent" | "amount")}
+                  >
+                    <SelectTrigger className="w-32">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="percent">Percent (%)</SelectItem>
+                      <SelectItem value="amount">Amount ({settings.general.currency})</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={discountDraftValue}
+                    onChange={(e) => setDiscountDraftValue(e.target.value)}
+                    placeholder={discountDraftType === "percent" ? "e.g. 10" : "e.g. 10.00"}
+                  />
+                </div>
+              </div>
+            )}
+            {settings.discounts.onlyFixedDiscounts && settings.discounts.presets.length === 0 && (
+              <p className="text-sm text-muted-foreground">
+                No discount presets are set up yet — ask an Admin to add some in Settings &gt;
+                Discounts.
+              </p>
+            )}
+          </div>
+          <DialogFooter className="gap-2 sm:justify-between">
+            {tab.discountType ? (
+              <Button
+                type="button"
+                variant="ghost"
+                className="text-destructive"
+                onClick={clearDiscount}
+              >
+                Remove Discount
+              </Button>
+            ) : (
+              <span />
+            )}
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={() => setDiscountOpen(false)}>
+                Cancel
+              </Button>
+              {!settings.discounts.onlyFixedDiscounts && (
+                <Button
+                  onClick={() => applyDiscount(discountDraftType, discountDraftValue)}
+                  disabled={!discountDraftValue || (parseFloat(discountDraftValue) || 0) <= 0}
+                >
+                  Apply
+                </Button>
+              )}
+            </div>
           </DialogFooter>
         </DialogContent>
       </Dialog>

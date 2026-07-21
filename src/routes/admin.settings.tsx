@@ -41,6 +41,7 @@ import {
   type PaymentMethodConfig,
   type WebhookConfig,
   type CustomTaxConfig,
+  type DiscountPresetConfig,
 } from "@/lib/settings-store";
 import {
   printTemplates,
@@ -170,6 +171,14 @@ function SettingsPage() {
     value: "",
   });
 
+  const [editingDiscount, setEditingDiscount] = useState<DiscountPresetConfig | null>(null);
+  const [addDiscountOpen, setAddDiscountOpen] = useState(false);
+  const [discountDraft, setDiscountDraft] = useState({
+    name: "",
+    type: "percent" as "percent" | "amount",
+    value: "",
+  });
+
   if (!canManage) return <RestrictedPage />;
 
   function saveSection<K extends keyof AppSettings>(section: K) {
@@ -291,6 +300,45 @@ function SettingsPage() {
       customTaxes: settings.tax.customTaxes.filter((t) => t.id !== id),
     });
     toast.success("Tax removed");
+  }
+
+  function addDiscountPreset() {
+    const value = parseFloat(discountDraft.value);
+    if (!discountDraft.name.trim() || !Number.isFinite(value) || value < 0) return;
+    const preset: DiscountPresetConfig = {
+      id: crypto.randomUUID(),
+      name: discountDraft.name.trim(),
+      type: discountDraft.type,
+      value,
+    };
+    settingsStore.updateSection("discounts", {
+      presets: [...settings.discounts.presets, preset],
+    });
+    toast.success(`${preset.name} discount added`);
+    setAddDiscountOpen(false);
+    setDiscountDraft({ name: "", type: "percent", value: "" });
+  }
+
+  function saveDiscountEdit() {
+    if (!editingDiscount) return;
+    const value = parseFloat(discountDraft.value);
+    if (!discountDraft.name.trim() || !Number.isFinite(value) || value < 0) return;
+    settingsStore.updateSection("discounts", {
+      presets: settings.discounts.presets.map((p) =>
+        p.id === editingDiscount.id
+          ? { ...p, name: discountDraft.name.trim(), type: discountDraft.type, value }
+          : p,
+      ),
+    });
+    toast.success(`${discountDraft.name.trim()} discount updated`);
+    setEditingDiscount(null);
+  }
+
+  function removeDiscountPreset(id: string) {
+    settingsStore.updateSection("discounts", {
+      presets: settings.discounts.presets.filter((p) => p.id !== id),
+    });
+    toast.success("Discount removed");
   }
 
   return (
@@ -915,6 +963,88 @@ function SettingsPage() {
               </div>
               <div className="flex justify-end border-t border-border pt-4">
                 <Button onClick={() => saveSection("discounts")}>Update Settings</Button>
+              </div>
+            </Card>
+          )}
+
+          {tab === "Discounts" && (
+            <Card className="mt-4 p-5">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-xl font-bold text-foreground">Discount Presets</p>
+                  <p className="text-sm text-muted-foreground">
+                    Percent or fixed-amount discounts a cashier can apply from the Sell page's
+                    Discount button.{" "}
+                    {settings.discounts.onlyFixedDiscounts
+                      ? '"Only Fixed Discounts" is on, so these are the only discounts allowed.'
+                      : "A cashier can also type any custom percent/amount instead of picking one of these."}
+                  </p>
+                </div>
+                <Button
+                  size="sm"
+                  className="gap-1.5"
+                  onClick={() => {
+                    setDiscountDraft({ name: "", type: "percent", value: "" });
+                    setAddDiscountOpen(true);
+                  }}
+                >
+                  <Plus className="h-4 w-4" /> Add Discount
+                </Button>
+              </div>
+              <div className="mt-4 overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Name</TableHead>
+                      <TableHead>Amount</TableHead>
+                      <TableHead />
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {settings.discounts.presets.length === 0 && (
+                      <TableRow>
+                        <TableCell colSpan={3} className="py-8 text-center text-muted-foreground">
+                          No discount presets added yet.
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {settings.discounts.presets.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-medium">{p.name}</TableCell>
+                        <TableCell>
+                          {p.type === "percent"
+                            ? `${p.value}%`
+                            : `${settings.general.currency} ${p.value.toFixed(2)}`}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setEditingDiscount(p);
+                                setDiscountDraft({
+                                  name: p.name,
+                                  type: p.type,
+                                  value: String(p.value),
+                                });
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => removeDiscountPreset(p.id)}
+                            >
+                              Delete
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
               </div>
             </Card>
           )}
@@ -1710,6 +1840,116 @@ function SettingsPage() {
               Cancel
             </Button>
             <Button onClick={saveTaxEdit} disabled={!taxDraft.name.trim() || !taxDraft.value}>
+              Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addDiscountOpen} onOpenChange={setAddDiscountOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Discount Preset</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={discountDraft.name}
+                onChange={(e) => setDiscountDraft((d) => ({ ...d, name: e.target.value }))}
+                placeholder="e.g. Staff Discount"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={discountDraft.type}
+                  onValueChange={(v) =>
+                    setDiscountDraft((d) => ({ ...d, type: v as "percent" | "amount" }))
+                  }
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">Percent (%)</SelectItem>
+                    <SelectItem value="amount">Amount ({settings.general.currency})</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={discountDraft.value}
+                  onChange={(e) => setDiscountDraft((d) => ({ ...d, value: e.target.value }))}
+                  placeholder={discountDraft.type === "amount" ? "e.g. 10.00" : "e.g. 10"}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAddDiscountOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={addDiscountPreset}
+              disabled={!discountDraft.name.trim() || !discountDraft.value}
+            >
+              Add
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!editingDiscount} onOpenChange={(v) => !v && setEditingDiscount(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit {editingDiscount?.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <Label>Name</Label>
+              <Input
+                value={discountDraft.name}
+                onChange={(e) => setDiscountDraft((d) => ({ ...d, name: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Amount</Label>
+              <div className="flex gap-2">
+                <Select
+                  value={discountDraft.type}
+                  onValueChange={(v) =>
+                    setDiscountDraft((d) => ({ ...d, type: v as "percent" | "amount" }))
+                  }
+                >
+                  <SelectTrigger className="w-40">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="percent">Percent (%)</SelectItem>
+                    <SelectItem value="amount">Amount ({settings.general.currency})</SelectItem>
+                  </SelectContent>
+                </Select>
+                <Input
+                  type="number"
+                  min={0}
+                  step={0.1}
+                  value={discountDraft.value}
+                  onChange={(e) => setDiscountDraft((d) => ({ ...d, value: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditingDiscount(null)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={saveDiscountEdit}
+              disabled={!discountDraft.name.trim() || !discountDraft.value}
+            >
               Save
             </Button>
           </DialogFooter>

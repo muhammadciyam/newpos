@@ -22,6 +22,16 @@ export type NumberFormatConfig = { type: string; format: string };
 // checkout on the Sell page. `value` is a percentage (e.g. 5 for 5%) or a flat amount per
 // unit (e.g. 2 for MVR 2/unit), depending on `type`.
 export type CustomTaxConfig = { id: string; name: string; type: "percent" | "unit"; value: number };
+// A named discount preset offered on the Sell page's Discount quick action. `value` is a
+// percentage (e.g. 10 for 10% off) or a flat amount off the bill, depending on `type`. When
+// discounts.onlyFixedDiscounts is on, these are the only discounts a cashier can apply — no
+// free-form percent/amount entry.
+export type DiscountPresetConfig = {
+  id: string;
+  name: string;
+  type: "percent" | "amount";
+  value: number;
+};
 export type WebhookConfig = {
   id: string;
   url: string;
@@ -110,6 +120,7 @@ export type AppSettings = {
     giftCardsEnabled: boolean;
     loyaltyProgramsEnabled: boolean;
     onlyFixedDiscounts: boolean;
+    presets: DiscountPresetConfig[];
   };
   inventory: {
     stockAdjustmentTypes: string[];
@@ -214,6 +225,7 @@ const defaults: AppSettings = {
     giftCardsEnabled: false,
     loyaltyProgramsEnabled: true,
     onlyFixedDiscounts: false,
+    presets: [],
   },
   inventory: {
     stockAdjustmentTypes: ["Lost / Stolen", "Expired", "Stock Recount", "Damaged"],
@@ -273,6 +285,10 @@ export function useSettings(): AppSettings {
     },
     wholesale: {
       lowStockThreshold: settings.wholesale?.lowStockThreshold ?? 5,
+    },
+    discounts: {
+      ...settings.discounts,
+      presets: settings.discounts.presets ?? [],
     },
   };
 }

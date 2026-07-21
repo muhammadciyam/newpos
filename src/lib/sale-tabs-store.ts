@@ -33,6 +33,10 @@ export type SaleTab = {
   tags: string[];
   currency: string | null;
   currencyRate: number | null;
+  // Manually-applied discount (via the Discount quick action) — null/empty means none.
+  // Ignored while `foc` is on, since FOC already zeroes the whole bill out.
+  discountType: "percent" | "amount" | null;
+  discountValue: string;
 };
 
 export function emptySaleTab(id: number): SaleTab {
@@ -54,6 +58,8 @@ export function emptySaleTab(id: number): SaleTab {
     tags: [],
     currency: null,
     currencyRate: null,
+    discountType: null,
+    discountValue: "",
   };
 }
 
