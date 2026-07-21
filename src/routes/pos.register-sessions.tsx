@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AppShell } from "@/components/app-shell";
 import { Button } from "@/components/ui/button";
@@ -17,6 +17,8 @@ import {
   useRegister,
   registerDisplayName,
 } from "@/lib/register-store";
+import { useCurrentOutletId } from "@/lib/auth-store";
+import { useOutlets } from "@/lib/outlets-store";
 import { cashTypes } from "@/lib/pos-data";
 import type { RegisterSession } from "@/lib/pos-data";
 
@@ -28,9 +30,24 @@ export const Route = createFileRoute("/pos/register-sessions")({
 });
 
 function RegisterSessionsPage() {
-  const registerSessions = useRegisterSessions();
+  const allRegisterSessions = useRegisterSessions();
   useRegisterSessionsPolling();
   const { registers } = useRegister();
+  const outlets = useOutlets();
+  // The outlet chosen on the login form for this session — unlike the role-based scoping
+  // useRegisterSessions() already applies (which leaves Super Admin unrestricted, seeing
+  // every outlet combined, same as Bills/Reports/etc.), register sessions are an
+  // operational "what happened at this store" log rather than a cross-outlet report, so
+  // this page always narrows further to just the outlet currently logged into — for every
+  // role, Super Admin included.
+  const currentOutletId = useCurrentOutletId();
+  const registerSessions = useMemo(
+    () =>
+      currentOutletId
+        ? allRegisterSessions.filter((s) => s.outletId === currentOutletId)
+        : allRegisterSessions,
+    [allRegisterSessions, currentOutletId],
+  );
   const [detailFor, setDetailFor] = useState<RegisterSession | null>(null);
 
   return (
@@ -68,7 +85,9 @@ function RegisterSessionsPage() {
                   <TableCell className="font-medium">{s.no}</TableCell>
                   <TableCell>
                     {registerDisplayName(registers, s.register)}
-                    <span className="block text-xs text-muted-foreground">At Seven Mart</span>
+                    <span className="block text-xs text-muted-foreground">
+                      At {outlets.find((o) => o.id === s.outletId)?.name ?? "—"}
+                    </span>
                   </TableCell>
                   <TableCell>
                     {s.createdAt}

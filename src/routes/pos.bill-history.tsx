@@ -43,7 +43,6 @@ import {
   Plus,
   Minus,
   Trash2,
-  CircleDollarSign,
   AlertCircle,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -106,15 +105,6 @@ function BillHistoryPage() {
     (b) => b.paymentStatus === "Pending" && b.status === "Sale",
   );
   const pendingTotal = pendingBills.reduce((s, b) => s + b.total, 0);
-
-  async function settlePayment(bill: Bill) {
-    const result = await billsStore.settleCredit(bill.number);
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(`Bill ${bill.number} marked as paid`);
-  }
 
   return (
     <AppShell>
@@ -240,11 +230,6 @@ function BillHistoryPage() {
                           <DropdownMenuItem onClick={() => setPrintNumber(b.number)}>
                             <Printer className="mr-2 h-4 w-4" /> Print / Reprint
                           </DropdownMenuItem>
-                          {b.paymentStatus === "Pending" && !b.pendingSync && (
-                            <DropdownMenuItem onClick={() => settlePayment(b)}>
-                              <CircleDollarSign className="mr-2 h-4 w-4" /> Mark as Paid
-                            </DropdownMenuItem>
-                          )}
                           {canManage && (
                             <>
                               <DropdownMenuItem
