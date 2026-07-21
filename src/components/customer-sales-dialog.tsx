@@ -281,6 +281,12 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
           {bills.length} bill{bills.length === 1 ? "" : "s"} total
         </p>
         <div className="flex items-center gap-3">
+          {selected.size > 0 && (
+            <p className="text-sm text-muted-foreground">
+              Selected ({selected.size}):{" "}
+              <span className="font-semibold text-foreground">{selectedRemaining.toFixed(2)}</span>
+            </p>
+          )}
           <p className="text-base font-semibold text-foreground">Total: {total.toFixed(2)}</p>
           {pendingBills.length > 0 && (
             <Button
