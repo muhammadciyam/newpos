@@ -6,6 +6,7 @@ import { productsStore } from "@/lib/products-store";
 import { settingsStore } from "@/lib/settings-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
 import { useScopeOutletId } from "@/lib/outlet-scope";
+import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import {
   fetchBills,
   createBillOnServer,
@@ -26,6 +27,170 @@ const listeners = new Set<() => void>();
 function setBills(next: Bill[]) {
   bills = next;
   listeners.forEach((l) => l());
+}
+
+export type CreateBillInput = {
+  customer: string;
+  customerId?: string | null;
+  location: string;
+  register: string;
+  outletId: string | null;
+  items: BillLineItem[];
+  subtotal: number;
+  discount: number;
+  gst: number;
+  bagQty?: number;
+  bagCharge?: number;
+  total: number;
+  by: string;
+  paymentMethod: Bill["paymentMethod"];
+  paymentStatus: Bill["paymentStatus"];
+  cashGiven?: number;
+  changeGiven?: number;
+  transferSlip?: string;
+  recipientNumber?: string;
+  cardSlipNumber?: string;
+  customReceiptNumber?: string;
+  note?: string;
+  foc?: boolean;
+  noDelivery?: boolean;
+  tags?: string[];
+  currency?: string;
+  currencyRate?: number;
+  currencyTotal?: number;
+};
+
+// Same "DD-Mon-YY, HH:MM" format the server stamps real bills with (see formatBillTimestamp
+// in bills-server-store.ts) — duplicated here (rather than imported) since that file is
+// server-only and can't be pulled into the client bundle.
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function formatLocalTimestamp(): string {
+  const d = new Date();
+  const day = String(d.getDate()).padStart(2, "0");
+  const month = MONTHS[d.getMonth()];
+  const year = String(d.getFullYear()).slice(2);
+  const hours = String(d.getHours()).padStart(2, "0");
+  const mins = String(d.getMinutes()).padStart(2, "0");
+  return `${day}-${month}-${year}, ${hours}:${mins}`;
+}
+
+// A bill rung up while Supabase was unreachable — saved on this device immediately (with a
+// placeholder number) so the sale is never lost, and retried in the background until it
+// syncs. See syncPendingBills below.
+// `customerId` narrowed from optional to required-but-nullable — every input is normalized
+// to this shape before it's sent to the server or queued, so a queued retry never has to
+// re-derive the `?? null` fallback.
+type NormalizedBillInput = Omit<CreateBillInput, "customerId"> & { customerId: string | null };
+
+export type PendingBill = {
+  bill: Bill;
+  input: NormalizedBillInput;
+  queuedAt: string;
+  attempts: number;
+  lastError?: string;
+};
+
+const pendingStore = createPersistedStore<PendingBill[]>("dhipos-pending-bills", []);
+
+function buildPlaceholderBill(input: NormalizedBillInput): Bill {
+  return {
+    number: `PENDING-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
+    customer: input.customer,
+    customerId: input.customerId ?? null,
+    location: input.location,
+    register: input.register,
+    outletId: input.outletId,
+    status: "Sale",
+    items: input.items,
+    subtotal: input.subtotal,
+    discount: input.discount,
+    gst: input.gst,
+    bagQty: input.bagQty,
+    bagCharge: input.bagCharge,
+    total: input.total,
+    created: formatLocalTimestamp(),
+    by: input.by,
+    paymentMethod: input.paymentMethod,
+    paymentStatus: input.paymentStatus,
+    cashGiven: input.cashGiven,
+    changeGiven: input.changeGiven,
+    transferSlip: input.transferSlip,
+    recipientNumber: input.recipientNumber,
+    cardSlipNumber: input.cardSlipNumber,
+    customReceiptNumber: input.customReceiptNumber,
+    note: input.note,
+    foc: input.foc,
+    noDelivery: input.noDelivery,
+    tags: input.tags,
+    currency: input.currency,
+    currencyRate: input.currencyRate,
+    currencyTotal: input.currencyTotal,
+    pendingSync: true,
+  };
+}
+
+// Optimistic-only (not authoritative) so this device's own "Not enough stock" checks stay
+// sensible while offline — overwritten by the server's real numbers the moment this bill (or
+// any refresh) syncs, so it can never compound into a wrong absolute value.
+function applyOptimisticStock(items: BillLineItem[]) {
+  const current = productsStore.get();
+  const patches = items
+    .map((i) => {
+      const product = current.find((p) => p.id === i.productId);
+      return product ? { productId: i.productId, stock: product.stock - i.qty } : null;
+    })
+    .filter((p): p is { productId: string; stock: number } => p !== null);
+  productsStore.applyStockPatches(patches);
+}
+
+let syncing = false;
+
+// Pushes every queued offline bill to Supabase, oldest first. Stops at the first one that
+// still fails (network's presumably still down) rather than reordering later ones ahead of
+// it. Safe to call as often as needed — no-ops while empty or already running.
+export async function syncPendingBills(): Promise<void> {
+  if (syncing) return;
+  if (typeof navigator !== "undefined" && navigator.onLine === false) return;
+  if (pendingStore.get().length === 0) return;
+  syncing = true;
+  try {
+    for (const pending of pendingStore.get()) {
+      const result = await safeServerCall(() => createBillOnServer({ data: pending.input }));
+      if ("networkError" in result) {
+        pendingStore.set((queue) =>
+          queue.map((p) =>
+            p.bill.number === pending.bill.number
+              ? { ...p, attempts: p.attempts + 1, lastError: result.error }
+              : p,
+          ),
+        );
+        break;
+      }
+      setBills([result.bill, ...bills.filter((b) => b.number !== pending.bill.number)]);
+      productsStore.applyStockPatches(result.updatedStock);
+      logAudit(actor(), "create", `Bill / ${result.bill.number} (synced from offline)`);
+      pendingStore.set((queue) => queue.filter((p) => p.bill.number !== pending.bill.number));
+    }
+  } finally {
+    syncing = false;
+  }
+}
+
+// Mounted once via AppShell's header (always on-screen while logged in) — drives automatic
+// background retry so nobody has to remember to come back and resync manually.
+export function usePendingBills(): PendingBill[] {
+  const pending = usePersistedStore(pendingStore);
+  useEffect(() => {
+    void syncPendingBills();
+    const id = setInterval(() => void syncPendingBills(), 15000);
+    const onOnline = () => void syncPendingBills();
+    window.addEventListener("online", onOnline);
+    return () => {
+      clearInterval(id);
+      window.removeEventListener("online", onOnline);
+    };
+  }, []);
+  return pending;
 }
 
 function patchBill(number: string, patch: Partial<Bill>) {
@@ -57,40 +222,23 @@ export function useBillsPolling(intervalMs = 5000) {
 export const billsStore = {
   get: () => bills,
 
-  async create(input: {
-    customer: string;
-    customerId?: string | null;
-    location: string;
-    register: string;
-    outletId: string | null;
-    items: BillLineItem[];
-    subtotal: number;
-    discount: number;
-    gst: number;
-    bagQty?: number;
-    bagCharge?: number;
-    total: number;
-    by: string;
-    paymentMethod: Bill["paymentMethod"];
-    paymentStatus: Bill["paymentStatus"];
-    cashGiven?: number;
-    changeGiven?: number;
-    transferSlip?: string;
-    recipientNumber?: string;
-    cardSlipNumber?: string;
-    customReceiptNumber?: string;
-    note?: string;
-    foc?: boolean;
-    noDelivery?: boolean;
-    tags?: string[];
-    currency?: string;
-    currencyRate?: number;
-    currencyTotal?: number;
-  }): Promise<Bill | { error: string }> {
-    const result = await safeServerCall(() =>
-      createBillOnServer({ data: { ...input, customerId: input.customerId ?? null } }),
-    );
-    if ("networkError" in result) return { error: result.error };
+  async create(input: CreateBillInput): Promise<Bill | { error: string }> {
+    const normalized: NormalizedBillInput = { ...input, customerId: input.customerId ?? null };
+    const result = await safeServerCall(() => createBillOnServer({ data: normalized }));
+    if ("networkError" in result) {
+      // Supabase is unreachable — never lose the sale. Save it on this device with a
+      // placeholder number and let the background loop (see syncPendingBills) push it to
+      // Supabase the moment the connection is back, instead of surfacing an error here.
+      const placeholder = buildPlaceholderBill(normalized);
+      setBills([placeholder, ...bills]);
+      applyOptimisticStock(normalized.items);
+      pendingStore.set((queue) => [
+        ...queue,
+        { bill: placeholder, input: normalized, queuedAt: new Date().toISOString(), attempts: 0 },
+      ]);
+      logAudit(actor(), "create", `Bill / ${placeholder.number} (offline, pending sync)`);
+      return placeholder;
+    }
     setBills([result.bill, ...bills]);
     productsStore.applyStockPatches(result.updatedStock);
     logAudit(actor(), "create", `Bill / ${result.bill.number}`);

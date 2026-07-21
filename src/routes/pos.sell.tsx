@@ -577,11 +577,17 @@ function SellPage() {
         by: currentUser?.name ?? "Unknown",
       });
     }
-    toast.success(
-      payMethod === "Credit"
-        ? `Bill ${bill.number} saved for ${total.toFixed(2)} on credit`
-        : `Bill ${bill.number} saved for ${total.toFixed(2)} via ${methodsByKey.get(payMethod)?.name ?? payMethod}`,
-    );
+    if (bill.pendingSync) {
+      toast.warning(
+        `Bill ${bill.number} saved on this device (offline) — will sync to Supabase once the connection is back`,
+      );
+    } else {
+      toast.success(
+        payMethod === "Credit"
+          ? `Bill ${bill.number} saved for ${total.toFixed(2)} on credit`
+          : `Bill ${bill.number} saved for ${total.toFixed(2)} via ${methodsByKey.get(payMethod)?.name ?? payMethod}`,
+      );
+    }
     setSavedBill(bill);
     setPrintOpen(true);
     // Unfreeze Save Bill as soon as the bill is safely in the database — the Print dialog

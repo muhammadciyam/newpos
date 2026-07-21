@@ -213,6 +213,11 @@ export type Bill = {
   currency?: string;
   currencyRate?: number;
   currencyTotal?: number;
+  // True only for a bill created while offline — saved locally with a temporary "PENDING-"
+  // number and not yet in Supabase. Cleared (and the real, server-assigned number swapped
+  // in) once the background sync succeeds. Edit/Refund/Void are blocked while this is true,
+  // since the server has no record of the bill yet to act on.
+  pendingSync?: boolean;
 };
 
 // ---- Online Payments ----

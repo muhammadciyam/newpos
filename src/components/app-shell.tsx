@@ -12,12 +12,14 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Inbox, Store, LogOut, UserCircle } from "lucide-react";
+import { Inbox, Store, LogOut, UserCircle, CloudOff, RefreshCw } from "lucide-react";
 import { toast } from "sonner";
 import { useRegister } from "@/lib/register-store";
 import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit, useAuditLogs, useAuditLogPolling } from "@/lib/audit-log-store";
 import { pendingSaleStore } from "@/lib/pending-sale-store";
+import { usePendingBills, syncPendingBills } from "@/lib/bills-store";
+import { settingsStore } from "@/lib/settings-store";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { accentColors, setAccentColor, useAccentColor } from "@/lib/theme-store";
 import { cn } from "@/lib/utils";
@@ -45,6 +47,14 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   const lastSeenAt = usePersistedStore(lastSeenStore);
   const hasUnseen = activity.length > 0 && activity[0].at !== lastSeenAt;
   const accent = useAccentColor();
+  const pendingBills = usePendingBills();
+  const [retrying, setRetrying] = useState(false);
+
+  async function retrySync() {
+    setRetrying(true);
+    await syncPendingBills();
+    setRetrying(false);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -116,6 +126,53 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
           <header className="sticky top-0 z-30 flex h-14 items-center gap-3 border-b border-border bg-background px-3">
             <SidebarTrigger />
             <div className="ml-auto flex items-center gap-3">
+              {pendingBills.length > 0 && (
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
+                    >
+                      <CloudOff className="h-4 w-4" />
+                      {pendingBills.length} bill{pendingBills.length > 1 ? "s" : ""} pending sync
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-80">
+                    <DropdownMenuLabel>Saved locally, not yet synced</DropdownMenuLabel>
+                    <DropdownMenuSeparator />
+                    <p className="px-2 pb-2 text-xs text-muted-foreground">
+                      These sales were saved on this device because Supabase couldn't be
+                      reached. They'll sync automatically once the connection is back.
+                    </p>
+                    {pendingBills.slice(0, 8).map((p) => (
+                      <DropdownMenuItem key={p.bill.number} className="flex-col items-start gap-0.5">
+                        <p className="text-sm text-foreground">
+                          {p.bill.number} — {settingsStore.get().general.currency}{" "}
+                          {p.bill.total.toFixed(2)}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          Queued {p.queuedAt.slice(0, 16).replace("T", " ")}
+                          {p.attempts > 0 ? ` — retried ${p.attempts}x` : ""}
+                        </p>
+                      </DropdownMenuItem>
+                    ))}
+                    <DropdownMenuSeparator />
+                    <div className="p-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full gap-1.5"
+                        disabled={retrying}
+                        onClick={retrySync}
+                      >
+                        <RefreshCw className={cn("h-3.5 w-3.5", retrying && "animate-spin")} />
+                        {retrying ? "Syncing..." : "Retry now"}
+                      </Button>
+                    </div>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              )}
               {register.register && (
                 <Button asChild variant="outline" size="sm" className="gap-1.5">
                   <Link to="/pos/register">

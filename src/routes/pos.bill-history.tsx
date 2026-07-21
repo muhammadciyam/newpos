@@ -194,6 +194,14 @@ function BillHistoryPage() {
                   </TableCell>
                   <TableCell>
                     <Badge className={statusColor[b.status]}>{b.status}</Badge>
+                    {b.pendingSync && (
+                      <Badge
+                        className="ml-1 bg-orange-100 text-orange-700 hover:bg-orange-200"
+                        title="Saved on this device — will sync to Supabase once the connection is back"
+                      >
+                        Pending Sync
+                      </Badge>
+                    )}
                     {b.paymentStatus === "Pending" && (
                       <button
                         type="button"
@@ -232,7 +240,7 @@ function BillHistoryPage() {
                           <DropdownMenuItem onClick={() => setPrintNumber(b.number)}>
                             <Printer className="mr-2 h-4 w-4" /> Print / Reprint
                           </DropdownMenuItem>
-                          {b.paymentStatus === "Pending" && (
+                          {b.paymentStatus === "Pending" && !b.pendingSync && (
                             <DropdownMenuItem onClick={() => settlePayment(b)}>
                               <CircleDollarSign className="mr-2 h-4 w-4" /> Mark as Paid
                             </DropdownMenuItem>
@@ -240,19 +248,22 @@ function BillHistoryPage() {
                           {canManage && (
                             <>
                               <DropdownMenuItem
-                                disabled={b.status !== "Sale"}
+                                disabled={b.status !== "Sale" || b.pendingSync}
+                                title={b.pendingSync ? "Wait for this bill to finish syncing" : undefined}
                                 onClick={() => setEditNumber(b.number)}
                               >
                                 <Pencil className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={b.status === "Void" || b.status === "Refunded"}
+                                disabled={b.status === "Void" || b.status === "Refunded" || b.pendingSync}
+                                title={b.pendingSync ? "Wait for this bill to finish syncing" : undefined}
                                 onClick={() => setRefundNumber(b.number)}
                               >
                                 <Undo2 className="mr-2 h-4 w-4" /> Refund
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={b.status === "Void" || b.status === "Refunded"}
+                                disabled={b.status === "Void" || b.status === "Refunded" || b.pendingSync}
+                                title={b.pendingSync ? "Wait for this bill to finish syncing" : undefined}
                                 onClick={() => setVoidNumber(b.number)}
                                 className="text-destructive focus:text-destructive"
                               >
