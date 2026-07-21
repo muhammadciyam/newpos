@@ -249,21 +249,31 @@ function BillHistoryPage() {
                             <>
                               <DropdownMenuItem
                                 disabled={b.status !== "Sale" || b.pendingSync}
-                                title={b.pendingSync ? "Wait for this bill to finish syncing" : undefined}
+                                title={
+                                  b.pendingSync ? "Wait for this bill to finish syncing" : undefined
+                                }
                                 onClick={() => setEditNumber(b.number)}
                               >
                                 <Pencil className="mr-2 h-4 w-4" /> Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={b.status === "Void" || b.status === "Refunded" || b.pendingSync}
-                                title={b.pendingSync ? "Wait for this bill to finish syncing" : undefined}
+                                disabled={
+                                  b.status === "Void" || b.status === "Refunded" || b.pendingSync
+                                }
+                                title={
+                                  b.pendingSync ? "Wait for this bill to finish syncing" : undefined
+                                }
                                 onClick={() => setRefundNumber(b.number)}
                               >
                                 <Undo2 className="mr-2 h-4 w-4" /> Refund
                               </DropdownMenuItem>
                               <DropdownMenuItem
-                                disabled={b.status === "Void" || b.status === "Refunded" || b.pendingSync}
-                                title={b.pendingSync ? "Wait for this bill to finish syncing" : undefined}
+                                disabled={
+                                  b.status === "Void" || b.status === "Refunded" || b.pendingSync
+                                }
+                                title={
+                                  b.pendingSync ? "Wait for this bill to finish syncing" : undefined
+                                }
                                 onClick={() => setVoidNumber(b.number)}
                                 className="text-destructive focus:text-destructive"
                               >

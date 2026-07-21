@@ -74,14 +74,14 @@ function formatLocalTimestamp(): string {
   return `${day}-${month}-${year}, ${hours}:${mins}`;
 }
 
-// A bill rung up while Supabase was unreachable — saved on this device immediately (with a
-// placeholder number) so the sale is never lost, and retried in the background until it
-// syncs. See syncPendingBills below.
 // `customerId` narrowed from optional to required-but-nullable — every input is normalized
 // to this shape before it's sent to the server or queued, so a queued retry never has to
 // re-derive the `?? null` fallback.
 type NormalizedBillInput = Omit<CreateBillInput, "customerId"> & { customerId: string | null };
 
+// A bill rung up while Supabase was unreachable — saved on this device immediately (with a
+// placeholder number) so the sale is never lost, and retried in the background until it
+// syncs. See syncPendingBills below.
 export type PendingBill = {
   bill: Bill;
   input: NormalizedBillInput;
@@ -199,7 +199,13 @@ function patchBill(number: string, patch: Partial<Bill>) {
 
 async function refreshFromServer() {
   const result = await safeServerCall(() => fetchBills());
-  if (!("networkError" in result)) setBills(result);
+  // Overlays any still-unsynced local bills on top of the server list — otherwise a page
+  // reload while offline would make an already-queued sale briefly vanish from Bill History
+  // (it's still safe in pendingStore, but this keeps what's on screen consistent with it)
+  // until the next successful sync swaps in the real, server-assigned bill.
+  if (!("networkError" in result)) {
+    setBills([...pendingStore.get().map((p) => p.bill), ...result]);
+  }
 }
 
 let initialFetchTriggered = false;

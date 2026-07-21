@@ -142,11 +142,14 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                     <DropdownMenuLabel>Saved locally, not yet synced</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <p className="px-2 pb-2 text-xs text-muted-foreground">
-                      These sales were saved on this device because Supabase couldn't be
-                      reached. They'll sync automatically once the connection is back.
+                      These sales were saved on this device because Supabase couldn't be reached.
+                      They'll sync automatically once the connection is back.
                     </p>
                     {pendingBills.slice(0, 8).map((p) => (
-                      <DropdownMenuItem key={p.bill.number} className="flex-col items-start gap-0.5">
+                      <DropdownMenuItem
+                        key={p.bill.number}
+                        className="flex-col items-start gap-0.5"
+                      >
                         <p className="text-sm text-foreground">
                           {p.bill.number} — {settingsStore.get().general.currency}{" "}
                           {p.bill.total.toFixed(2)}
