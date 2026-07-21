@@ -63,6 +63,7 @@ import { onlinePaymentsStore } from "@/lib/online-payments-store";
 import { useCustomers, customersStore } from "@/lib/customers-store";
 import { useRegister } from "@/lib/register-store";
 import { useCurrentUser } from "@/lib/auth-store";
+import { useHasPermission } from "@/lib/permissions";
 import { useSettings, settingsStore } from "@/lib/settings-store";
 import { pendingSaleStore } from "@/lib/pending-sale-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
@@ -98,6 +99,7 @@ function SellPage() {
     ? (register.registers[register.register]?.outletId ?? null)
     : null;
   const currentUser = useCurrentUser();
+  const canFoc = useHasPermission("sales.foc");
   const settings = useSettings();
   // "Credit" is a sale-outcome (unsettled/AR), not a collectible payment method, so it's
   // always offered regardless of what's configured in Settings > Payments. Cash/Card/Bank
@@ -471,6 +473,7 @@ function SellPage() {
   }
 
   function toggleFoc() {
+    if (!canFoc) return toast.error("You don't have permission to mark a sale as Free of Charge");
     updateTab({ foc: !tab.foc });
     toast.success(
       tab.foc ? "FOC removed — bill will be charged normally" : "Marked as Free of Charge",
@@ -885,7 +888,9 @@ function SellPage() {
                   active={!!tab.currency}
                   onClick={() => setCurrencyOpen(true)}
                 />
-                <IconAction icon={Smile} label="FOC" active={tab.foc} onClick={toggleFoc} />
+                {canFoc && (
+                  <IconAction icon={Smile} label="FOC" active={tab.foc} onClick={toggleFoc} />
+                )}
                 <IconAction
                   icon={PackageX}
                   label="No Delivery"

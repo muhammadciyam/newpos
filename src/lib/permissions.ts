@@ -12,6 +12,7 @@ export type Permission =
   | "customers.manage" // create customers
   | "sales.viewAll" // Bill History shows everyone's bills, not just their own
   | "sales.manage" // edit / void / refund bills in Bill History
+  | "sales.foc" // mark a sale as Free of Charge on the Sell page
   | "outlets.manage"; // create/edit/remove outlets (Admin > Locations)
 
 // All assignable permissions, in the order they're offered as checkboxes when a Super Admin
@@ -26,6 +27,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "customers.manage",
   "sales.viewAll",
   "sales.manage",
+  "sales.foc",
   "outlets.manage",
 ];
 
@@ -39,6 +41,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "customers.manage": "Manage Customers",
   "sales.viewAll": "View All Sales — Bill History for every user",
   "sales.manage": "Manage Sales — edit, void, refund bills",
+  "sales.foc": "Mark Sales as Free of Charge (FOC) on the Sell page",
   "outlets.manage": "Manage Outlets — Admin > Locations",
 };
 
@@ -53,6 +56,7 @@ const rolePermissions: Record<string, Permission[]> = {
     "customers.manage",
     "sales.viewAll",
     "sales.manage",
+    "sales.foc",
     "outlets.manage",
   ],
   Admin: [
@@ -65,6 +69,7 @@ const rolePermissions: Record<string, Permission[]> = {
     "customers.manage",
     "sales.viewAll",
     "sales.manage",
+    "sales.foc",
   ],
   Manager: [
     "products.manage",
@@ -73,8 +78,15 @@ const rolePermissions: Record<string, Permission[]> = {
     "reports.view",
     "customers.manage",
     "sales.viewAll",
+    "sales.foc",
   ],
-  Supervisor: ["inventory.access", "reports.view", "customers.manage", "sales.viewAll"],
+  Supervisor: [
+    "inventory.access",
+    "reports.view",
+    "customers.manage",
+    "sales.viewAll",
+    "sales.foc",
+  ],
   Cashier: ["customers.manage"],
 };
 
