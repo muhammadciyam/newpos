@@ -324,6 +324,8 @@ function SellPage() {
       tags: [],
       currency: null,
       currencyRate: null,
+      discountType: null,
+      discountValue: "",
     });
     setCustomerQuery("");
   }
