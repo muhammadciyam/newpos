@@ -92,6 +92,40 @@ export type PendingBill = {
 
 const pendingStore = createPersistedStore<PendingBill[]>("dhipos-pending-bills", []);
 
+// createPersistedStore trusts whatever's in localStorage as-is (a plain JSON.parse cast, no
+// runtime check) — this shape changed more than once while this feature was being built, so
+// a device with an entry saved under an older shape (or genuinely corrupted storage) would
+// otherwise crash the very first thing that reads a field off it (e.g. the header's pending
+// bills dropdown calling p.bill.total.toFixed()) instead of just quietly dropping it. Same
+// "don't trust persisted/remote data blindly" precaution sale-tabs-store.ts already takes
+// for held bills coming back from the server.
+function isValidPendingBill(p: unknown): p is PendingBill {
+  if (!p || typeof p !== "object") return false;
+  const entry = p as Partial<PendingBill>;
+  const bill = entry.bill as Partial<Bill> | undefined;
+  return (
+    !!bill &&
+    typeof bill === "object" &&
+    typeof bill.number === "string" &&
+    typeof bill.total === "number" &&
+    Array.isArray(bill.items) &&
+    !!entry.input &&
+    typeof entry.input === "object" &&
+    typeof entry.queuedAt === "string" &&
+    typeof entry.attempts === "number"
+  );
+}
+
+// The only safe way to read the queue — filters out (and, if any were found, persists the
+// cleanup of) anything malformed, so one bad entry can never crash every page that shows the
+// pending-sync count instead of just failing to sync that one sale.
+function getValidPendingBills(): PendingBill[] {
+  const raw = pendingStore.get();
+  const valid = raw.filter(isValidPendingBill);
+  if (valid.length !== raw.length) pendingStore.set(valid);
+  return valid;
+}
+
 function buildPlaceholderBill(input: NormalizedBillInput): Bill {
   return {
     number: `PENDING-${crypto.randomUUID().slice(0, 8).toUpperCase()}`,
@@ -195,10 +229,11 @@ let syncing = false;
 export async function syncPendingBills(): Promise<void> {
   if (syncing) return;
   if (typeof navigator !== "undefined" && navigator.onLine === false) return;
-  if (pendingStore.get().length === 0) return;
+  const queue = getValidPendingBills();
+  if (queue.length === 0) return;
   syncing = true;
   try {
-    for (const pending of pendingStore.get()) {
+    for (const pending of queue) {
       const outcome = await trySyncOne(pending);
       if (outcome === "failed") break;
     }
@@ -221,7 +256,7 @@ export function usePendingBills(): PendingBill[] {
       window.removeEventListener("online", onOnline);
     };
   }, []);
-  return pending;
+  return useMemo(() => pending.filter(isValidPendingBill), [pending]);
 }
 
 function patchBill(number: string, patch: Partial<Bill>) {
@@ -235,7 +270,7 @@ async function refreshFromServer() {
   // (it's still safe in pendingStore, but this keeps what's on screen consistent with it)
   // until the next successful sync swaps in the real, server-assigned bill.
   if (!("networkError" in result)) {
-    setBills([...pendingStore.get().map((p) => p.bill), ...result]);
+    setBills([...getValidPendingBills().map((p) => p.bill), ...result]);
   }
 }
 
