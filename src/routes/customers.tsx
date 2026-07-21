@@ -46,7 +46,6 @@ import { useCustomers, customersStore } from "@/lib/customers-store";
 import type { Customer } from "@/lib/pos-data";
 import { useBills } from "@/lib/bills-store";
 import { useSettings } from "@/lib/settings-store";
-import { PrintBillDialog } from "@/components/print-bill-dialog";
 import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
 import { downloadCsv } from "@/lib/csv-utils";
 
@@ -94,8 +93,6 @@ function CustomersPage() {
   const [balanceFilter, setBalanceFilter] = useState<"all" | "outstanding" | "clear">("all");
   const [form, setForm] = useState(emptyForm);
   const [salesCustomerId, setSalesCustomerId] = useState<string | null>(null);
-  const [printNumber, setPrintNumber] = useState<string | null>(null);
-  const printBill = bills.find((b) => b.number === printNumber) ?? null;
 
   function customerBills(customerId: string) {
     return bills.filter((b) => b.customerId === customerId);
@@ -459,19 +456,9 @@ function CustomersPage() {
 
       <Dialog open={!!salesCustomer} onOpenChange={(v) => !v && setSalesCustomerId(null)}>
         {salesCustomer && (
-          <CustomerSalesDialog
-            customer={salesCustomer}
-            bills={customerBills(salesCustomer.id)}
-            onPrint={setPrintNumber}
-          />
+          <CustomerSalesDialog customer={salesCustomer} bills={customerBills(salesCustomer.id)} />
         )}
       </Dialog>
-
-      <PrintBillDialog
-        bill={printBill}
-        open={!!printBill}
-        onOpenChange={(v) => !v && setPrintNumber(null)}
-      />
     </AppShell>
   );
 }

@@ -1,6 +1,8 @@
+import { useState } from "react";
 import { DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -9,19 +11,49 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Printer } from "lucide-react";
+import { CircleDollarSign } from "lucide-react";
+import { toast } from "sonner";
+import { billsStore } from "@/lib/bills-store";
 import { type Bill, type Customer } from "@/lib/pos-data";
 
-export function CustomerSalesDialog({
-  customer,
-  bills,
-  onPrint,
-}: {
-  customer: Customer;
-  bills: Bill[];
-  onPrint: (number: string) => void;
-}) {
+export function CustomerSalesDialog({ customer, bills }: { customer: Customer; bills: Bill[] }) {
   const total = bills.filter((b) => b.status !== "Void").reduce((s, b) => s + b.total, 0);
+  const pendingBills = bills.filter((b) => b.paymentStatus === "Pending");
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [settling, setSettling] = useState(false);
+
+  function toggle(number: string, checked: boolean) {
+    setSelected((s) => {
+      const next = new Set(s);
+      if (checked) next.add(number);
+      else next.delete(number);
+      return next;
+    });
+  }
+
+  function toggleAll(checked: boolean) {
+    setSelected(checked ? new Set(pendingBills.map((b) => b.number)) : new Set());
+  }
+
+  async function settleSelected() {
+    if (selected.size === 0) return;
+    setSettling(true);
+    let succeeded = 0;
+    let failed = 0;
+    for (const number of selected) {
+      const result = await billsStore.settleCredit(number);
+      if ("error" in result) failed++;
+      else succeeded++;
+    }
+    setSettling(false);
+    setSelected(new Set());
+    if (succeeded > 0) {
+      toast.success(`${succeeded} bill${succeeded === 1 ? "" : "s"} marked as paid`);
+    }
+    if (failed > 0) {
+      toast.error(`${failed} bill${failed === 1 ? "" : "s"} couldn't be marked as paid`);
+    }
+  }
 
   return (
     <DialogContent className="max-w-2xl">
@@ -32,11 +64,25 @@ export function CustomerSalesDialog({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-10">
+                {pendingBills.length > 0 && (
+                  <Checkbox
+                    checked={
+                      selected.size > 0 && selected.size === pendingBills.length
+                        ? true
+                        : selected.size > 0
+                          ? "indeterminate"
+                          : false
+                    }
+                    onCheckedChange={(v) => toggleAll(v === true)}
+                    aria-label="Select all pending payments"
+                  />
+                )}
+              </TableHead>
               <TableHead>Bill Number</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Total</TableHead>
               <TableHead>Created</TableHead>
-              <TableHead />
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -49,6 +95,15 @@ export function CustomerSalesDialog({
             )}
             {bills.map((b) => (
               <TableRow key={b.number}>
+                <TableCell>
+                  {b.paymentStatus === "Pending" && (
+                    <Checkbox
+                      checked={selected.has(b.number)}
+                      onCheckedChange={(v) => toggle(b.number, v === true)}
+                      aria-label={`Select bill ${b.number}`}
+                    />
+                  )}
+                </TableCell>
                 <TableCell className="font-medium">{b.number}</TableCell>
                 <TableCell>
                   <Badge
@@ -68,16 +123,6 @@ export function CustomerSalesDialog({
                 </TableCell>
                 <TableCell>{b.total.toFixed(2)}</TableCell>
                 <TableCell>{b.created}</TableCell>
-                <TableCell>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5"
-                    onClick={() => onPrint(b.number)}
-                  >
-                    <Printer className="h-3.5 w-3.5" /> Print
-                  </Button>
-                </TableCell>
               </TableRow>
             ))}
           </TableBody>
@@ -87,7 +132,22 @@ export function CustomerSalesDialog({
         <p className="text-sm text-muted-foreground">
           {bills.length} bill{bills.length === 1 ? "" : "s"} total
         </p>
-        <p className="text-base font-semibold text-foreground">Total: {total.toFixed(2)}</p>
+        <div className="flex items-center gap-3">
+          <p className="text-base font-semibold text-foreground">Total: {total.toFixed(2)}</p>
+          {pendingBills.length > 0 && (
+            <Button
+              size="sm"
+              className="gap-1.5"
+              disabled={selected.size === 0 || settling}
+              onClick={settleSelected}
+            >
+              <CircleDollarSign className="h-3.5 w-3.5" />
+              {settling
+                ? "Marking as paid..."
+                : `Payment${selected.size > 0 ? ` (${selected.size})` : ""}`}
+            </Button>
+          )}
+        </div>
       </DialogFooter>
     </DialogContent>
   );

@@ -6,13 +6,6 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Dialog,
   DialogContent,
   DialogFooter,
@@ -33,26 +26,14 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  SlidersHorizontal,
-  MoreHorizontal,
-  Printer,
-  Pencil,
-  Undo2,
-  Ban,
-  Plus,
-  Minus,
-  Trash2,
-  AlertCircle,
-} from "lucide-react";
+import { SlidersHorizontal, MoreHorizontal, Printer, Undo2, Ban, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { useBills, useBillsPolling, billsStore } from "@/lib/bills-store";
 import { useRegister, registerDisplayName } from "@/lib/register-store";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useHasPermission } from "@/lib/permissions";
-import { useProducts } from "@/lib/products-store";
 import { useCustomers } from "@/lib/customers-store";
-import { type Bill, type BillLineItem } from "@/lib/pos-data";
+import { type Bill } from "@/lib/pos-data";
 import { useSettings } from "@/lib/settings-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
 import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
@@ -89,14 +70,12 @@ function BillHistoryPage() {
 
   const [detailsNumber, setDetailsNumber] = useState<string | null>(null);
   const [printNumber, setPrintNumber] = useState<string | null>(null);
-  const [editNumber, setEditNumber] = useState<string | null>(null);
   const [refundNumber, setRefundNumber] = useState<string | null>(null);
   const [voidNumber, setVoidNumber] = useState<string | null>(null);
   const [salesCustomerId, setSalesCustomerId] = useState<string | null>(null);
 
   const detailsBill = scopedBills.find((b) => b.number === detailsNumber) ?? null;
   const printBill = scopedBills.find((b) => b.number === printNumber) ?? null;
-  const editBill = scopedBills.find((b) => b.number === editNumber) ?? null;
   const refundBill = scopedBills.find((b) => b.number === refundNumber) ?? null;
   const voidBill = scopedBills.find((b) => b.number === voidNumber) ?? null;
   const salesCustomer = customers.find((c) => c.id === salesCustomerId) ?? null;
@@ -233,15 +212,6 @@ function BillHistoryPage() {
                           {canManage && (
                             <>
                               <DropdownMenuItem
-                                disabled={b.status !== "Sale" || b.pendingSync}
-                                title={
-                                  b.pendingSync ? "Wait for this bill to finish syncing" : undefined
-                                }
-                                onClick={() => setEditNumber(b.number)}
-                              >
-                                <Pencil className="mr-2 h-4 w-4" /> Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
                                 disabled={
                                   b.status === "Void" || b.status === "Refunded" || b.pendingSync
                                 }
@@ -295,10 +265,6 @@ function BillHistoryPage() {
         onOpenChange={(v) => !v && setPrintNumber(null)}
       />
 
-      <Dialog open={!!editBill} onOpenChange={(v) => !v && setEditNumber(null)}>
-        {editBill && <EditBillDialog bill={editBill} onDone={() => setEditNumber(null)} />}
-      </Dialog>
-
       <Dialog open={!!refundBill} onOpenChange={(v) => !v && setRefundNumber(null)}>
         {refundBill && <RefundBillDialog bill={refundBill} onDone={() => setRefundNumber(null)} />}
       </Dialog>
@@ -312,7 +278,6 @@ function BillHistoryPage() {
           <CustomerSalesDialog
             customer={salesCustomer}
             bills={scopedBills.filter((b) => b.customerId === salesCustomer.id)}
-            onPrint={setPrintNumber}
           />
         )}
       </Dialog>
@@ -447,152 +412,6 @@ function BillDetails({ bill, onPrint }: { bill: Bill; onPrint: () => void }) {
         <Button onClick={onPrint} className="gap-1.5">
           <Printer className="h-4 w-4" /> Print / Reprint
         </Button>
-      </DialogFooter>
-    </DialogContent>
-  );
-}
-
-function EditBillDialog({ bill, onDone }: { bill: Bill; onDone: () => void }) {
-  // useProducts() scopes to the *viewer's* own outlet, but a bill belongs to whichever outlet
-  // it was rung up at — for Super Admin editing another outlet's bill those can differ, so the
-  // add-product picker must filter to the bill's own outlet, not the viewer's.
-  const productsForOutlet = useProducts().filter((p) => p.outletId === bill.outletId);
-  const currency = useSettings().general.currency;
-  const [items, setItems] = useState<BillLineItem[]>(bill.items.map((i) => ({ ...i })));
-  const [addProductId, setAddProductId] = useState("");
-
-  const subtotal = items.reduce((s, i) => s + i.price * i.qty, 0);
-
-  function setQty(productId: string, qty: number) {
-    if (qty <= 0) {
-      setItems((its) => its.filter((i) => i.productId !== productId));
-      return;
-    }
-    setItems((its) => its.map((i) => (i.productId === productId ? { ...i, qty } : i)));
-  }
-
-  function addLine() {
-    const product = productsForOutlet.find((p) => p.id === addProductId);
-    if (!product) return;
-    setItems((its) =>
-      its.some((i) => i.productId === product.id)
-        ? its.map((i) => (i.productId === product.id ? { ...i, qty: i.qty + 1 } : i))
-        : [
-            ...its,
-            {
-              productId: product.id,
-              name: product.name,
-              price: product.price,
-              qty: 1,
-              gstApplicable: product.gstApplicable,
-            },
-          ],
-    );
-    setAddProductId("");
-  }
-
-  async function save() {
-    if (items.length === 0) {
-      toast.error("A bill must have at least one item");
-      return;
-    }
-    const result = await billsStore.update(bill.number, items);
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
-    }
-    toast.success(`Bill ${bill.number} updated`);
-    onDone();
-  }
-
-  return (
-    <DialogContent className="max-w-lg">
-      <DialogHeader>
-        <DialogTitle>Edit Bill {bill.number}</DialogTitle>
-      </DialogHeader>
-      <div className="space-y-4">
-        <div className="flex items-center gap-2">
-          <Select value={addProductId} onValueChange={setAddProductId}>
-            <SelectTrigger className="flex-1">
-              <SelectValue placeholder="Add a product…" />
-            </SelectTrigger>
-            <SelectContent>
-              {productsForOutlet.map((p) => (
-                <SelectItem key={p.id} value={p.id}>
-                  {p.name} ({p.stock} in stock)
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button variant="outline" disabled={!addProductId} onClick={addLine}>
-            <Plus className="h-4 w-4" />
-          </Button>
-        </div>
-        <div className="rounded-lg border border-border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Product</TableHead>
-                <TableHead>Qty</TableHead>
-                <TableHead>Price</TableHead>
-                <TableHead>Total</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((i) => (
-                <TableRow key={i.productId}>
-                  <TableCell>{i.name}</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-6 w-6"
-                        onClick={() => setQty(i.productId, i.qty - 1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-6 text-center">{i.qty}</span>
-                      <Button
-                        size="icon"
-                        variant="outline"
-                        className="h-6 w-6"
-                        onClick={() => setQty(i.productId, i.qty + 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {currency} {i.price.toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    {currency} {(i.price * i.qty).toFixed(2)}
-                  </TableCell>
-                  <TableCell>
-                    <Button size="icon" variant="ghost" onClick={() => setQty(i.productId, 0)}>
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
-        <p className="text-right text-sm text-muted-foreground">
-          Subtotal:{" "}
-          <span className="font-medium text-foreground">
-            {currency} {subtotal.toFixed(2)}
-          </span>{" "}
-          (total &amp; GST recompute on save)
-        </p>
-      </div>
-      <DialogFooter>
-        <Button variant="outline" onClick={onDone}>
-          Cancel
-        </Button>
-        <Button onClick={save}>Save Changes</Button>
       </DialogFooter>
     </DialogContent>
   );
