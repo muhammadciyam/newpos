@@ -47,6 +47,7 @@ export const customersStore = {
       createCustomerOnServer({ data: { ...input, outletId } }),
     );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setCustomers([result.customer, ...customers]);
     logAudit(actor(), "create", `Customer / ${result.customer.name}`);
     return result.customer;
