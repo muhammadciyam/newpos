@@ -648,32 +648,6 @@ function SettingsPage() {
                     noLabel="No, Can't Sell"
                   />
                 </SettingRow>
-                <SettingRow
-                  label="Should bill date be register date?"
-                  desc="If set, the bill date will be the date the register session was opened and not the actual calendar at the time of bill creation"
-                >
-                  <BoolSelect
-                    value={draft.sales.billDateIsRegisterDate}
-                    onChange={(v) =>
-                      setDraft((d) => ({ ...d, sales: { ...d.sales, billDateIsRegisterDate: v } }))
-                    }
-                    yesLabel="Yes, Register Date"
-                    noLabel="No, Calendar Date"
-                  />
-                </SettingRow>
-                <SettingRow
-                  label="Allow to set Bill Date when creating a bill?"
-                  desc="If enabled, you can select a bill date while creating a bill."
-                >
-                  <BoolSelect
-                    value={draft.sales.allowSetBillDate}
-                    onChange={(v) =>
-                      setDraft((d) => ({ ...d, sales: { ...d.sales, allowSetBillDate: v } }))
-                    }
-                    yesLabel="Yes, Can Modify"
-                    noLabel="No, Cannot modify date"
-                  />
-                </SettingRow>
               </div>
               <div className="mt-4 flex justify-end border-t border-border pt-4">
                 <Button onClick={() => saveSection("sales")}>Update Settings</Button>

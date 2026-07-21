@@ -59,8 +59,6 @@ export type AppSettings = {
     allowSellBelowCost: boolean;
     restrictExpiredBatches: boolean;
     allowSellWithoutStock: boolean;
-    billDateIsRegisterDate: boolean;
-    allowSetBillDate: boolean;
     salesEmail: string;
   };
   payments: {
@@ -152,8 +150,6 @@ const defaults: AppSettings = {
     allowSellBelowCost: false,
     restrictExpiredBatches: false,
     allowSellWithoutStock: false,
-    billDateIsRegisterDate: false,
-    allowSetBillDate: false,
     salesEmail: "",
   },
   payments: {
