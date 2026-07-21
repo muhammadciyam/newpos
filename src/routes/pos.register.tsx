@@ -34,7 +34,7 @@ import {
   type RegisterName,
 } from "@/lib/register-store";
 import { useCurrentUser } from "@/lib/auth-store";
-import { getDeviceId } from "@/lib/device-id";
+import { getTabId } from "@/lib/device-id";
 import { CountMoneyDialog } from "@/components/count-money-dialog";
 import { useBills } from "@/lib/bills-store";
 import { computeSessionSales } from "@/lib/register-session-stats";
@@ -205,7 +205,7 @@ function RegisterPage() {
                 {group.names.map((name) => {
                   const r = register.registers[name];
                   if (!r) return null;
-                  const mine = r.openedByDeviceId === getDeviceId();
+                  const mine = r.openedByDeviceId === getTabId();
                   return (
                     <div key={name} className="rounded-lg border border-border bg-card p-4">
                       <div className="flex items-center justify-between">

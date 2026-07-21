@@ -85,6 +85,9 @@ export type LoginResult =
 // Only this device's "which email am I logged in as" is local — the account directory
 // itself lives on the server (users-server-store.ts) so a user created on one device
 // can log in from any device, the same fix already applied to registers and sessions.
+// Kept per-TAB (sessionStorage) rather than shared across the browser, so one browser can
+// have two different tabs logged into two different outlets at once without the second
+// login silently overwriting the first tab's session.
 const sessionStoreInternal = createPersistedStore<{
   email: string | null;
   // The outlet name typed on the login form, matched against Outlet.id — must match this
@@ -92,10 +95,14 @@ const sessionStoreInternal = createPersistedStore<{
   // shows as storeName (header/sidebar/register/receipts). Actual data scoping
   // (registers/bills/reports) instead uses the account's own outletId — see outlet-scope.ts.
   outletId: string | null;
-}>("dhipos-session", {
-  email: null,
-  outletId: null,
-});
+}>(
+  "dhipos-session",
+  {
+    email: null,
+    outletId: null,
+  },
+  "session",
+);
 
 function normalize(value: string) {
   return value.trim().toLowerCase();

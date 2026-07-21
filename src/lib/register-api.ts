@@ -73,14 +73,16 @@ export const openRegisterOnServer = createServerFn({ method: "POST" })
         error: `Already open on another device — opened by ${existing.openedBy ?? "someone"} since ${since}`,
       };
     }
-    // Same device (shared across its browser tabs via a stable device id, unlike the
-    // per-tab in-memory register pointer) already has a different register open.
+    // `deviceId` here is actually a per-TAB id (see getTabId() in device-id.ts) — this only
+    // catches the same browser TAB somehow already holding a different register open (e.g. a
+    // stale id from a duplicated/restored tab), not the same browser generally. Two different
+    // tabs of the same browser are expected to each hold their own register.
     const heldElsewhere = Object.entries(state.registers).find(
       ([name, r]) => name !== data.name && r.isOpen && r.openedByDeviceId === data.deviceId,
     );
     if (heldElsewhere) {
       return {
-        error: `This device already has "${heldElsewhere[0]}" open — close it before opening another register.`,
+        error: `This tab already has "${heldElsewhere[0]}" open — close it before opening another register.`,
       };
     }
     const now = Date.now();

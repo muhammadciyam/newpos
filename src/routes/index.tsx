@@ -14,13 +14,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Wallet,
   TrendingUp,
   CreditCard,
@@ -195,28 +188,6 @@ function DashboardPage() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-2xl font-bold text-foreground">Sales Dashboard</h1>
           <div className="flex flex-wrap items-center gap-2">
-            <Select
-              defaultValue="all"
-              onValueChange={(v) =>
-                toast.success(`Showing ${v === "all" ? "All Outlets" : "Seven Mart"}`)
-              }
-            >
-              <SelectTrigger className="w-44 gap-2">
-                <span
-                  className={cn(
-                    "flex h-6 w-6 items-center justify-center rounded-md shadow-sm ring-1 ring-black/5",
-                    iconColors.violet,
-                  )}
-                >
-                  <Store className="h-3.5 w-3.5" strokeWidth={2.25} />
-                </span>
-                <SelectValue placeholder="All Outlets" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Outlets</SelectItem>
-                <SelectItem value="seven-mart">Seven Mart</SelectItem>
-              </SelectContent>
-            </Select>
             <ReportDateRangeControl value={range} onChange={setRange} />
           </div>
         </div>

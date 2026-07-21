@@ -7,16 +7,32 @@ export type PersistedStore<T> = {
   hydrate(): void;
 };
 
-export function createPersistedStore<T>(key: string, initial: T): PersistedStore<T> {
+// "local" (the default) is shared across every tab of the same browser, same as always.
+// "session" is sessionStorage instead — unique to the one tab it was set in, and gone when
+// that tab closes — used for state that should let one browser run two genuinely independent
+// sessions side by side in two tabs (see auth-store.ts's login session, register-store.ts's
+// locally-open register, and sale-tabs-store.ts's held cart), rather than the second tab's
+// activity silently overwriting what the first tab thinks is still true.
+export function createPersistedStore<T>(
+  key: string,
+  initial: T,
+  storage: "local" | "session" = "local",
+): PersistedStore<T> {
   let state: T = initial;
   let hydrated = false;
   const listeners = new Set<() => void>();
   const emit = () => listeners.forEach((l) => l());
 
+  function backingStorage(): Storage | null {
+    if (typeof window === "undefined") return null;
+    return storage === "session" ? window.sessionStorage : window.localStorage;
+  }
+
   function readFromStorage(): boolean {
-    if (typeof window === "undefined") return false;
+    const backing = backingStorage();
+    if (!backing) return false;
     try {
-      const raw = localStorage.getItem(key);
+      const raw = backing.getItem(key);
       if (raw) {
         state = JSON.parse(raw) as T;
         return true;
@@ -28,9 +44,10 @@ export function createPersistedStore<T>(key: string, initial: T): PersistedStore
   }
 
   function persist() {
-    if (typeof window === "undefined") return;
+    const backing = backingStorage();
+    if (!backing) return;
     try {
-      localStorage.setItem(key, JSON.stringify(state));
+      backing.setItem(key, JSON.stringify(state));
     } catch {
       // storage unavailable (private mode, quota, etc.) — in-memory state still works
     }

@@ -87,12 +87,17 @@ function normalizeState(s: SaleTabsState): SaleTabsState {
   };
 }
 
-// Persisted so a held sale (items added but not yet saved as a bill) survives a
-// refresh or the browser being closed and reopened — nothing is lost by holding.
-// This is the LOCAL mirror; the source of truth for "what's held on register X" lives
-// server-side on the register record itself (see useSaleTabs below), so a held bill
-// survives the register moving to a different device too, not just a refresh.
-const store = createPersistedStore<SaleTabsState>("dhipos-sale-tabs", emptySaleTabsState());
+// Persisted (per-TAB — sessionStorage, not shared across the browser, so two tabs can hold
+// two different outlets' carts at once) so a held sale (items added but not yet saved as a
+// bill) survives a refresh — nothing is lost by holding. This is the LOCAL mirror; the source
+// of truth for "what's held on register X" lives server-side on the register record itself
+// (see useSaleTabs below), so a held bill survives moving to a different tab/device too, not
+// just a refresh — closing this tab only loses the local mirror, not the actual held sale.
+const store = createPersistedStore<SaleTabsState>(
+  "dhipos-sale-tabs",
+  emptySaleTabsState(),
+  "session",
+);
 
 export const saleTabsStore = {
   subscribe: store.subscribe,

@@ -54,7 +54,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { useRegister, formatOpenSince, registerDisplayName } from "@/lib/register-store";
-import { useCurrentUser } from "@/lib/auth-store";
+import { useCurrentUser, useCurrentOutletId } from "@/lib/auth-store";
+import { useOutlets } from "@/lib/outlets-store";
 import { hasPermission, type Permission } from "@/lib/permissions";
 import { useCustomRoles } from "@/lib/custom-roles-store";
 import { iconColors, type IconColor } from "@/lib/icon-colors";
@@ -223,6 +224,9 @@ export function AppSidebar() {
   const isActive = (url: string) => (url === "/" ? pathname === "/" : pathname.startsWith(url));
   const register = useRegister();
   const currentUser = useCurrentUser();
+  const loginOutletId = useCurrentOutletId();
+  const outlets = useOutlets();
+  const loginOutletName = outlets.find((o) => o.id === loginOutletId)?.name ?? "—";
   // Warms/subscribes to the custom-roles cache that hasPermission() reads synchronously below.
   useCustomRoles();
 
@@ -320,6 +324,16 @@ export function AppSidebar() {
                           {!collapsed && <span>{item.title}</span>}
                         </Link>
                       </SidebarMenuButton>
+                      {/* The outlet this session is logged into — sits right under Super
+                          Admin since that's the one place a single login can see/manage every
+                          outlet at once, so it's easy to lose track of which one you're
+                          actually in. */}
+                      {item.title === "Super Admin" && !collapsed && (
+                        <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-sidebar-foreground/60">
+                          <MapPin className="h-3 w-3 shrink-0" />
+                          Logged into {loginOutletName}
+                        </div>
+                      )}
                     </SidebarMenuItem>
                   );
                 }

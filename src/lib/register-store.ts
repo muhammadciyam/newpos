@@ -3,7 +3,7 @@ import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import type { RegisterSession, RegisterSessionClosing } from "@/lib/pos-data";
 import { authStore, useCurrentOutletId } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
-import { getDeviceId } from "@/lib/device-id";
+import { getTabId } from "@/lib/device-id";
 import { safeServerCall } from "@/lib/server-fn-helpers";
 import { useOutlets } from "@/lib/outlets-store";
 import { useScopeOutletId } from "@/lib/outlet-scope";
@@ -87,7 +87,14 @@ const initialLocalState: LocalRegisterState = {
   openedBy: "",
 };
 
-const store = createPersistedStore<LocalRegisterState>("dhipos-register", initialLocalState);
+// Per-TAB (sessionStorage), not shared across the browser — see getTabId() in device-id.ts
+// for why: this is what lets one browser run two different outlets' registers side by side
+// in two tabs instead of the second tab's register clobbering the first tab's local pointer.
+const store = createPersistedStore<LocalRegisterState>(
+  "dhipos-register",
+  initialLocalState,
+  "session",
+);
 
 // One-time fixup for browsers that already persisted the old default register name
 // ("Main" / "Main 2") as their active-register pointer before it was renamed/removed.
@@ -288,7 +295,7 @@ export const registerStore = {
     const actor = by ?? authStore.getCurrentUser()?.name ?? "Unknown";
     const result = await safeServerCall(() =>
       openRegisterOnServer({
-        data: { name, by: actor, deviceId: getDeviceId(), opening: opening ?? {} },
+        data: { name, by: actor, deviceId: getTabId(), opening: opening ?? {} },
       }),
     );
     if ("error" in result) return result;
@@ -297,7 +304,7 @@ export const registerStore = {
       isOpen: true,
       openedAt: now,
       openedBy: actor,
-      openedByDeviceId: getDeviceId(),
+      openedByDeviceId: getTabId(),
       lastClosedAt: serverRegisters[name]?.lastClosedAt ?? null,
       heldBill: serverRegisters[name]?.heldBill ?? null,
       opening: opening ?? {},
@@ -325,13 +332,13 @@ export const registerStore = {
 
   // Switch the active session view to a register that is already open, without
   // resetting its opened-at time (unlike `open`, which opens a fresh session).
-  // Only the device that opened it may view/use it — another device seeing it's open
-  // gets "View Register" hidden entirely in the UI (see pos.register.tsx), and this is
-  // a defense-in-depth guard against reaching it any other way.
+  // Only the tab that opened it may view/use it — another tab seeing it's open gets
+  // "View Register" hidden entirely in the UI (see pos.register.tsx), and this is a
+  // defense-in-depth guard against reaching it any other way.
   view(name: RegisterName): { ok: true } | { error: string } {
     const existing = serverRegisters[name];
     if (!existing?.isOpen) return { error: "Register is not open" };
-    if (existing.openedByDeviceId !== getDeviceId()) {
+    if (existing.openedByDeviceId !== getTabId()) {
       return {
         error: `In use on ${existing.openedBy ?? "another device"}'s device — ask them to close it first, or ask an Admin to force-close it.`,
       };
