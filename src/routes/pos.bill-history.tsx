@@ -64,9 +64,10 @@ function BillHistoryPage() {
   const scopedBills = canViewAll ? allBills : allBills.filter((b) => b.by === currentUser?.name);
 
   const [numberFilter, setNumberFilter] = useState("");
-  const bills = scopedBills.filter((b) =>
-    b.number.toLowerCase().includes(numberFilter.trim().toLowerCase()),
-  );
+  const [showPendingOnly, setShowPendingOnly] = useState(false);
+  const bills = scopedBills
+    .filter((b) => b.number.toLowerCase().includes(numberFilter.trim().toLowerCase()))
+    .filter((b) => !showPendingOnly || (b.paymentStatus === "Pending" && b.status === "Sale"));
 
   const [detailsNumber, setDetailsNumber] = useState<string | null>(null);
   const [printNumber, setPrintNumber] = useState<string | null>(null);
@@ -106,15 +107,29 @@ function BillHistoryPage() {
         </div>
 
         {pendingBills.length > 0 && (
-          <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+          <button
+            type="button"
+            onClick={() => setShowPendingOnly((v) => !v)}
+            title={
+              showPendingOnly
+                ? "Showing only bills awaiting payment — click to clear"
+                : "Click to show only bills awaiting payment"
+            }
+            className={`flex items-center gap-2 rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
+              showPendingOnly
+                ? "border-amber-400 bg-amber-100 text-amber-900"
+                : "border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100"
+            }`}
+          >
             <AlertCircle className="h-4 w-4 shrink-0" />
             <p>
               <span className="font-semibold">
                 {pendingBills.length} bill{pendingBills.length === 1 ? "" : "s"}
               </span>{" "}
               awaiting payment — {currency} {pendingTotal.toFixed(2)} total on credit.
+              {showPendingOnly && <span className="ml-1 underline">(showing only these)</span>}
             </p>
-          </div>
+          </button>
         )}
 
         <div className="overflow-x-auto rounded-lg border border-border bg-card">
