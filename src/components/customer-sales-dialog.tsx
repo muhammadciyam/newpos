@@ -23,6 +23,8 @@ import {
 import { CircleDollarSign, ArrowLeft, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { billsStore } from "@/lib/bills-store";
+import { onlinePaymentsStore } from "@/lib/online-payments-store";
+import { useCurrentUser } from "@/lib/auth-store";
 import { type Bill, type Customer } from "@/lib/pos-data";
 
 const PAYMENT_METHODS = ["Cash", "Card", "Bank Transfer"] as const;
@@ -57,6 +59,7 @@ function allocate(amount: number, bills: Bill[]): Map<string, number> {
 }
 
 export function CustomerSalesDialog({ customer, bills }: { customer: Customer; bills: Bill[] }) {
+  const currentUser = useCurrentUser();
   const total = bills.filter((b) => b.status !== "Void").reduce((s, b) => s + b.total, 0);
   const pendingBills = bills.filter((b) => b.paymentStatus === "Pending");
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -119,8 +122,20 @@ export function CustomerSalesDialog({ customer, bills }: { customer: Customer; b
         needsSlip ? slipNumber.trim() : undefined,
         method === "Bank Transfer" ? transferSlip || undefined : undefined,
       );
-      if ("error" in result) failed++;
-      else succeeded++;
+      if ("error" in result) {
+        failed++;
+      } else {
+        succeeded++;
+        if (method === "Bank Transfer") {
+          onlinePaymentsStore.create({
+            billNumber: number,
+            amount: amt,
+            reference: slipNumber.trim(),
+            receiptSlip: transferSlip,
+            by: currentUser?.name ?? "Unknown",
+          });
+        }
+      }
     }
     setSettling(false);
     setSelected(new Set());
