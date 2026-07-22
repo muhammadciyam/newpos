@@ -84,8 +84,14 @@ function formatLocalTimestamp(): string {
 
 // `customerId` narrowed from optional to required-but-nullable — every input is normalized
 // to this shape before it's sent to the server or queued, so a queued retry never has to
-// re-derive the `?? null` fallback.
-type NormalizedBillInput = Omit<CreateBillInput, "customerId"> & { customerId: string | null };
+// re-derive the `?? null` fallback. `created` is stamped once here, on this device, at the
+// moment Save Bill was pressed — the server persists it as-is rather than re-stamping its own
+// clock, so a bill's Created time can never shift later just because the server process
+// happens to run in a different timezone than the shop (see formatLocalTimestamp above).
+type NormalizedBillInput = Omit<CreateBillInput, "customerId"> & {
+  customerId: string | null;
+  created: string;
+};
 
 // A bill rung up while Supabase was unreachable — saved on this device immediately (with a
 // placeholder number) so the sale is never lost, and retried in the background until it
@@ -150,7 +156,7 @@ function buildPlaceholderBill(input: NormalizedBillInput): Bill {
     bagQty: input.bagQty,
     bagCharge: input.bagCharge,
     total: input.total,
-    created: formatLocalTimestamp(),
+    created: input.created,
     by: input.by,
     paymentMethod: input.paymentMethod,
     paymentStatus: input.paymentStatus,
@@ -309,7 +315,11 @@ export const billsStore = {
   // automatically, so by the time a cashier actually hits Print it's almost always already
   // showing the real number rather than the placeholder.
   async create(input: CreateBillInput): Promise<Bill> {
-    const normalized: NormalizedBillInput = { ...input, customerId: input.customerId ?? null };
+    const normalized: NormalizedBillInput = {
+      ...input,
+      customerId: input.customerId ?? null,
+      created: formatLocalTimestamp(),
+    };
     const placeholder = buildPlaceholderBill(normalized);
     setBills([placeholder, ...bills]);
     applyOptimisticStock(normalized.items);
@@ -333,7 +343,16 @@ export const billsStore = {
   async update(number: string, items: BillLineItem[]): Promise<{ ok: true } | { error: string }> {
     const gstPercent = settingsStore.get().tax.gstPercent;
     const result = await safeServerCall(() =>
-      updateBillOnServer({ data: { number, items, actor: actor(), gstPercent, ...caller() } }),
+      updateBillOnServer({
+        data: {
+          number,
+          items,
+          actor: actor(),
+          gstPercent,
+          editedAt: formatLocalTimestamp(),
+          ...caller(),
+        },
+      }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -347,7 +366,9 @@ export const billsStore = {
   // been refunded, and marks the bill Void.
   async void(number: string, reason?: string): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() =>
-      voidBillOnServer({ data: { number, reason, actor: actor(), ...caller() } }),
+      voidBillOnServer({
+        data: { number, reason, actor: actor(), voidedAt: formatLocalTimestamp(), ...caller() },
+      }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -365,7 +386,16 @@ export const billsStore = {
     reason?: string,
   ): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() =>
-      refundBillOnServer({ data: { number, lines, reason, actor: actor(), ...caller() } }),
+      refundBillOnServer({
+        data: {
+          number,
+          lines,
+          reason,
+          actor: actor(),
+          at: formatLocalTimestamp(),
+          ...caller(),
+        },
+      }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -387,7 +417,16 @@ export const billsStore = {
   ): Promise<{ ok: true; remaining: number } | { error: string }> {
     const result = await safeServerCall(() =>
       settleCreditOnServer({
-        data: { number, actor: actor(), amount, method, slipNumber, transferSlip, ...caller() },
+        data: {
+          number,
+          actor: actor(),
+          amount,
+          method,
+          slipNumber,
+          transferSlip,
+          at: formatLocalTimestamp(),
+          ...caller(),
+        },
       }),
     );
     if ("networkError" in result) return { error: result.error };
