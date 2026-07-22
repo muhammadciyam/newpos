@@ -56,7 +56,6 @@ const emptyForm = {
   price: "",
   category: "drinks",
   barcode: "",
-  sku: "",
   image: "",
   countable: true,
   gstApplicable: true,
@@ -121,7 +120,6 @@ function ProductsPage() {
       price: String(p.price),
       category: p.category,
       barcode: p.barcode ?? "",
-      sku: p.sku ?? "",
       image: p.image,
       countable: p.countable ?? true,
       gstApplicable: p.gstApplicable ?? true,
@@ -139,10 +137,6 @@ function ProductsPage() {
   }
 
   async function save() {
-    if (settings.product.skuRequired && !form.sku.trim()) {
-      toast.error("SKU is required (Settings > Product > Require SKU on new products).");
-      return;
-    }
     if (!editingId && !form.outletId) {
       toast.error("Choose which outlet this product belongs to.");
       return;
@@ -159,7 +153,6 @@ function ProductsPage() {
       price: parseFloat(form.price) || 0,
       category: form.category,
       barcode: barcode || undefined,
-      sku: form.sku.trim() || undefined,
       countable: form.countable,
       gstApplicable: form.gstApplicable,
     };
@@ -460,27 +453,17 @@ function ProductsPage() {
                 </div>
               )
             )}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1.5">
-                <Label>Barcode</Label>
-                <Input
-                  value={form.barcode}
-                  onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))}
-                  placeholder={
-                    settings.product.barcodeAutoGenerate
-                      ? "Leave blank to auto-generate"
-                      : "e.g. 8901030"
-                  }
-                />
-              </div>
-              <div className="space-y-1.5">
-                <Label>SKU{settings.product.skuRequired && " *"}</Label>
-                <Input
-                  value={form.sku}
-                  onChange={(e) => setForm((f) => ({ ...f, sku: e.target.value }))}
-                  placeholder="e.g. SKU-001"
-                />
-              </div>
+            <div className="space-y-1.5">
+              <Label>Barcode</Label>
+              <Input
+                value={form.barcode}
+                onChange={(e) => setForm((f) => ({ ...f, barcode: e.target.value }))}
+                placeholder={
+                  settings.product.barcodeAutoGenerate
+                    ? "Leave blank to auto-generate"
+                    : "e.g. 8901030"
+                }
+              />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
@@ -590,12 +573,7 @@ function ProductsPage() {
               Cancel
             </Button>
             <Button
-              disabled={
-                !form.name.trim() ||
-                !form.price ||
-                (settings.product.skuRequired && !form.sku.trim()) ||
-                (!editingId && !form.outletId)
-              }
+              disabled={!form.name.trim() || !form.price || (!editingId && !form.outletId)}
               onClick={save}
             >
               {editingId ? "Save Changes" : "Add Product"}

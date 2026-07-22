@@ -81,7 +81,7 @@ export const productsStore = {
   // `outletId` is part of `input` (not auto-injected here) because Super Admin has no
   // outlet of their own and must explicitly choose one — see products.tsx's Add Product
   // form, which pre-fills it from the current user for everyone else.
-  async create(input: Omit<Product, "id" | "stock">): Promise<Product | { error: string }> {
+  async create(input: Omit<Product, "id" | "stock" | "sku">): Promise<Product | { error: string }> {
     const result = await safeServerCall(() => createProductOnServer({ data: input }));
     if ("networkError" in result) return { error: result.error };
     setProducts([result.product, ...products]);
@@ -91,7 +91,7 @@ export const productsStore = {
 
   // Used by the Products page's CSV import.
   async createBulk(
-    inputs: Omit<Product, "id" | "stock">[],
+    inputs: Omit<Product, "id" | "stock" | "sku">[],
   ): Promise<Product[] | { error: string }> {
     const result = await safeServerCall(() =>
       createProductsBulkOnServer({ data: { items: inputs } }),
@@ -106,7 +106,7 @@ export const productsStore = {
   // see updateProductOnServer.
   async update(
     id: string,
-    patch: Partial<Omit<Product, "stock" | "outletId">>,
+    patch: Partial<Omit<Product, "stock" | "outletId" | "sku">>,
   ): Promise<{ ok: true } | { error: string }> {
     const { role, callerOutletId } = callerContext();
     const result = await safeServerCall(() =>

@@ -74,7 +74,6 @@ export type AppSettings = {
     eBillQrEnabled: boolean;
   };
   product: {
-    skuRequired: boolean;
     barcodeAutoGenerate: boolean;
   };
   customer: {
@@ -180,7 +179,6 @@ const defaults: AppSettings = {
     eBillQrEnabled: true,
   },
   product: {
-    skuRequired: false,
     barcodeAutoGenerate: true,
   },
   customer: {

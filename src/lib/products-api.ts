@@ -6,28 +6,46 @@ export const fetchProducts = createServerFn({ method: "GET" }).handler(async () 
   return getServerProducts();
 });
 
+// SKU is always auto-generated here (never client-supplied) — a zero-padded 6-digit
+// sequence starting at 000001, one higher than the highest existing numeric SKU. Non-numeric
+// legacy SKUs (free-typed before this existed) are ignored when finding that max rather than
+// breaking the sequence.
+function maxSkuNumber(products: Product[]): number {
+  return products.reduce((max, p) => {
+    const n = p.sku ? parseInt(p.sku, 10) : NaN;
+    return Number.isFinite(n) ? Math.max(max, n) : max;
+  }, 0);
+}
+
 export const createProductOnServer = createServerFn({ method: "POST" })
-  .validator((data: Omit<Product, "id" | "stock">) => data)
+  .validator((data: Omit<Product, "id" | "stock" | "sku">) => data)
   .handler(async ({ data }) => {
+    const existing = await getServerProducts();
     // New products always start at zero stock — quantity can only ever be added via an
     // approved Purchase Invoice or Stock Count, never set directly here.
-    const product: Product = { ...data, id: `p-${Date.now()}`, stock: 0 };
+    const product: Product = {
+      ...data,
+      id: `p-${Date.now()}`,
+      stock: 0,
+      sku: String(maxSkuNumber(existing) + 1).padStart(6, "0"),
+    };
     await mutateServerProducts((ps) => [product, ...ps]);
     return { ok: true as const, product };
   });
 
-// Bulk variant for the Products page's CSV import — same zero-stock rule as
-// createProductOnServer, just for many rows in one round trip. IDs are suffixed with the
-// row index (not just Date.now()) since a loop of single-ms inserts would otherwise collide.
+// Bulk variant for the Products page's CSV import — same zero-stock and auto-SKU rules as
+// createProductOnServer, just for many rows in one round trip, each getting the next number
+// in sequence. IDs are suffixed with the row index (not just Date.now()) since a loop of
+// single-ms inserts would otherwise collide.
 export const createProductsBulkOnServer = createServerFn({ method: "POST" })
-  .validator((data: { items: Omit<Product, "id" | "stock">[] }) => data)
+  .validator((data: { items: Omit<Product, "id" | "stock" | "sku">[] }) => data)
   .handler(async ({ data }) => {
     const now = Date.now();
-    const created: Product[] = data.items.map((item, i) => ({
-      ...item,
-      id: `p-${now}-${i}`,
-      stock: 0,
-    }));
+    let nextSku = maxSkuNumber(await getServerProducts());
+    const created: Product[] = data.items.map((item, i) => {
+      nextSku += 1;
+      return { ...item, id: `p-${now}-${i}`, stock: 0, sku: String(nextSku).padStart(6, "0") };
+    });
     await mutateServerProducts((ps) => [...created, ...ps]);
     return { ok: true as const, products: created };
   });
@@ -36,8 +54,9 @@ export const createProductsBulkOnServer = createServerFn({ method: "POST" })
 // Super Admin or by an Admin whose own outlet matches the product's outlet. `role`/
 // `callerOutletId` are client-supplied claims — this app has no server-verified auth (see
 // the same caveat on forceCloseRegisterOnServer in register-api.ts) — a UI-level guard
-// consistent with the rest of the app's all-client-trust permission model. `outletId`
-// itself is never editable via patch — a product can't be moved to a different outlet.
+// consistent with the rest of the app's all-client-trust permission model. `outletId` itself
+// is never editable via patch — a product can't be moved to a different outlet — and neither
+// is `sku`, which is only ever assigned once, at creation (see maxSkuNumber above).
 function canManageProduct(product: Product, role: string, callerOutletId: string | null): boolean {
   if (role === "Super Admin") return true;
   return product.outletId !== null && product.outletId === callerOutletId;
@@ -47,7 +66,7 @@ export const updateProductOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: {
       id: string;
-      patch: Partial<Omit<Product, "stock" | "outletId">>;
+      patch: Partial<Omit<Product, "stock" | "outletId" | "sku">>;
       role: string;
       callerOutletId: string | null;
     }) => data,

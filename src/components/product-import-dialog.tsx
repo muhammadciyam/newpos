@@ -32,20 +32,11 @@ import { PLACEHOLDER_PRODUCT_IMAGE } from "@/lib/placeholder-image";
 import type { Product, Category } from "@/lib/pos-data";
 import type { Outlet } from "@/lib/outlets-store";
 
-const COLUMNS = [
-  "Name",
-  "Category",
-  "Price",
-  "Cost",
-  "SKU",
-  "Barcode",
-  "GST Applicable",
-  "Countable",
-];
+const COLUMNS = ["Name", "Category", "Price", "Cost", "Barcode", "GST Applicable", "Countable"];
 
 const SAMPLE_ROWS = [
-  ["Espresso", "Drinks", "3.50", "1.20", "ESP-001", "", "Yes", "Yes"],
-  ["Cheeseburger", "Food", "9.99", "4.50", "", "8901234567890", "Yes", "Yes"],
+  ["Espresso", "Drinks", "3.50", "1.20", "", "Yes", "Yes"],
+  ["Cheeseburger", "Food", "9.99", "4.50", "8901234567890", "Yes", "Yes"],
 ];
 
 function downloadSampleFormat() {
@@ -58,7 +49,6 @@ type ParsedRow = {
   categoryName: string;
   price: number | null;
   cost?: number;
-  sku?: string;
   barcode?: string;
   gstApplicable?: boolean;
   countable?: boolean;
@@ -80,7 +70,7 @@ function parseRows(csvText: string): ParsedRow[] {
   // re-typing the template header slightly differently shouldn't break the whole import.
   const dataRows = rows.slice(1);
   return dataRows.map((cells, idx) => {
-    const [name, categoryName, priceRaw, costRaw, sku, barcode, gstRaw, countableRaw] = cells.map(
+    const [name, categoryName, priceRaw, costRaw, barcode, gstRaw, countableRaw] = cells.map(
       (c) => c ?? "",
     );
     const line = idx + 2; // +1 for header row, +1 for 1-based line numbers
@@ -101,7 +91,6 @@ function parseRows(csvText: string): ParsedRow[] {
       categoryName: categoryName.trim(),
       price,
       cost,
-      sku: sku.trim() || undefined,
       barcode: barcode.trim() || undefined,
       gstApplicable: parseBool(gstRaw),
       countable: parseBool(countableRaw),
@@ -169,14 +158,13 @@ export function ProductImportDialog({
     if (validRows.length === 0 || !outletId) return;
     setImporting(true);
     const categoryCache = new Map<string, string>();
-    const inputs: Omit<Product, "id" | "stock">[] = validRows.map((r) => ({
+    const inputs: Omit<Product, "id" | "stock" | "sku">[] = validRows.map((r) => ({
       name: r.name,
       price: r.price as number,
       category: resolveCategoryId(r.categoryName, categoryCache),
       image: PLACEHOLDER_PRODUCT_IMAGE,
       outletId,
       cost: r.cost,
-      sku: r.sku,
       barcode: r.barcode,
       gstApplicable: r.gstApplicable,
       countable: r.countable,

@@ -1069,19 +1069,6 @@ function SettingsPage() {
               <p className="text-xl font-bold text-foreground">Product Settings</p>
               <div className="mt-2">
                 <SettingRow
-                  label="Require SKU on new products?"
-                  desc="If enabled, a SKU must be entered when creating a product."
-                >
-                  <BoolSelect
-                    value={draft.product.skuRequired}
-                    onChange={(v) =>
-                      setDraft((d) => ({ ...d, product: { ...d.product, skuRequired: v } }))
-                    }
-                    yesLabel="Yes, Required"
-                    noLabel="No, Optional"
-                  />
-                </SettingRow>
-                <SettingRow
                   label="Auto-generate barcodes?"
                   desc="Automatically assign a barcode to products that don't have one."
                 >
