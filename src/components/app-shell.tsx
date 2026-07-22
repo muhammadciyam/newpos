@@ -2,7 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -222,6 +222,7 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                 <DropdownMenuTrigger asChild>
                   <button className="flex items-center gap-2">
                     <Avatar className="h-8 w-8">
+                      {user.photo && <AvatarImage src={user.photo} alt="" />}
                       <AvatarFallback className="bg-destructive text-xs font-semibold text-destructive-foreground">
                         {user.name.trim()[0]?.toUpperCase()}
                       </AvatarFallback>
