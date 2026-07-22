@@ -16,6 +16,7 @@ import { CalendarDays } from "lucide-react";
 import { toast } from "sonner";
 import { useBills } from "@/lib/bills-store";
 import { useHasPermission } from "@/lib/permissions";
+import { useSettings } from "@/lib/settings-store";
 import { RestrictedPage } from "@/components/restricted-page";
 
 export const Route = createFileRoute("/analytics/sales")({
@@ -29,12 +30,21 @@ function SalesAnalyticsPage() {
   const canView = useHasPermission("reports.view");
   const [outletSelected, setOutletSelected] = useState(true);
   const bills = useBills();
+  const currency = useSettings().general.currency;
 
   if (!canView) return <RestrictedPage />;
 
-  const grossSales = bills.reduce((s, b) => s + b.total, 0);
-  const netSales = grossSales;
-  const billCount = bills.length;
+  // Same Gross/Net/Discounts convention as report-day-summary.tsx: void bills never counted,
+  // Net is Gross minus actual refund amounts (not just an alias for Gross).
+  const nonVoid = bills.filter((b) => b.status !== "Void");
+  const grossSales = nonVoid.reduce((s, b) => s + b.total, 0);
+  const refundsTotal = nonVoid.reduce(
+    (s, b) => s + (b.refunds ?? []).reduce((rs, r) => rs + r.amount, 0),
+    0,
+  );
+  const netSales = grossSales - refundsTotal;
+  const discountGiven = nonVoid.reduce((s, b) => s + b.discount, 0);
+  const billCount = nonVoid.length;
 
   return (
     <AppShell>
@@ -99,9 +109,18 @@ function SalesAnalyticsPage() {
               </Card>
             ) : (
               <Card className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
-                <SummaryStat label="Gross Sales" value={grossSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
-                <SummaryStat label="Discounts" value="0.00" />
-                <SummaryStat label="Net Sales" value={netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+                <SummaryStat
+                  label="Gross Sales"
+                  value={`${currency} ${grossSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                />
+                <SummaryStat
+                  label="Discounts"
+                  value={`${currency} ${discountGiven.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                />
+                <SummaryStat
+                  label="Net Sales"
+                  value={`${currency} ${netSales.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                />
                 <SummaryStat label="Bill Count" value={billCount.toLocaleString()} />
               </Card>
             )}
