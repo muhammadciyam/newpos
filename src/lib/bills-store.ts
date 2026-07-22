@@ -4,6 +4,7 @@ import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { productsStore } from "@/lib/products-store";
 import { settingsStore } from "@/lib/settings-store";
+import { outletsStore } from "@/lib/outlets-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
 import { useScopeOutletId } from "@/lib/outlet-scope";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
@@ -68,18 +69,48 @@ export type CreateBillInput = {
   currencyTotal?: number;
 };
 
-// Same "DD-Mon-YY, HH:MM" format the server stamps real bills with (see formatBillTimestamp
-// in bills-server-store.ts) — duplicated here (rather than imported) since that file is
-// server-only and can't be pulled into the client bundle.
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+// The current outlet's own configured timezone (Admin > Locations, Super Admin only) — the
+// same one the header clock shows (see live-clock.tsx) — not just whatever timezone this
+// particular device's OS happens to be set to, and never the server process's timezone
+// (which, on a cloud/edge deployment, is very likely UTC and could otherwise silently shift a
+// bill's stamped time by several hours). Falls back to Indian/Maldives if the outlet has none.
+function currentOutletTimeZone(): string {
+  const outletId = authStore.getCurrentUser()?.outletId ?? null;
+  const outlet = outletId ? outletsStore.get().find((o) => o.id === outletId) : undefined;
+  return outlet?.timezone ?? "Indian/Maldives";
+}
+
+// Stamps "now" in the outlet's own timezone — every bill create/edit/void/refund/settle
+// timestamp is captured once, here, on this device, at the moment the action happens. The
+// server persists whatever it's given as-is rather than re-stamping its own clock, so a
+// bill's times can never shift later just because the server happens to run elsewhere.
 function formatLocalTimestamp(): string {
-  const d = new Date();
-  const day = String(d.getDate()).padStart(2, "0");
-  const month = MONTHS[d.getMonth()];
-  const year = String(d.getFullYear()).slice(2);
-  const hours = String(d.getHours()).padStart(2, "0");
-  const mins = String(d.getMinutes()).padStart(2, "0");
-  return `${day}-${month}-${year}, ${hours}:${mins}`;
+  const timeZone = currentOutletTimeZone();
+  try {
+    const parts = new Intl.DateTimeFormat("en-GB", {
+      timeZone,
+      day: "2-digit",
+      month: "short",
+      year: "2-digit",
+      hour: "2-digit",
+      minute: "2-digit",
+      hourCycle: "h23",
+    }).formatToParts(new Date());
+    const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
+    return `${get("day")}-${get("month")}-${get("year")}, ${get("hour")}:${get("minute")}`;
+  } catch {
+    // Unrecognized/invalid saved timezone — fall back to this device's own local time
+    // rather than crashing bill creation.
+    const d = new Date();
+    const day = String(d.getDate()).padStart(2, "0");
+    const month = MONTHS[d.getMonth()];
+    const year = String(d.getFullYear()).slice(2);
+    const hours = String(d.getHours()).padStart(2, "0");
+    const mins = String(d.getMinutes()).padStart(2, "0");
+    return `${day}-${month}-${year}, ${hours}:${mins}`;
+  }
 }
 
 // `customerId` narrowed from optional to required-but-nullable — every input is normalized

@@ -1,5 +1,5 @@
 import { createServerFn } from "@tanstack/react-start";
-import { getServerBills, mutateServerBills, formatBillTimestamp } from "@/lib/bills-server-store";
+import { getServerBills, mutateServerBills } from "@/lib/bills-server-store";
 import { adjustStock, getServerProducts } from "@/lib/products-server-store";
 import { getOrCreateDefaultOutlet } from "@/lib/outlets-server-store";
 import type { Bill, BillLineItem, CreditPayment } from "@/lib/pos-data";
@@ -77,6 +77,7 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       currency?: string;
       currencyRate?: number;
       currencyTotal?: number;
+      created: string;
     }) => data,
   )
   .handler(async ({ data }) => {
@@ -101,7 +102,7 @@ export const createBillOnServer = createServerFn({ method: "POST" })
       bagQty: data.bagQty,
       bagCharge: data.bagCharge,
       total: data.total,
-      created: formatBillTimestamp(),
+      created: data.created,
       by: data.by,
       paymentMethod: data.paymentMethod,
       paymentStatus: data.paymentStatus,
