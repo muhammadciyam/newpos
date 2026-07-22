@@ -84,6 +84,11 @@ function formatNow() {
   return `${day}-${month}-${year}, ${hours}:${mins}`;
 }
 
+function caller() {
+  const user = authStore.getCurrentUser();
+  return { role: user?.role ?? "", callerOutletId: user?.outletId ?? null };
+}
+
 function actor() {
   return authStore.getCurrentUser()?.name ?? "System";
 }
@@ -144,7 +149,7 @@ export const purchaseInvoicesStore = {
     const at = formatNow();
     const by = actor();
     const result = await safeServerCall(() =>
-      markPurchaseInvoiceReceivedOnServer({ data: { id, by, at } }),
+      markPurchaseInvoiceReceivedOnServer({ data: { id, by, at, ...caller() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -169,7 +174,7 @@ export const purchaseInvoicesStore = {
     const at = formatNow();
     const by = actor();
     const result = await safeServerCall(() =>
-      approvePurchaseInvoiceOnServer({ data: { id, by, at } }),
+      approvePurchaseInvoiceOnServer({ data: { id, by, at, ...caller() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -187,7 +192,7 @@ export const purchaseInvoicesStore = {
     const at = formatNow();
     const by = actor();
     const result = await safeServerCall(() =>
-      rejectPurchaseInvoiceOnServer({ data: { id, by, at } }),
+      rejectPurchaseInvoiceOnServer({ data: { id, by, at, ...caller() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -207,7 +212,9 @@ export const purchaseInvoicesStore = {
   // clears the invoice records themselves.
   async clearAll(ids: string[]): Promise<{ ok: true } | { error: string }> {
     if (ids.length === 0) return { ok: true };
-    const result = await safeServerCall(() => clearPurchaseInvoicesOnServer({ data: { ids } }));
+    const result = await safeServerCall(() =>
+      clearPurchaseInvoicesOnServer({ data: { ids, ...caller() } }),
+    );
     if ("networkError" in result) return { error: result.error };
     setInvoices(invoices.filter((i) => !ids.includes(i.id)));
     logAudit(actor(), "delete", `Purchase Invoices / cleared ${ids.length}`);

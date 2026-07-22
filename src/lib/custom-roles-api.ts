@@ -7,13 +7,22 @@ import type { Permission } from "@/lib/permissions";
 
 const RESERVED_NAMES = new Set(["Super Admin", ...BUILT_IN_ROLES].map((r) => r.toLowerCase()));
 
+// Defining a custom role hands out permissions (potentially every permission in the app) —
+// this must never be reachable by anyone but Super Admin, regardless of what the client UI
+// hides, or any logged-in account could mint itself a role with full access.
+function requireSuperAdmin(callerRole: string): { error: string } | null {
+  return callerRole === "Super Admin" ? null : { error: "Only Super Admin can manage roles" };
+}
+
 export const fetchCustomRoles = createServerFn({ method: "GET" }).handler(async () => {
   return getServerCustomRoles();
 });
 
 export const createCustomRoleOnServer = createServerFn({ method: "POST" })
-  .validator((data: { name: string; permissions: Permission[] }) => data)
+  .validator((data: { name: string; permissions: Permission[]; callerRole: string }) => data)
   .handler(async ({ data }): Promise<{ error: string } | { ok: true; role: CustomRole }> => {
+    const authError = requireSuperAdmin(data.callerRole);
+    if (authError) return authError;
     const name = data.name.trim();
     if (!name) return { error: "Role name is required" };
     if (RESERVED_NAMES.has(name.toLowerCase())) {
@@ -35,9 +44,15 @@ export const createCustomRoleOnServer = createServerFn({ method: "POST" })
 
 export const updateCustomRoleOnServer = createServerFn({ method: "POST" })
   .validator(
-    (data: { id: string; patch: Partial<Pick<CustomRole, "name" | "permissions">> }) => data,
+    (data: {
+      id: string;
+      patch: Partial<Pick<CustomRole, "name" | "permissions">>;
+      callerRole: string;
+    }) => data,
   )
   .handler(async ({ data }): Promise<{ error: string } | { ok: true }> => {
+    const authError = requireSuperAdmin(data.callerRole);
+    if (authError) return authError;
     const existing = await getServerCustomRoles();
     const role = existing.find((r) => r.id === data.id);
     if (!role) return { error: "Role not found" };
@@ -67,8 +82,10 @@ export const updateCustomRoleOnServer = createServerFn({ method: "POST" })
   });
 
 export const removeCustomRoleOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: { id: string; callerRole: string }) => data)
   .handler(async ({ data }): Promise<{ error: string } | { ok: true }> => {
+    const authError = requireSuperAdmin(data.callerRole);
+    if (authError) return authError;
     const existing = await getServerCustomRoles();
     const role = existing.find((r) => r.id === data.id);
     if (!role) return { ok: true as const };

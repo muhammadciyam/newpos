@@ -9,6 +9,17 @@ export const fetchPurchaseInvoices = createServerFn({ method: "GET" }).handler(a
   return getServerPurchaseInvoices();
 });
 
+// Mirrors canManageProduct in products-api.ts — a purchase invoice belongs to the outlet it
+// was raised for.
+function canManageInvoice(
+  invoice: PurchaseInvoice,
+  role: string,
+  callerOutletId: string | null,
+): boolean {
+  if (role === "Super Admin") return true;
+  return invoice.outletId === callerOutletId;
+}
+
 export const createPurchaseInvoiceOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: {
@@ -50,10 +61,16 @@ export const createPurchaseInvoiceOnServer = createServerFn({ method: "POST" })
   });
 
 export const markPurchaseInvoiceReceivedOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string; by: string; at: string }) => data)
+  .validator(
+    (data: { id: string; by: string; at: string; role: string; callerOutletId: string | null }) =>
+      data,
+  )
   .handler(async ({ data }) => {
     const invoice = (await getServerPurchaseInvoices()).find((i) => i.id === data.id);
     if (!invoice || invoice.status !== "Pending") return { error: "Invoice not found" };
+    if (!canManageInvoice(invoice, data.role, data.callerOutletId)) {
+      return { error: "Cannot update this invoice" };
+    }
     await mutateServerPurchaseInvoices((invs) =>
       invs.map((i) =>
         i.id === data.id
@@ -68,10 +85,16 @@ export const markPurchaseInvoiceReceivedOnServer = createServerFn({ method: "POS
 // for calling productsStore.increaseStock/setCost for each line first, same as before this
 // moved server-side.
 export const approvePurchaseInvoiceOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string; by: string; at: string }) => data)
+  .validator(
+    (data: { id: string; by: string; at: string; role: string; callerOutletId: string | null }) =>
+      data,
+  )
   .handler(async ({ data }) => {
     const invoice = (await getServerPurchaseInvoices()).find((i) => i.id === data.id);
     if (!invoice || invoice.status !== "Received") return { error: "Invoice not found" };
+    if (!canManageInvoice(invoice, data.role, data.callerOutletId)) {
+      return { error: "Cannot approve this invoice" };
+    }
     await mutateServerPurchaseInvoices((invs) =>
       invs.map((i) =>
         i.id === data.id
@@ -83,11 +106,17 @@ export const approvePurchaseInvoiceOnServer = createServerFn({ method: "POST" })
   });
 
 export const rejectPurchaseInvoiceOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string; by: string; at: string }) => data)
+  .validator(
+    (data: { id: string; by: string; at: string; role: string; callerOutletId: string | null }) =>
+      data,
+  )
   .handler(async ({ data }) => {
     const invoice = (await getServerPurchaseInvoices()).find((i) => i.id === data.id);
     if (!invoice || (invoice.status !== "Pending" && invoice.status !== "Received")) {
       return { error: "Invoice not found" };
+    }
+    if (!canManageInvoice(invoice, data.role, data.callerOutletId)) {
+      return { error: "Cannot reject this invoice" };
     }
     await mutateServerPurchaseInvoices((invs) =>
       invs.map((i) =>
@@ -99,13 +128,17 @@ export const rejectPurchaseInvoiceOnServer = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
-// Deletes exactly the invoice ids the caller passes — inventory.tsx passes only whatever
-// is currently visible to it (already outlet-scoped by usePurchaseInvoices()), so an
-// outlet-scoped Admin clearing inventory only ever clears their own outlet's invoices,
-// never another outlet's.
+// Deletes the invoice ids the caller passes — inventory.tsx passes only whatever is
+// currently visible to it (already outlet-scoped by usePurchaseInvoices()), but re-checked
+// here too rather than trusting that client-side scoping alone: any id that isn't actually
+// this caller's to manage is silently kept instead of deleted.
 export const clearPurchaseInvoicesOnServer = createServerFn({ method: "POST" })
-  .validator((data: { ids: string[] }) => data)
+  .validator((data: { ids: string[]; role: string; callerOutletId: string | null }) => data)
   .handler(async ({ data }) => {
-    await mutateServerPurchaseInvoices((invs) => invs.filter((i) => !data.ids.includes(i.id)));
+    await mutateServerPurchaseInvoices((invs) =>
+      invs.filter(
+        (i) => !(data.ids.includes(i.id) && canManageInvoice(i, data.role, data.callerOutletId)),
+      ),
+    );
     return { ok: true as const };
   });

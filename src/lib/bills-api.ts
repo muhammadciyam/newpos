@@ -12,6 +12,17 @@ async function stockPatchesFor(productIds: Iterable<string>) {
   });
 }
 
+// Mirrors canManageProduct in products-api.ts — editing/voiding/refunding/settling a bill is
+// scoped to the outlet it was rung up at, same as everything else. `role`/`callerOutletId`
+// are client-supplied claims — this app has no server-verified auth (see the caveat in
+// session-api.ts), so this is the same trust model already used everywhere else, just
+// finally applied here too instead of relying only on the client hiding the Edit/Refund/Void
+// buttons.
+function canManageBill(bill: Bill, role: string, callerOutletId: string | null): boolean {
+  if (role === "Super Admin") return true;
+  return bill.outletId !== null && bill.outletId === callerOutletId;
+}
+
 // Bills created before per-outlet inventory (or on a register with no outlet assigned)
 // have no outletId — fall back to the shop's default outlet so stock still moves somewhere
 // sensible instead of the adjustment silently going nowhere.
@@ -118,11 +129,21 @@ export const createBillOnServer = createServerFn({ method: "POST" })
 
 export const updateBillOnServer = createServerFn({ method: "POST" })
   .validator(
-    (data: { number: string; items: BillLineItem[]; actor: string; gstPercent: number }) => data,
+    (data: {
+      number: string;
+      items: BillLineItem[];
+      actor: string;
+      gstPercent: number;
+      role: string;
+      callerOutletId: string | null;
+    }) => data,
   )
   .handler(async ({ data }) => {
     const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
+    if (!canManageBill(bill, data.role, data.callerOutletId)) {
+      return { error: "Cannot edit this bill" };
+    }
     if (bill.status !== "Sale") return { error: `Cannot edit a bill that is ${bill.status}` };
 
     const oldByProduct = new Map(bill.items.map((i) => [i.productId, i]));
@@ -177,10 +198,21 @@ function remainingQty(item: BillLineItem) {
 }
 
 export const voidBillOnServer = createServerFn({ method: "POST" })
-  .validator((data: { number: string; reason: string | undefined; actor: string }) => data)
+  .validator(
+    (data: {
+      number: string;
+      reason: string | undefined;
+      actor: string;
+      role: string;
+      callerOutletId: string | null;
+    }) => data,
+  )
   .handler(async ({ data }) => {
     const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
+    if (!canManageBill(bill, data.role, data.callerOutletId)) {
+      return { error: "Cannot void this bill" };
+    }
     if (bill.status !== "Sale" && bill.status !== "Partially Refunded") {
       return { error: `Bill is already ${bill.status}` };
     }
@@ -212,11 +244,16 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
       lines: { productId: string; qty: number }[];
       reason: string | undefined;
       actor: string;
+      role: string;
+      callerOutletId: string | null;
     }) => data,
   )
   .handler(async ({ data }) => {
     const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
+    if (!canManageBill(bill, data.role, data.callerOutletId)) {
+      return { error: "Cannot refund this bill" };
+    }
     if (bill.status !== "Sale" && bill.status !== "Partially Refunded") {
       return { error: `Cannot refund a bill that is ${bill.status}` };
     }
@@ -280,11 +317,16 @@ export const settleCreditOnServer = createServerFn({ method: "POST" })
       method: string;
       slipNumber?: string;
       transferSlip?: string;
+      role: string;
+      callerOutletId: string | null;
     }) => data,
   )
   .handler(async ({ data }) => {
     const bill = (await getServerBills()).find((b) => b.number === data.number);
     if (!bill) return { error: "Bill not found" };
+    if (!canManageBill(bill, data.role, data.callerOutletId)) {
+      return { error: "Cannot record a payment for this bill" };
+    }
     if (bill.paymentStatus !== "Pending") return { error: "This bill has no pending payment" };
     const alreadyPaid = (bill.payments ?? []).reduce((s, p) => s + p.amount, 0);
     const remaining = bill.total - alreadyPaid;

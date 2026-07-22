@@ -31,6 +31,10 @@ function actor() {
   return authStore.getCurrentUser()?.name ?? "System";
 }
 
+function callerRole() {
+  return authStore.getCurrentUser()?.role ?? "";
+}
+
 let items: WholesaleInventoryItem[] = [];
 const listeners = new Set<() => void>();
 
@@ -58,9 +62,10 @@ export const wholesaleInventoryStore = {
     input: Omit<WholesaleInventoryItem, "id" | "createdAt">,
   ): Promise<WholesaleInventoryItem | { error: string }> {
     const result = await safeServerCall(() =>
-      createWholesaleInventoryItemOnServer({ data: input }),
+      createWholesaleInventoryItemOnServer({ data: { ...input, callerRole: callerRole() } }),
     );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setItems([result.item, ...items]);
     logAudit(actor(), "create", `Wholesale Inventory / ${result.item.productName}`);
     return result.item;
@@ -72,7 +77,7 @@ export const wholesaleInventoryStore = {
   ): Promise<{ ok: true } | { error: string }> {
     const existing = items.find((i) => i.id === id);
     const result = await safeServerCall(() =>
-      updateWholesaleInventoryItemOnServer({ data: { id, patch } }),
+      updateWholesaleInventoryItemOnServer({ data: { id, patch, callerRole: callerRole() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -88,9 +93,10 @@ export const wholesaleInventoryStore = {
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const existing = items.find((i) => i.id === id);
     const result = await safeServerCall(() =>
-      removeWholesaleInventoryItemOnServer({ data: { id } }),
+      removeWholesaleInventoryItemOnServer({ data: { id, callerRole: callerRole() } }),
     );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setItems(items.filter((i) => i.id !== id));
     logAudit(actor(), "delete", `Wholesale Inventory / ${existing?.productName ?? id}`);
     return { ok: true };

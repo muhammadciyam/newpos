@@ -48,7 +48,10 @@ export const customRolesStore = {
     name: string;
     permissions: Permission[];
   }): Promise<CustomRole | { error: string }> {
-    const result = await safeServerCall(() => createCustomRoleOnServer({ data: input }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() =>
+      createCustomRoleOnServer({ data: { ...input, callerRole } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setCustomRoles([result.role, ...customRoles]);
@@ -61,7 +64,10 @@ export const customRolesStore = {
     patch: Partial<Pick<CustomRole, "name" | "permissions">>,
   ): Promise<{ ok: true } | { error: string }> {
     const existing = customRoles.find((r) => r.id === id);
-    const result = await safeServerCall(() => updateCustomRoleOnServer({ data: { id, patch } }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() =>
+      updateCustomRoleOnServer({ data: { id, patch, callerRole } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setCustomRoles(customRoles.map((r) => (r.id === id ? { ...r, ...patch } : r)));
@@ -71,7 +77,10 @@ export const customRolesStore = {
 
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const existing = customRoles.find((r) => r.id === id);
-    const result = await safeServerCall(() => removeCustomRoleOnServer({ data: { id } }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() =>
+      removeCustomRoleOnServer({ data: { id, callerRole } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setCustomRoles(customRoles.filter((r) => r.id !== id));

@@ -9,6 +9,12 @@ import {
 } from "@/lib/register-store";
 import { saveHeldBillOnServer } from "@/lib/register-api";
 import { safeServerCall } from "@/lib/server-fn-helpers";
+import { authStore } from "@/lib/auth-store";
+
+function caller() {
+  const user = authStore.getCurrentUser();
+  return { role: user?.role ?? "", callerOutletId: user?.outletId ?? null };
+}
 
 export type CartLine = { product: Product; qty: number; priceOverride?: number };
 
@@ -174,7 +180,7 @@ export function useSaleTabs(): SaleTabsState {
     if (!registerName) return;
     const id = setTimeout(() => {
       void safeServerCall(() =>
-        saveHeldBillOnServer({ data: { name: registerName, heldBill: localState } }),
+        saveHeldBillOnServer({ data: { name: registerName, heldBill: localState, ...caller() } }),
       );
     }, 800);
     return () => clearTimeout(id);
@@ -199,6 +205,6 @@ export function useHeldTabsPreview(): SaleTabsState {
 export async function flushHeldBill(registerName: RegisterName): Promise<void> {
   if (linkedRegister !== registerName) return;
   await safeServerCall(() =>
-    saveHeldBillOnServer({ data: { name: registerName, heldBill: store.get() } }),
+    saveHeldBillOnServer({ data: { name: registerName, heldBill: store.get(), ...caller() } }),
   );
 }

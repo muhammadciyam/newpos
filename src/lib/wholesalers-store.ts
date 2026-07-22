@@ -75,6 +75,10 @@ function actor() {
   return authStore.getCurrentUser()?.name ?? "System";
 }
 
+function callerRole() {
+  return authStore.getCurrentUser()?.role ?? "";
+}
+
 let wholesalers: Wholesaler[] = [];
 const listeners = new Set<() => void>();
 
@@ -138,8 +142,11 @@ export const wholesalersStore = {
   async create(
     input: Omit<Wholesaler, "id" | "createdAt">,
   ): Promise<Wholesaler | { error: string }> {
-    const result = await safeServerCall(() => createWholesalerOnServer({ data: input }));
+    const result = await safeServerCall(() =>
+      createWholesalerOnServer({ data: { ...input, callerRole: callerRole() } }),
+    );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setWholesalers([result.wholesaler, ...wholesalers]);
     logAudit(actor(), "create", `Wholesaler / ${result.wholesaler.name}`);
     return result.wholesaler;
@@ -150,7 +157,9 @@ export const wholesalersStore = {
     patch: Partial<Omit<Wholesaler, "id" | "createdAt">>,
   ): Promise<{ ok: true } | { error: string }> {
     const existing = wholesalers.find((w) => w.id === id);
-    const result = await safeServerCall(() => updateWholesalerOnServer({ data: { id, patch } }));
+    const result = await safeServerCall(() =>
+      updateWholesalerOnServer({ data: { id, patch, callerRole: callerRole() } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setWholesalers(wholesalers.map((w) => (w.id === id ? { ...w, ...patch } : w)));
@@ -160,8 +169,11 @@ export const wholesalersStore = {
 
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const existing = wholesalers.find((w) => w.id === id);
-    const result = await safeServerCall(() => removeWholesalerOnServer({ data: { id } }));
+    const result = await safeServerCall(() =>
+      removeWholesalerOnServer({ data: { id, callerRole: callerRole() } }),
+    );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setWholesalers(wholesalers.filter((w) => w.id !== id));
     logAudit(actor(), "delete", `Wholesaler / ${existing?.name ?? id}`);
     return { ok: true };
@@ -170,9 +182,10 @@ export const wholesalersStore = {
   async setActive(id: string, active: boolean): Promise<{ ok: true } | { error: string }> {
     const existing = wholesalers.find((w) => w.id === id);
     const result = await safeServerCall(() =>
-      setWholesalerActiveOnServer({ data: { id, active } }),
+      setWholesalerActiveOnServer({ data: { id, active, callerRole: callerRole() } }),
     );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setWholesalers(wholesalers.map((w) => (w.id === id ? { ...w, active } : w)));
     logAudit(
       actor(),

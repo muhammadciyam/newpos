@@ -11,6 +11,17 @@ function normalizeForMatch(s: string | undefined): string {
   return (s ?? "").trim().toLowerCase();
 }
 
+// Mirrors canManageProduct in products-api.ts — a customer belongs to the outlet it was
+// created at, same as every other outlet-owned resource.
+function canManageCustomer(
+  customer: Customer,
+  role: string,
+  callerOutletId: string | null,
+): boolean {
+  if (role === "Super Admin") return true;
+  return customer.outletId !== null && customer.outletId === callerOutletId;
+}
+
 export const createCustomerOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: Omit<Customer, "id" | "outstanding" | "spent" | "loyalty"> & { id?: string }) => data,
@@ -53,11 +64,15 @@ export const updateCustomerOnServer = createServerFn({ method: "POST" })
     (data: {
       id: string;
       patch: Partial<Omit<Customer, "id" | "outstanding" | "spent" | "loyalty">>;
+      role: string;
+      callerOutletId: string | null;
     }) => data,
   )
   .handler(async ({ data }) => {
-    if (!(await getServerCustomers()).some((c) => c.id === data.id)) {
-      return { error: "Customer not found" };
+    const customer = (await getServerCustomers()).find((c) => c.id === data.id);
+    if (!customer) return { error: "Customer not found" };
+    if (!canManageCustomer(customer, data.role, data.callerOutletId)) {
+      return { error: "Cannot edit this customer" };
     }
     await mutateServerCustomers((cs) =>
       cs.map((c) => (c.id === data.id ? { ...c, ...data.patch } : c)),
@@ -66,8 +81,13 @@ export const updateCustomerOnServer = createServerFn({ method: "POST" })
   });
 
 export const removeCustomerOnServer = createServerFn({ method: "POST" })
-  .validator((data: { id: string }) => data)
+  .validator((data: { id: string; role: string; callerOutletId: string | null }) => data)
   .handler(async ({ data }): Promise<{ error: string } | { ok: true }> => {
+    const customer = (await getServerCustomers()).find((c) => c.id === data.id);
+    if (!customer) return { error: "Customer not found" };
+    if (!canManageCustomer(customer, data.role, data.callerOutletId)) {
+      return { error: "Cannot delete this customer" };
+    }
     const hasBills = (await getServerBills()).some((b) => b.customerId === data.id);
     if (hasBills) {
       return { error: "This customer has sales on record and can't be deleted." };

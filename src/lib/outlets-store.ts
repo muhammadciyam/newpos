@@ -49,8 +49,12 @@ export const outletsStore = {
   get: () => outlets,
 
   async create(input: Omit<Outlet, "id" | "createdAt">): Promise<Outlet | { error: string }> {
-    const result = await safeServerCall(() => createOutletOnServer({ data: input }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() =>
+      createOutletOnServer({ data: { ...input, callerRole } }),
+    );
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setOutlets([result.outlet, ...outlets]);
     logAudit(actor(), "create", `Outlet / ${result.outlet.name}`);
     return result.outlet;
@@ -61,7 +65,10 @@ export const outletsStore = {
     patch: Partial<Omit<Outlet, "id" | "createdAt">>,
   ): Promise<{ ok: true } | { error: string }> {
     const existing = outlets.find((o) => o.id === id);
-    const result = await safeServerCall(() => updateOutletOnServer({ data: { id, patch } }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() =>
+      updateOutletOnServer({ data: { id, patch, callerRole } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setOutlets(outlets.map((o) => (o.id === id ? { ...o, ...patch } : o)));
@@ -71,8 +78,10 @@ export const outletsStore = {
 
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const existing = outlets.find((o) => o.id === id);
-    const result = await safeServerCall(() => removeOutletOnServer({ data: { id } }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() => removeOutletOnServer({ data: { id, callerRole } }));
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setOutlets(outlets.filter((o) => o.id !== id));
     logAudit(actor(), "delete", `Outlet / ${existing?.name ?? id}`);
     return { ok: true };

@@ -16,6 +16,11 @@ function actor() {
   return authStore.getCurrentUser()?.name ?? "System";
 }
 
+function caller() {
+  const user = authStore.getCurrentUser();
+  return { role: user?.role ?? "", callerOutletId: user?.outletId ?? null };
+}
+
 let customers: Customer[] = [];
 const listeners = new Set<() => void>();
 
@@ -57,7 +62,9 @@ export const customersStore = {
     id: string,
     patch: Partial<Omit<Customer, "id" | "outstanding" | "spent" | "loyalty" | "outletId">>,
   ): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => updateCustomerOnServer({ data: { id, patch } }));
+    const result = await safeServerCall(() =>
+      updateCustomerOnServer({ data: { id, patch, ...caller() } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setCustomers(customers.map((c) => (c.id === id ? { ...c, ...patch } : c)));
@@ -67,7 +74,9 @@ export const customersStore = {
 
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const existing = customers.find((c) => c.id === id);
-    const result = await safeServerCall(() => removeCustomerOnServer({ data: { id } }));
+    const result = await safeServerCall(() =>
+      removeCustomerOnServer({ data: { id, ...caller() } }),
+    );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
     setCustomers(customers.filter((c) => c.id !== id));

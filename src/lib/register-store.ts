@@ -263,13 +263,23 @@ async function closeOutSession(name: RegisterName, now: number, closing?: Regist
     serverSessions.map((s) => (s.id === opened.id ? { ...s, closedAt, openDuration, closing } : s)),
   );
   await safeServerCall(() =>
-    closeRegisterSessionOnServer({ data: { register: name, closedAt, openDuration, closing } }),
+    closeRegisterSessionOnServer({
+      data: { register: name, closedAt, openDuration, closing, ...caller() },
+    }),
   );
+}
+
+function caller() {
+  const user = authStore.getCurrentUser();
+  return { role: user?.role ?? "", callerOutletId: user?.outletId ?? null };
 }
 
 export const registerStore = {
   async createRegister(name: string, outletId: string): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => createRegisterOnServer({ data: { name, outletId } }));
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
+    const result = await safeServerCall(() =>
+      createRegisterOnServer({ data: { name, outletId, callerRole } }),
+    );
     if (!("error" in result)) await refreshRegistersFromServer();
     return result;
   },
@@ -277,8 +287,9 @@ export const registerStore = {
   // Assigns/reassigns which outlet a register belongs to — mainly for registers created
   // before per-outlet inventory existed, which show "—" for Outlet until fixed up here.
   async setOutlet(name: RegisterName, outletId: string): Promise<{ ok: true } | { error: string }> {
+    const callerRole = authStore.getCurrentUser()?.role ?? "";
     const result = await safeServerCall(() =>
-      setRegisterOutletOnServer({ data: { name, outletId } }),
+      setRegisterOutletOnServer({ data: { name, outletId, callerRole } }),
     );
     if (!("error" in result)) {
       patchServerRegister(name, { ...serverRegisters[name], outletId });
@@ -295,7 +306,7 @@ export const registerStore = {
     const actor = by ?? authStore.getCurrentUser()?.name ?? "Unknown";
     const result = await safeServerCall(() =>
       openRegisterOnServer({
-        data: { name, by: actor, deviceId: getTabId(), opening: opening ?? {} },
+        data: { name, by: actor, deviceId: getTabId(), opening: opening ?? {}, ...caller() },
       }),
     );
     if ("error" in result) return result;
@@ -324,7 +335,7 @@ export const registerStore = {
       outletId: serverRegisters[name]?.outletId ?? null,
     };
     setServerSessions([session, ...serverSessions]);
-    void safeServerCall(() => createRegisterSessionOnServer({ data: session }));
+    void safeServerCall(() => createRegisterSessionOnServer({ data: { ...session, ...caller() } }));
     logAudit(actor, "create", `Register Session / ${name}`);
     await refreshRegistersFromServer();
     return { ok: true };
@@ -351,7 +362,9 @@ export const registerStore = {
     name: RegisterName,
     closing?: RegisterSessionClosing,
   ): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => closeRegisterOnServer({ data: { name } }));
+    const result = await safeServerCall(() =>
+      closeRegisterOnServer({ data: { name, ...caller() } }),
+    );
     if ("error" in result) return result;
     patchServerRegister(name, {
       isOpen: false,
@@ -378,8 +391,9 @@ export const registerStore = {
   // in register-api.ts: this app has no server-verified auth, so it's a UI-level
   // guard consistent with the rest of the app's all-client-trust permission model.
   async forceClose(name: RegisterName): Promise<{ ok: true } | { error: string }> {
-    const role = authStore.getCurrentUser()?.role ?? "";
-    const result = await safeServerCall(() => forceCloseRegisterOnServer({ data: { name, role } }));
+    const result = await safeServerCall(() =>
+      forceCloseRegisterOnServer({ data: { name, ...caller() } }),
+    );
     if ("error" in result) return result;
     patchServerRegister(name, {
       isOpen: false,

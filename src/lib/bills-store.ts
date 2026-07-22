@@ -21,6 +21,14 @@ function actor() {
   return authStore.getCurrentUser()?.name ?? "System";
 }
 
+// Passed alongside every mutation below so the server can verify the caller actually owns
+// the outlet a bill belongs to (see canManageBill in bills-api.ts), instead of trusting the
+// client to have hidden the Edit/Refund/Void buttons correctly.
+function caller() {
+  const user = authStore.getCurrentUser();
+  return { role: user?.role ?? "", callerOutletId: user?.outletId ?? null };
+}
+
 let bills: Bill[] = [];
 const listeners = new Set<() => void>();
 
@@ -325,7 +333,7 @@ export const billsStore = {
   async update(number: string, items: BillLineItem[]): Promise<{ ok: true } | { error: string }> {
     const gstPercent = settingsStore.get().tax.gstPercent;
     const result = await safeServerCall(() =>
-      updateBillOnServer({ data: { number, items, actor: actor(), gstPercent } }),
+      updateBillOnServer({ data: { number, items, actor: actor(), gstPercent, ...caller() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -339,7 +347,7 @@ export const billsStore = {
   // been refunded, and marks the bill Void.
   async void(number: string, reason?: string): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() =>
-      voidBillOnServer({ data: { number, reason, actor: actor() } }),
+      voidBillOnServer({ data: { number, reason, actor: actor(), ...caller() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -357,7 +365,7 @@ export const billsStore = {
     reason?: string,
   ): Promise<{ ok: true } | { error: string }> {
     const result = await safeServerCall(() =>
-      refundBillOnServer({ data: { number, lines, reason, actor: actor() } }),
+      refundBillOnServer({ data: { number, lines, reason, actor: actor(), ...caller() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
@@ -379,7 +387,7 @@ export const billsStore = {
   ): Promise<{ ok: true; remaining: number } | { error: string }> {
     const result = await safeServerCall(() =>
       settleCreditOnServer({
-        data: { number, actor: actor(), amount, method, slipNumber, transferSlip },
+        data: { number, actor: actor(), amount, method, slipNumber, transferSlip, ...caller() },
       }),
     );
     if ("networkError" in result) return { error: result.error };
