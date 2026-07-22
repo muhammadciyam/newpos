@@ -135,6 +135,7 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
       items: BillLineItem[];
       actor: string;
       gstPercent: number;
+      editedAt: string;
       role: string;
       callerOutletId: string | null;
     }) => data,
@@ -184,7 +185,7 @@ export const updateBillOnServer = createServerFn({ method: "POST" })
               gst,
               total,
               editedBy: data.actor,
-              editedAt: formatBillTimestamp(),
+              editedAt: data.editedAt,
               originalTotal: b.originalTotal ?? b.total,
             }
           : b,
@@ -204,6 +205,7 @@ export const voidBillOnServer = createServerFn({ method: "POST" })
       number: string;
       reason: string | undefined;
       actor: string;
+      voidedAt: string;
       role: string;
       callerOutletId: string | null;
     }) => data,
@@ -228,7 +230,7 @@ export const voidBillOnServer = createServerFn({ method: "POST" })
               ...b,
               status: "Void",
               voidedBy: data.actor,
-              voidedAt: formatBillTimestamp(),
+              voidedAt: data.voidedAt,
               voidReason: data.reason,
             }
           : b,
@@ -245,6 +247,7 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
       lines: { productId: string; qty: number }[];
       reason: string | undefined;
       actor: string;
+      at: string;
       role: string;
       callerOutletId: string | null;
     }) => data,
@@ -282,7 +285,7 @@ export const refundBillOnServer = createServerFn({ method: "POST" })
 
     const refund = {
       id: `refund-${Date.now()}`,
-      at: formatBillTimestamp(),
+      at: data.at,
       by: data.actor,
       items: refundItems,
       amount,
@@ -318,6 +321,7 @@ export const settleCreditOnServer = createServerFn({ method: "POST" })
       method: string;
       slipNumber?: string;
       transferSlip?: string;
+      at: string;
       role: string;
       callerOutletId: string | null;
     }) => data,
@@ -340,7 +344,7 @@ export const settleCreditOnServer = createServerFn({ method: "POST" })
     }
     const payment: CreditPayment = {
       id: `credit-payment-${Date.now()}`,
-      at: formatBillTimestamp(),
+      at: data.at,
       by: data.actor,
       amount: data.amount,
       method: data.method,
@@ -358,7 +362,7 @@ export const settleCreditOnServer = createServerFn({ method: "POST" })
                 ? {
                     paymentStatus: "Paid" as const,
                     settledBy: data.actor,
-                    settledAt: formatBillTimestamp(),
+                    settledAt: data.at,
                   }
                 : {}),
             }
