@@ -175,7 +175,13 @@ export function ProductImportDialog({
       toast.error(result.error);
       return;
     }
-    toast.success(`Imported ${result.length} product${result.length === 1 ? "" : "s"}`);
+    const { products, skipped } = result;
+    toast.success(`Imported ${products.length} product${products.length === 1 ? "" : "s"}`);
+    if (skipped.length > 0) {
+      toast.error(
+        `Skipped ${skipped.length} duplicate${skipped.length === 1 ? "" : "s"}: ${skipped.join(", ")}`,
+      );
+    }
     setRows(null);
     onOpenChange(false);
   }

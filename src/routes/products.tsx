@@ -54,6 +54,10 @@ export const Route = createFileRoute("/products")({
 const emptyForm = {
   name: "",
   price: "",
+  // Convenience mirror of `price` (which is always stored GST-exclusive) shown as a second
+  // "Price (Incl. GST)" field so whoever's typing in the actual shelf/selling price doesn't
+  // have to back out the tax themselves — see the two onChange handlers below.
+  priceIncGst: "",
   category: "drinks",
   barcode: "",
   image: "",
@@ -61,6 +65,18 @@ const emptyForm = {
   gstApplicable: true,
   outletId: "",
 };
+
+function priceWithGst(price: string, gstPercent: number): string {
+  const n = parseFloat(price);
+  if (!Number.isFinite(n)) return "";
+  return (n * (1 + gstPercent / 100)).toFixed(2);
+}
+
+function priceWithoutGst(priceIncGst: string, gstPercent: number): string {
+  const n = parseFloat(priceIncGst);
+  if (!Number.isFinite(n)) return "";
+  return (n / (1 + gstPercent / 100)).toFixed(2);
+}
 
 function ProductsPage() {
   const canManage = useHasPermission("products.manage");
@@ -115,14 +131,17 @@ function ProductsPage() {
     const p = products.find((x) => x.id === id);
     if (!p) return;
     setEditingId(id);
+    const gstApplicable = p.gstApplicable ?? true;
+    const price = String(p.price);
     setForm({
       name: p.name,
-      price: String(p.price),
+      price,
+      priceIncGst: gstApplicable ? priceWithGst(price, settings.tax.gstPercent) : price,
       category: p.category,
       barcode: p.barcode ?? "",
       image: p.image,
       countable: p.countable ?? true,
-      gstApplicable: p.gstApplicable ?? true,
+      gstApplicable,
       outletId: p.outletId ?? "",
     });
     setOpen(true);
@@ -467,75 +486,104 @@ function ProductsPage() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">
-                <Label>Price</Label>
+                <Label>Price (Excl. GST)</Label>
                 <Input
                   value={form.price}
-                  onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                  onChange={(e) => {
+                    const price = e.target.value;
+                    setForm((f) => ({
+                      ...f,
+                      price,
+                      priceIncGst: f.gstApplicable
+                        ? priceWithGst(price, settings.tax.gstPercent)
+                        : price,
+                    }));
+                  }}
                   placeholder="0.00"
                 />
               </div>
               <div className="space-y-1.5">
-                <Label>Category</Label>
-                {addingCategory ? (
-                  <div className="flex items-center gap-1.5">
-                    <Input
-                      autoFocus
-                      value={newCategoryName}
-                      onChange={(e) => setNewCategoryName(e.target.value)}
-                      placeholder="New category name"
-                      onKeyDown={(e) => e.key === "Enter" && addCategory()}
-                    />
-                    <Button
-                      type="button"
-                      size="sm"
-                      disabled={!newCategoryName.trim()}
-                      onClick={addCategory}
-                    >
-                      Add
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => {
-                        setAddingCategory(false);
-                        setNewCategoryName("");
-                      }}
-                    >
-                      Cancel
-                    </Button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-1.5">
-                    <Select
-                      value={form.category}
-                      onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories
-                          .filter((c) => c.id !== "all")
-                          .map((c) => (
-                            <SelectItem key={c.id} value={c.id}>
-                              {c.name}
-                            </SelectItem>
-                          ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="icon"
-                      title="Add new category"
-                      onClick={() => setAddingCategory(true)}
-                    >
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </div>
-                )}
+                <Label>Price (Incl. GST)</Label>
+                <Input
+                  value={form.priceIncGst}
+                  disabled={!form.gstApplicable}
+                  onChange={(e) => setForm((f) => ({ ...f, priceIncGst: e.target.value }))}
+                  onBlur={(e) => {
+                    if (!form.gstApplicable) return;
+                    const price = priceWithoutGst(e.target.value, settings.tax.gstPercent);
+                    setForm((f) => ({
+                      ...f,
+                      price: price || f.price,
+                      priceIncGst: price
+                        ? priceWithGst(price, settings.tax.gstPercent)
+                        : f.priceIncGst,
+                    }));
+                  }}
+                  placeholder="0.00"
+                />
               </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label>Category</Label>
+              {addingCategory ? (
+                <div className="flex items-center gap-1.5">
+                  <Input
+                    autoFocus
+                    value={newCategoryName}
+                    onChange={(e) => setNewCategoryName(e.target.value)}
+                    placeholder="New category name"
+                    onKeyDown={(e) => e.key === "Enter" && addCategory()}
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    disabled={!newCategoryName.trim()}
+                    onClick={addCategory}
+                  >
+                    Add
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setAddingCategory(false);
+                      setNewCategoryName("");
+                    }}
+                  >
+                    Cancel
+                  </Button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5">
+                  <Select
+                    value={form.category}
+                    onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories
+                        .filter((c) => c.id !== "all")
+                        .map((c) => (
+                          <SelectItem key={c.id} value={c.id}>
+                            {c.name}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    title="Add new category"
+                    onClick={() => setAddingCategory(true)}
+                  >
+                    <Plus className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
@@ -558,7 +606,13 @@ function ProductsPage() {
               </div>
               <Switch
                 checked={form.gstApplicable}
-                onCheckedChange={(v) => setForm((f) => ({ ...f, gstApplicable: v }))}
+                onCheckedChange={(v) =>
+                  setForm((f) => ({
+                    ...f,
+                    gstApplicable: v,
+                    priceIncGst: v ? priceWithGst(f.price, settings.tax.gstPercent) : f.price,
+                  }))
+                }
               />
             </div>
             {!editingId && (

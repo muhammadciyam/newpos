@@ -84,22 +84,25 @@ export const productsStore = {
   async create(input: Omit<Product, "id" | "stock" | "sku">): Promise<Product | { error: string }> {
     const result = await safeServerCall(() => createProductOnServer({ data: input }));
     if ("networkError" in result) return { error: result.error };
+    if ("error" in result) return result;
     setProducts([result.product, ...products]);
     logAudit(actor(), "create", `Product / ${result.product.name}`);
     return result.product;
   },
 
-  // Used by the Products page's CSV import.
+  // Used by the Products page's CSV import. `skipped` names rows that were dropped as
+  // duplicates (of the existing catalog, or of an earlier row in the same file) rather than
+  // failing the whole import — see createProductsBulkOnServer.
   async createBulk(
     inputs: Omit<Product, "id" | "stock" | "sku">[],
-  ): Promise<Product[] | { error: string }> {
+  ): Promise<{ products: Product[]; skipped: string[] } | { error: string }> {
     const result = await safeServerCall(() =>
       createProductsBulkOnServer({ data: { items: inputs } }),
     );
     if ("networkError" in result) return { error: result.error };
     setProducts([...result.products, ...products]);
     logAudit(actor(), "create", `${result.products.length} products imported from CSV`);
-    return result.products;
+    return { products: result.products, skipped: result.skipped };
   },
 
   // Restricted server-side to Super Admin, or an Admin whose own outlet owns this product —
