@@ -10,6 +10,7 @@ export type Permission =
   | "inventory.approve" // approve/reject Purchase Invoices
   | "reports.view" // Reports + Analytics pages
   | "customers.manage" // create customers
+  | "customers.edit" // edit/delete existing customers
   | "sales.viewAll" // Bill History shows everyone's bills, not just their own
   | "sales.manage" // edit / void / refund bills in Bill History
   | "sales.foc" // mark a sale as Free of Charge on the Sell page
@@ -26,6 +27,7 @@ export const ALL_PERMISSIONS: Permission[] = [
   "inventory.approve",
   "reports.view",
   "customers.manage",
+  "customers.edit",
   "sales.viewAll",
   "sales.manage",
   "sales.foc",
@@ -40,7 +42,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "inventory.access": "Access Inventory — view/create Purchase Invoices",
   "inventory.approve": "Approve Purchase Invoices",
   "reports.view": "View Reports & Analytics",
-  "customers.manage": "Manage Customers",
+  "customers.manage": "Manage Customers — create new customers",
+  "customers.edit": "Edit/Delete Customers — update or remove existing customer records",
   "sales.viewAll": "View All Sales — Bill History for every user",
   "sales.manage": "Manage Sales — edit, void, refund bills",
   "sales.foc": "Mark Sales as Free of Charge (FOC) on the Sell page",
@@ -57,6 +60,7 @@ const rolePermissions: Record<string, Permission[]> = {
     "inventory.approve",
     "reports.view",
     "customers.manage",
+    "customers.edit",
     "sales.viewAll",
     "sales.manage",
     "sales.foc",
@@ -71,6 +75,7 @@ const rolePermissions: Record<string, Permission[]> = {
     "inventory.approve",
     "reports.view",
     "customers.manage",
+    "customers.edit",
     "sales.viewAll",
     "sales.manage",
     "sales.foc",
@@ -82,6 +87,7 @@ const rolePermissions: Record<string, Permission[]> = {
     "inventory.approve",
     "reports.view",
     "customers.manage",
+    "customers.edit",
     "sales.viewAll",
     "sales.foc",
     "wholesale.manage",
@@ -90,9 +96,12 @@ const rolePermissions: Record<string, Permission[]> = {
     "inventory.access",
     "reports.view",
     "customers.manage",
+    "customers.edit",
     "sales.viewAll",
     "sales.foc",
   ],
+  // Cashier can create new customers at the register but can't edit or delete an existing
+  // customer's record — see customers.tsx.
   Cashier: ["customers.manage"],
 };
 

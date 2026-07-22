@@ -48,6 +48,7 @@ import { useBills } from "@/lib/bills-store";
 import { useSettings } from "@/lib/settings-store";
 import { CustomerSalesDialog } from "@/components/customer-sales-dialog";
 import { downloadCsv } from "@/lib/csv-utils";
+import { useHasPermission } from "@/lib/permissions";
 
 export const Route = createFileRoute("/customers")({
   head: () => ({
@@ -84,6 +85,8 @@ const emptyForm = {
 };
 
 function CustomersPage() {
+  const canCreate = useHasPermission("customers.manage");
+  const canEdit = useHasPermission("customers.edit");
   const customers = useCustomers();
   const bills = useBills();
   const settings = useSettings();
@@ -217,9 +220,11 @@ function CustomersPage() {
                 <SelectItem value="clear">No Balance Due</SelectItem>
               </SelectContent>
             </Select>
-            <Button onClick={openCreate} className="gap-1.5">
-              <Plus className="h-4 w-4" /> New
-            </Button>
+            {canCreate && (
+              <Button onClick={openCreate} className="gap-1.5">
+                <Plus className="h-4 w-4" /> New
+              </Button>
+            )}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="icon">
@@ -283,51 +288,53 @@ function CustomersPage() {
                       <Button variant="outline" size="sm" onClick={() => setSalesCustomerId(c.id)}>
                         View Sales
                       </Button>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="outline" size="icon" className="h-8 w-8">
-                            <MoreHorizontal className="h-3.5 w-3.5" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem onClick={() => openEdit(c)} className="gap-1.5">
-                            <Pencil className="h-3.5 w-3.5" /> Edit
-                          </DropdownMenuItem>
-                          <AlertDialog>
-                            <AlertDialogTrigger asChild>
-                              <DropdownMenuItem
-                                onSelect={(e) => e.preventDefault()}
-                                className="gap-1.5 text-destructive focus:text-destructive"
-                              >
-                                <Trash2 className="h-3.5 w-3.5" /> Delete
-                              </DropdownMenuItem>
-                            </AlertDialogTrigger>
-                            <AlertDialogContent>
-                              <AlertDialogHeader>
-                                <AlertDialogTitle>Delete "{c.name}"?</AlertDialogTitle>
-                                <AlertDialogDescription>
-                                  This removes the customer record. This can't be undone.
-                                </AlertDialogDescription>
-                              </AlertDialogHeader>
-                              <AlertDialogFooter>
-                                <AlertDialogCancel>Cancel</AlertDialogCancel>
-                                <AlertDialogAction
-                                  onClick={async () => {
-                                    const result = await customersStore.remove(c.id);
-                                    if ("error" in result) {
-                                      toast.error(result.error);
-                                      return;
-                                    }
-                                    toast.success(`"${c.name}" deleted`);
-                                  }}
+                      {canEdit && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="icon" className="h-8 w-8">
+                              <MoreHorizontal className="h-3.5 w-3.5" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            <DropdownMenuItem onClick={() => openEdit(c)} className="gap-1.5">
+                              <Pencil className="h-3.5 w-3.5" /> Edit
+                            </DropdownMenuItem>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <DropdownMenuItem
+                                  onSelect={(e) => e.preventDefault()}
+                                  className="gap-1.5 text-destructive focus:text-destructive"
                                 >
-                                  Delete
-                                </AlertDialogAction>
-                              </AlertDialogFooter>
-                            </AlertDialogContent>
-                          </AlertDialog>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
+                                  <Trash2 className="h-3.5 w-3.5" /> Delete
+                                </DropdownMenuItem>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete "{c.name}"?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This removes the customer record. This can't be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction
+                                    onClick={async () => {
+                                      const result = await customersStore.remove(c.id);
+                                      if ("error" in result) {
+                                        toast.error(result.error);
+                                        return;
+                                      }
+                                      toast.success(`"${c.name}" deleted`);
+                                    }}
+                                  >
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

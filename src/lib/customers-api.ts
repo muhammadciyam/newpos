@@ -22,6 +22,17 @@ function canManageCustomer(
   return customer.outletId !== null && customer.outletId === callerOutletId;
 }
 
+// A Cashier can create a walk-in customer (see createCustomerOnServer) but shouldn't be able
+// to edit or delete an existing customer's record — that's Supervisor and up (see
+// permissions.ts's "customers.edit"). Doesn't account for a custom role separately granted
+// the permission, same simplification the rest of this app's server-side checks already make
+// (see requireWholesaleManage in wholesalers-api.ts).
+function requireCustomerEdit(role: string): { error: string } | null {
+  return ["Super Admin", "Admin", "Manager", "Supervisor"].includes(role)
+    ? null
+    : { error: "You don't have permission to edit or delete customers" };
+}
+
 export const createCustomerOnServer = createServerFn({ method: "POST" })
   .validator(
     (data: Omit<Customer, "id" | "outstanding" | "spent" | "loyalty"> & { id?: string }) => data,
@@ -69,6 +80,8 @@ export const updateCustomerOnServer = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
+    const authError = requireCustomerEdit(data.role);
+    if (authError) return authError;
     const customer = (await getServerCustomers()).find((c) => c.id === data.id);
     if (!customer) return { error: "Customer not found" };
     if (!canManageCustomer(customer, data.role, data.callerOutletId)) {
@@ -83,6 +96,8 @@ export const updateCustomerOnServer = createServerFn({ method: "POST" })
 export const removeCustomerOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; role: string; callerOutletId: string | null }) => data)
   .handler(async ({ data }): Promise<{ error: string } | { ok: true }> => {
+    const authError = requireCustomerEdit(data.role);
+    if (authError) return authError;
     const customer = (await getServerCustomers()).find((c) => c.id === data.id);
     if (!customer) return { error: "Customer not found" };
     if (!canManageCustomer(customer, data.role, data.callerOutletId)) {
