@@ -81,14 +81,11 @@ import {
 import { useCart, cartStore, type CartItem } from "@/lib/cart-store";
 import { useWholesaleOrders, wholesaleOrdersStore } from "@/lib/wholesale-orders-store";
 import { useCurrentUser } from "@/lib/auth-store";
+import { useHasPermission } from "@/lib/permissions";
 import { findProductPhoto } from "@/lib/product-photo-search";
 import { logAudit } from "@/lib/audit-log-store";
 import { settingsStore, useSettings } from "@/lib/settings-store";
 import { cn } from "@/lib/utils";
-
-// Wholesaler management (add/edit/delete/enable-disable) is restricted to this one email,
-// independent of the app's Role/Permission system — everyone else can only browse.
-const SUPPLY_ADMIN_EMAIL = "siyante003@gmail.com";
 
 export const Route = createFileRoute("/supply/home")({
   head: () => ({
@@ -272,6 +269,7 @@ function UnitSelect({
 
 function WholesalerHomePage() {
   const currentUser = useCurrentUser();
+  const canManage = useHasPermission("wholesale.manage");
   const wholesalers = useWholesalers();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -329,7 +327,6 @@ function WholesalerHomePage() {
 
   if (!currentUser) return <RestrictedPage />;
 
-  const canManage = (currentUser.email ?? "").trim().toLowerCase() === SUPPLY_ADMIN_EMAIL;
   const visible = canManage ? wholesalers : wholesalers.filter((s) => s.active);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
