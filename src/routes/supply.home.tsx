@@ -677,6 +677,23 @@ function WholesalerHomePage() {
   }
 
   const productWholesaler = wholesalers.find((w) => w.id === productWholesalerId) ?? null;
+  const productCategory =
+    productWholesaler?.categories.find((c) => c.id === productCategoryId) ?? null;
+
+  // Lets a category be deleted right from the Add Product picker, same effect as deleting it
+  // from the full wholesaler edit form — no need to leave this dialog to do it.
+  async function deleteProductCategory() {
+    if (!productWholesaler || !productCategory) return;
+    const result = await wholesalersStore.update(productWholesaler.id, {
+      categories: productWholesaler.categories.filter((c) => c.id !== productCategory.id),
+    });
+    if ("error" in result) {
+      toast.error(result.error);
+      return;
+    }
+    toast.success(`"${productCategory.name}" deleted`);
+    setProductCategoryId("");
+  }
 
   async function submitStandaloneProduct() {
     if (!productWholesaler) {
@@ -1451,27 +1468,62 @@ function WholesalerHomePage() {
                 <Label>
                   <span className="text-destructive">*</span> Category
                 </Label>
-                <Select
-                  value={productCategoryId}
-                  onValueChange={setProductCategoryId}
-                  disabled={!productWholesaler}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Choose a category" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(productWholesaler?.categories ?? []).map((c) => (
-                      <SelectItem key={c.id} value={c.id}>
-                        {c.name}
+                <div className="flex gap-2">
+                  <Select
+                    value={productCategoryId}
+                    onValueChange={setProductCategoryId}
+                    disabled={!productWholesaler}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Choose a category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(productWholesaler?.categories ?? []).map((c) => (
+                        <SelectItem key={c.id} value={c.id}>
+                          {c.name}
+                        </SelectItem>
+                      ))}
+                      <SelectItem value={NEW_CATEGORY_VALUE}>
+                        <span className="flex items-center gap-1.5">
+                          <Plus className="h-3.5 w-3.5" /> New Category
+                        </span>
                       </SelectItem>
-                    ))}
-                    <SelectItem value={NEW_CATEGORY_VALUE}>
-                      <span className="flex items-center gap-1.5">
-                        <Plus className="h-3.5 w-3.5" /> New Category
-                      </span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                    </SelectContent>
+                  </Select>
+                  {productCategory && (
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="icon"
+                          className="shrink-0 text-destructive hover:text-destructive"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Delete category "{productCategory.name}"?
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            This removes the category and all {productCategory.products.length}{" "}
+                            product
+                            {productCategory.products.length === 1 ? "" : "s"} in it. This can't be
+                            undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel>Cancel</AlertDialogCancel>
+                          <AlertDialogAction onClick={deleteProductCategory}>
+                            Delete
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  )}
+                </div>
                 {productCategoryId === NEW_CATEGORY_VALUE && (
                   <Input
                     value={productNewCategoryName}
