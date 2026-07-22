@@ -49,18 +49,30 @@ const openingKeyForCashType: Record<string, string> = {
   card: "card",
   "cash-usd": "usd",
   "cash-usd-1": "usd1",
+  "cash-usd-5": "usd5",
+  "cash-usd-10": "usd10",
   "cash-usd-20": "usd20",
+  "cash-usd-50": "usd50",
+  "cash-usd-100": "usd100",
 };
 
 const countMoneyTitles: Record<string, string> = {
   mvr: "MVR",
   usd: "USD",
   usd1: "USD $1",
+  usd5: "USD $5",
+  usd10: "USD $10",
   usd20: "USD $20",
+  usd50: "USD $50",
+  usd100: "USD $100",
   cash: "MVR",
   "cash-usd": "USD",
   "cash-usd-1": "USD $1",
+  "cash-usd-5": "USD $5",
+  "cash-usd-10": "USD $10",
   "cash-usd-20": "USD $20",
+  "cash-usd-50": "USD $50",
+  "cash-usd-100": "USD $100",
 };
 
 export const Route = createFileRoute("/pos/register")({
@@ -113,7 +125,11 @@ function RegisterPage() {
     mvr: "0",
     usd: "0",
     usd1: "0",
+    usd5: "0",
+    usd10: "0",
     usd20: "0",
+    usd50: "0",
+    usd100: "0",
     card: "0",
     bank: "0",
   });

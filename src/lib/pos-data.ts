@@ -89,7 +89,11 @@ export const cashTypes: CashType[] = [
   { key: "card", label: "card", currency: "" },
   { key: "cash-usd", label: "cash/USD", currency: "USD" },
   { key: "cash-usd-1", label: "cash/USD 1", currency: "USD 1" },
-  { key: "cash-usd-20", label: "cash/usd 20", currency: "usd 20" },
+  { key: "cash-usd-5", label: "cash/USD 5", currency: "USD 5" },
+  { key: "cash-usd-10", label: "cash/USD 10", currency: "USD 10" },
+  { key: "cash-usd-20", label: "cash/USD 20", currency: "USD 20" },
+  { key: "cash-usd-50", label: "cash/USD 50", currency: "USD 50" },
+  { key: "cash-usd-100", label: "cash/USD 100", currency: "USD 100" },
 ];
 
 // The cash-counting/sales detail captured at the moment a register was closed — what
@@ -354,9 +358,21 @@ export function denominationsForKey(key: string): { name: string; value: number 
     case "usd1":
     case "cash-usd-1":
       return usdDenominations.filter((d) => d.value === 1);
+    case "usd5":
+    case "cash-usd-5":
+      return usdDenominations.filter((d) => d.value === 5);
+    case "usd10":
+    case "cash-usd-10":
+      return usdDenominations.filter((d) => d.value === 10);
     case "usd20":
     case "cash-usd-20":
       return usdDenominations.filter((d) => d.value === 20);
+    case "usd50":
+    case "cash-usd-50":
+      return usdDenominations.filter((d) => d.value === 50);
+    case "usd100":
+    case "cash-usd-100":
+      return usdDenominations.filter((d) => d.value === 100);
     default:
       return [];
   }
