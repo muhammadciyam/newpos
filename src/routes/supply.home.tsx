@@ -2160,7 +2160,7 @@ function CatalogueSheet({
   onOpenOrderHistory: () => void;
 }) {
   const [query, setQuery] = useState("");
-  const [fullScreen, setFullScreen] = useState(false);
+  const [fullScreen, setFullScreen] = useState(true);
   const [editingProduct, setEditingProduct] = useState<{
     categoryId: string;
     product: WholesalerProduct;
