@@ -276,8 +276,6 @@ function RegisterPage() {
               {[
                 ["mvr", "Opening Cash Amount (MVR)"],
                 ["usd", "Opening Cash Amount (USD)"],
-                ["usd1", "Opening Cash Amount (USD 1)"],
-                ["usd20", "Opening Cash Amount (usd 20)"],
               ].map(([key, label]) => (
                 <div key={key} className="flex items-center justify-between gap-3">
                   <label className="text-sm text-foreground">

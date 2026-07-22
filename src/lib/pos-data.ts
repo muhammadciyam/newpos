@@ -343,8 +343,6 @@ export const usdDenominations = [
 ];
 
 // Maps an opening/closing cash-field key to the denominations to count for it.
-// "usd1"/"usd20" (and their closing-table equivalents "cash-usd-1"/"cash-usd-20")
-// are single-denomination fields since the $1 and $20 bills are tracked separately.
 export function denominationsForKey(key: string): { name: string; value: number }[] {
   switch (key) {
     case "mvr":
@@ -352,7 +350,7 @@ export function denominationsForKey(key: string): { name: string; value: number 
       return cashDenominations;
     case "usd":
     case "cash-usd":
-      return usdDenominations.filter((d) => d.value !== 1 && d.value !== 20);
+      return usdDenominations;
     case "usd1":
     case "cash-usd-1":
       return usdDenominations.filter((d) => d.value === 1);
