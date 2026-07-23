@@ -359,13 +359,13 @@ function WholesalerHomePage() {
     else toast.success(`"${product.name}" added to cart`);
   }
 
-  async function setCartQty(productId: string, qty: number) {
-    const result = await cartStore.setQty(productId, qty);
+  async function setCartQty(productId: string, outletId: string | null, qty: number) {
+    const result = await cartStore.setQty(productId, outletId, qty);
     if ("error" in result) toast.error(result.error);
   }
 
-  async function removeFromCart(productId: string) {
-    const result = await cartStore.remove(productId);
+  async function removeFromCart(productId: string, outletId: string | null) {
+    const result = await cartStore.remove(productId, outletId);
     if ("error" in result) toast.error(result.error);
   }
 
@@ -1720,7 +1720,9 @@ function WholesalerHomePage() {
                               <button
                                 type="button"
                                 className="flex h-5 w-5 items-center justify-center text-foreground hover:text-primary"
-                                onClick={() => setCartQty(item.productId, item.qty + 1)}
+                                onClick={() =>
+                                  setCartQty(item.productId, item.outletId, item.qty + 1)
+                                }
                               >
                                 <Plus className="h-3.5 w-3.5" />
                               </button>
@@ -1730,7 +1732,9 @@ function WholesalerHomePage() {
                               <button
                                 type="button"
                                 className="flex h-5 w-5 items-center justify-center text-foreground hover:text-destructive"
-                                onClick={() => setCartQty(item.productId, item.qty - 1)}
+                                onClick={() =>
+                                  setCartQty(item.productId, item.outletId, item.qty - 1)
+                                }
                               >
                                 <Minus className="h-3.5 w-3.5" />
                               </button>
@@ -1787,7 +1791,7 @@ function WholesalerHomePage() {
                                   <AlertDialogFooter>
                                     <AlertDialogCancel>Cancel</AlertDialogCancel>
                                     <AlertDialogAction
-                                      onClick={() => removeFromCart(item.productId)}
+                                      onClick={() => removeFromCart(item.productId, item.outletId)}
                                     >
                                       Remove
                                     </AlertDialogAction>
