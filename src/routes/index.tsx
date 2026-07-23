@@ -29,6 +29,7 @@ import {
   X,
   Apple,
   PlayCircle,
+  Smartphone,
   type LucideIcon,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -208,20 +209,40 @@ function DashboardPage() {
         </div>
 
         {showPromo && (
-          <Card className="flex flex-col items-center gap-4 p-5 sm:flex-row sm:justify-between">
-            <div>
-              <p className="font-semibold text-foreground">Dhipos in your Pocket!</p>
-              <p className="text-sm text-muted-foreground">
-                Our brand new Dhipos mobile app is now available on Android and iOS app stores!
-                Download now to manage your business on the go.
-              </p>
-              <button
-                onClick={() => setShowPromo(false)}
-                className="mt-1 flex items-center gap-1 text-sm font-medium text-primary hover:underline"
-              >
-                <X className="h-3.5 w-3.5" />
-                Dismiss
-              </button>
+          <Card className="relative flex animate-in flex-col items-center gap-4 overflow-hidden border-violet-200/70 bg-gradient-to-r from-violet-50 via-sky-50 to-emerald-50 p-5 fade-in slide-in-from-bottom-2 duration-700 sm:flex-row sm:justify-between dark:border-violet-900/40 dark:from-violet-950/40 dark:via-sky-950/30 dark:to-emerald-950/30">
+            {/* One-shot shimmer sweep across the title text — Tailwind's static build has no
+                built-in "moving gradient" utility, so the keyframe is declared inline once
+                here (same approach as BannerCarousel in supply.home.tsx). */}
+            <style>{`
+              @keyframes dhipos-promo-shimmer {
+                0% { background-position: 0% 50%; }
+                100% { background-position: 200% 50%; }
+              }
+            `}</style>
+            <div className="pointer-events-none absolute -right-10 -top-10 h-40 w-40 rounded-full bg-gradient-to-br from-violet-400/20 via-sky-400/20 to-emerald-400/20 blur-2xl" />
+            <div className="flex items-center gap-4">
+              <div className="relative hidden shrink-0 sm:block">
+                <span className="absolute inset-0 animate-ping rounded-2xl bg-primary/20" />
+                <div className="relative flex h-12 w-12 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 via-sky-500 to-emerald-500 text-white shadow-md">
+                  <Smartphone className="h-6 w-6" />
+                </div>
+              </div>
+              <div>
+                <p className="w-fit bg-gradient-to-r from-violet-600 via-sky-600 to-emerald-600 bg-[length:200%_auto] bg-clip-text font-bold text-transparent [animation:dhipos-promo-shimmer_3s_linear_infinite]">
+                  Take Dhipos Everywhere!
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  The Dhipos mobile app is now available for Android and iOS. Download now and stay
+                  connected to your business wherever you go.
+                </p>
+                <button
+                  onClick={() => setShowPromo(false)}
+                  className="mt-1 flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+                >
+                  <X className="h-3.5 w-3.5" />
+                  Dismiss
+                </button>
+              </div>
             </div>
             <div className="flex shrink-0 gap-2">
               <button
