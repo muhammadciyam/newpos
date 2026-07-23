@@ -81,7 +81,6 @@ import {
 import { useCart, cartStore, type CartItem } from "@/lib/cart-store";
 import { useWholesaleOrders, wholesaleOrdersStore } from "@/lib/wholesale-orders-store";
 import { useCurrentUser } from "@/lib/auth-store";
-import { useHasPermission } from "@/lib/permissions";
 import { findProductPhoto } from "@/lib/product-photo-search";
 import { logAudit } from "@/lib/audit-log-store";
 import { settingsStore, useSettings } from "@/lib/settings-store";
@@ -269,10 +268,11 @@ function UnitSelect({
 
 function WholesalerHomePage() {
   const currentUser = useCurrentUser();
-  const canManage = useHasPermission("wholesale.manage");
-  // Editing/deleting a wholesaler shop itself (as opposed to managing its catalogue) is
-  // restricted further, to Super Admin only.
-  const isSuperAdmin = currentUser?.role === "Super Admin";
+  // Every wholesale management action — creating/editing a wholesaler shop (including its
+  // catalogue), deleting or disabling one, adding a product, and Wholesale Inventory — is
+  // Super Admin only (enforced again server-side, see wholesalers-api.ts/
+  // wholesale-inventory-api.ts).
+  const canManage = currentUser?.role === "Super Admin";
   const wholesalers = useWholesalers();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -930,7 +930,7 @@ function WholesalerHomePage() {
                 <BookOpen className="h-4 w-4" /> View Catalogue
               </Button>
 
-              {canManage && isSuperAdmin && (
+              {canManage && (
                 <div className="flex justify-end gap-2 border-t border-border pt-2">
                   <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
                     <Pencil className="h-3.5 w-3.5" />

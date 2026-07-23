@@ -14,8 +14,13 @@ export type Permission =
   | "sales.viewAll" // Bill History shows everyone's bills, not just their own
   | "sales.manage" // edit / void / refund bills in Bill History
   | "sales.foc" // mark a sale as Free of Charge on the Sell page
-  | "outlets.manage" // create/edit/remove outlets (Admin > Locations)
-  | "wholesale.manage"; // manage wholesalers, categories & products (Wholesaler page)
+  | "outlets.manage"; // create/edit/remove outlets (Admin > Locations)
+// Note: wholesale management (Wholesaler page — wholesalers, catalogues, Wholesale
+// Inventory) isn't in this permission system at all — it's Super Admin only, checked
+// directly against the role in supply.home.tsx/wholesalers-api.ts/wholesale-inventory-api.ts,
+// the same as any other Super-Admin-only action. It was a grantable permission until Admin
+// and Manager's wholesale access was removed; keeping it here would let a custom role be
+// "granted" something that silently does nothing.
 
 // All assignable permissions, in the order they're offered as checkboxes when a Super Admin
 // creates a custom role (Admin > Users > Create Role).
@@ -32,7 +37,6 @@ export const ALL_PERMISSIONS: Permission[] = [
   "sales.manage",
   "sales.foc",
   "outlets.manage",
-  "wholesale.manage",
 ];
 
 export const PERMISSION_LABELS: Record<Permission, string> = {
@@ -48,7 +52,6 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   "sales.manage": "Manage Sales — edit, void, refund bills",
   "sales.foc": "Mark Sales as Free of Charge (FOC) on the Sell page",
   "outlets.manage": "Manage Outlets — Admin > Locations",
-  "wholesale.manage": "Manage Wholesalers — categories, products, banners",
 };
 
 const rolePermissions: Record<string, Permission[]> = {
@@ -65,7 +68,6 @@ const rolePermissions: Record<string, Permission[]> = {
     "sales.manage",
     "sales.foc",
     "outlets.manage",
-    "wholesale.manage",
   ],
   Admin: [
     "users.manage",
@@ -79,7 +81,6 @@ const rolePermissions: Record<string, Permission[]> = {
     "sales.viewAll",
     "sales.manage",
     "sales.foc",
-    "wholesale.manage",
   ],
   Manager: [
     "products.manage",
@@ -90,7 +91,6 @@ const rolePermissions: Record<string, Permission[]> = {
     "customers.edit",
     "sales.viewAll",
     "sales.foc",
-    "wholesale.manage",
   ],
   Supervisor: [
     "inventory.access",

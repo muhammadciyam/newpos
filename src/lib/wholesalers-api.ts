@@ -2,20 +2,9 @@ import { createServerFn } from "@tanstack/react-start";
 import { getServerWholesalers, mutateServerWholesalers } from "@/lib/wholesalers-server-store";
 import type { Wholesaler } from "@/lib/wholesalers-store";
 
-// Wholesalers aren't tied to one outlet (they're the whole company's shared B2B catalog),
-// so there's no outlet to check ownership against — just the built-in roles that get
-// wholesale.manage by default (see permissions.ts). Doesn't account for a custom role
-// separately granted the permission, same simplification the rest of this app's
-// server-side checks already make (see canManageProduct in products-api.ts).
-function requireWholesaleManage(callerRole: string): { error: string } | null {
-  return ["Super Admin", "Admin", "Manager"].includes(callerRole)
-    ? null
-    : { error: "You don't have permission to manage wholesalers" };
-}
-
-// Deleting or disabling/enabling the wholesaler shop itself (as opposed to editing its
-// catalogue, which shares updateWholesalerOnServer and stays open to the roles above) is
-// Super Admin only.
+// Wholesalers aren't tied to one outlet (they're the whole company's shared B2B catalog).
+// Every action on them — create, edit (including catalogue/product changes, which share
+// updateWholesalerOnServer), delete, and enable/disable — is Super Admin only.
 function requireSuperAdmin(callerRole: string, action: string): { error: string } | null {
   return callerRole === "Super Admin" ? null : { error: `Only Super Admin can ${action}` };
 }
@@ -27,7 +16,7 @@ export const fetchWholesalers = createServerFn({ method: "GET" }).handler(async 
 export const createWholesalerOnServer = createServerFn({ method: "POST" })
   .validator((data: Omit<Wholesaler, "id" | "createdAt"> & { callerRole: string }) => data)
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole, "add a wholesaler");
     if (authError) return authError;
     const { callerRole: _callerRole, ...wholesalerData } = data;
     const wholesaler: Wholesaler = {
@@ -48,7 +37,7 @@ export const updateWholesalerOnServer = createServerFn({ method: "POST" })
     }) => data,
   )
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole, "edit a wholesaler");
     if (authError) return authError;
     if (!(await getServerWholesalers()).some((w) => w.id === data.id)) {
       return { error: "Wholesaler not found" };

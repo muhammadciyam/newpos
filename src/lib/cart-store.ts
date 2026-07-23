@@ -27,6 +27,22 @@ function setItems(next: CartItem[]) {
   listeners.forEach((l) => l());
 }
 
+// Every mutation below reads `items` before its own await and writes it back after — without
+// this, two calls fired close together (e.g. double-clicking "Add to Cart", or a qty
+// stepper's "+" mashed quickly) both read the cart before either's own change has landed,
+// each conclude the product "isn't in the cart yet", and both append their own row instead of
+// one incrementing the other's. Chaining every call onto this queue forces them to run one at
+// a time, so each one only ever sees the fully-applied result of the last.
+let mutationQueue: Promise<unknown> = Promise.resolve();
+function serialize<T>(fn: () => Promise<T>): Promise<T> {
+  const run = mutationQueue.then(fn, fn);
+  mutationQueue = run.then(
+    () => undefined,
+    () => undefined,
+  );
+  return run;
+}
+
 async function refreshFromServer() {
   const result = await safeServerCall(() => fetchCart());
   if (!("networkError" in result)) setItems(result);
@@ -44,50 +60,56 @@ export const cartStore = {
 
   // Adds one unit of `product` from `wholesaler` — increments qty if it's already in the
   // cart rather than creating a duplicate row.
-  async addToCart(
+  addToCart(
     wholesaler: { id: string; name: string },
     product: { id: string; name: string; price: number },
   ): Promise<{ ok: true } | { error: string }> {
-    const existing = items.find((i) => i.productId === product.id);
-    const item: CartItem = {
-      wholesalerId: wholesaler.id,
-      wholesalerName: wholesaler.name,
-      productId: product.id,
-      productName: product.name,
-      price: product.price,
-      qty: (existing?.qty ?? 0) + 1,
-    };
-    const result = await safeServerCall(() => setCartItemOnServer({ data: item }));
-    if ("networkError" in result) return { error: result.error };
-    setItems(
-      existing ? items.map((i) => (i.productId === item.productId ? item : i)) : [...items, item],
-    );
-    return { ok: true };
+    return serialize(async () => {
+      const existing = items.find((i) => i.productId === product.id);
+      const item: CartItem = {
+        wholesalerId: wholesaler.id,
+        wholesalerName: wholesaler.name,
+        productId: product.id,
+        productName: product.name,
+        price: product.price,
+        qty: (existing?.qty ?? 0) + 1,
+      };
+      const result = await safeServerCall(() => setCartItemOnServer({ data: item }));
+      if ("networkError" in result) return { error: result.error };
+      setItems([item, ...items.filter((i) => i.productId !== item.productId)]);
+      return { ok: true };
+    });
   },
 
-  async setQty(productId: string, qty: number): Promise<{ ok: true } | { error: string }> {
+  setQty(productId: string, qty: number): Promise<{ ok: true } | { error: string }> {
     if (qty <= 0) return cartStore.remove(productId);
-    const existing = items.find((i) => i.productId === productId);
-    if (!existing) return { ok: true };
-    const item = { ...existing, qty };
-    const result = await safeServerCall(() => setCartItemOnServer({ data: item }));
-    if ("networkError" in result) return { error: result.error };
-    setItems(items.map((i) => (i.productId === productId ? item : i)));
-    return { ok: true };
+    return serialize(async () => {
+      const existing = items.find((i) => i.productId === productId);
+      if (!existing) return { ok: true };
+      const item = { ...existing, qty };
+      const result = await safeServerCall(() => setCartItemOnServer({ data: item }));
+      if ("networkError" in result) return { error: result.error };
+      setItems(items.map((i) => (i.productId === productId ? item : i)));
+      return { ok: true };
+    });
   },
 
-  async remove(productId: string): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => removeCartItemOnServer({ data: { productId } }));
-    if ("networkError" in result) return { error: result.error };
-    setItems(items.filter((i) => i.productId !== productId));
-    return { ok: true };
+  remove(productId: string): Promise<{ ok: true } | { error: string }> {
+    return serialize(async () => {
+      const result = await safeServerCall(() => removeCartItemOnServer({ data: { productId } }));
+      if ("networkError" in result) return { error: result.error };
+      setItems(items.filter((i) => i.productId !== productId));
+      return { ok: true };
+    });
   },
 
-  async clear(): Promise<{ ok: true } | { error: string }> {
-    const result = await safeServerCall(() => clearCartOnServer());
-    if ("networkError" in result) return { error: result.error };
-    setItems([]);
-    return { ok: true };
+  clear(): Promise<{ ok: true } | { error: string }> {
+    return serialize(async () => {
+      const result = await safeServerCall(() => clearCartOnServer());
+      if ("networkError" in result) return { error: result.error };
+      setItems([]);
+      return { ok: true };
+    });
   },
 };
 

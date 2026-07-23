@@ -5,12 +5,12 @@ import {
 } from "@/lib/wholesale-inventory-server-store";
 import type { WholesaleInventoryItem } from "@/lib/wholesale-inventory-store";
 
-// Same reasoning as wholesalers-api.ts — not outlet-scoped, just gated to the built-in
-// roles that get wholesale.manage by default.
-function requireWholesaleManage(callerRole: string): { error: string } | null {
-  return ["Super Admin", "Admin", "Manager"].includes(callerRole)
+// Same reasoning as wholesalers-api.ts — not outlet-scoped, and (like every wholesale
+// action) Super Admin only.
+function requireSuperAdmin(callerRole: string): { error: string } | null {
+  return callerRole === "Super Admin"
     ? null
-    : { error: "You don't have permission to manage wholesale inventory" };
+    : { error: "Only Super Admin can manage wholesale inventory" };
 }
 
 export const fetchWholesaleInventory = createServerFn({ method: "GET" }).handler(async () => {
@@ -22,7 +22,7 @@ export const createWholesaleInventoryItemOnServer = createServerFn({ method: "PO
     (data: Omit<WholesaleInventoryItem, "id" | "createdAt"> & { callerRole: string }) => data,
   )
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole);
     if (authError) return authError;
     const { callerRole: _callerRole, ...itemData } = data;
     const item: WholesaleInventoryItem = {
@@ -43,7 +43,7 @@ export const updateWholesaleInventoryItemOnServer = createServerFn({ method: "PO
     }) => data,
   )
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole);
     if (authError) return authError;
     if (!(await getServerWholesaleInventory()).some((i) => i.id === data.id)) {
       return { error: "Item not found" };
@@ -57,7 +57,7 @@ export const updateWholesaleInventoryItemOnServer = createServerFn({ method: "PO
 export const removeWholesaleInventoryItemOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; callerRole: string }) => data)
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole);
     if (authError) return authError;
     await mutateServerWholesaleInventory((items) => items.filter((i) => i.id !== data.id));
     return { ok: true as const };
