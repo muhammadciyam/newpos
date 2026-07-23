@@ -11,7 +11,9 @@ export const fetchWholesaleOrders = createServerFn({ method: "GET" }).handler(as
 });
 
 export const createWholesaleOrderOnServer = createServerFn({ method: "POST" })
-  .validator((data: { items: CartItem[]; total: number; placedBy: string }) => data)
+  .validator(
+    (data: { items: CartItem[]; total: number; placedBy: string; outletId: string | null }) => data,
+  )
   .handler(async ({ data }) => {
     const order: WholesaleOrder = {
       id: `worder-${Date.now()}`,
@@ -19,6 +21,7 @@ export const createWholesaleOrderOnServer = createServerFn({ method: "POST" })
       total: data.total,
       placedBy: data.placedBy,
       createdAt: new Date().toISOString(),
+      outletId: data.outletId,
     };
     await mutateServerWholesaleOrders((orders) => [order, ...orders]);
     return { ok: true as const, order };
