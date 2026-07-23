@@ -12,6 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { isLowStock } from "@/lib/pos-data";
 import { useProducts } from "@/lib/products-store";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
@@ -32,7 +33,7 @@ function InventoryAnalyticsPage() {
 
   const salesValue = products.reduce((s, p) => s + p.price * p.stock, 0);
   const count = products.reduce((s, p) => s + p.stock, 0);
-  const lowStocks = products.filter((p) => p.stock < 15).length;
+  const lowStocks = products.filter(isLowStock).length;
 
   return (
     <AppShell>
@@ -75,7 +76,13 @@ function InventoryAnalyticsPage() {
           <TabsContent value="summary">
             <Card className="grid grid-cols-1 gap-4 p-5 sm:grid-cols-2 lg:grid-cols-4">
               <SummaryStat label="Total Cost" value="0.00" />
-              <SummaryStat label="Sales Value (Ex. Tax)" value={salesValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })} />
+              <SummaryStat
+                label="Sales Value (Ex. Tax)"
+                value={salesValue.toLocaleString(undefined, {
+                  minimumFractionDigits: 2,
+                  maximumFractionDigits: 2,
+                })}
+              />
               <SummaryStat label="Count" value={count.toLocaleString()} />
               <SummaryStat label="Low Stocks" value={lowStocks.toLocaleString()} />
             </Card>

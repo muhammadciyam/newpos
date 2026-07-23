@@ -12,6 +12,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { isLowStock } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useHasPermission } from "@/lib/permissions";
 import { RestrictedPage } from "@/components/restricted-page";
@@ -44,7 +45,7 @@ function StockReportPage() {
 
   const totalUnits = products.reduce((s, p) => s + p.stock, 0);
   const outOfStock = products.filter((p) => p.stock === 0).length;
-  const lowStock = products.filter((p) => p.stock > 0 && p.stock < 15).length;
+  const lowStock = products.filter((p) => p.stock > 0 && isLowStock(p)).length;
 
   return (
     <ReportPageShell
@@ -99,12 +100,12 @@ function StockReportPage() {
                     className={
                       p.stock === 0
                         ? "bg-destructive/10 text-destructive"
-                        : p.stock < 15
+                        : isLowStock(p)
                           ? "bg-amber-100 text-amber-700"
                           : "bg-emerald-100 text-emerald-700"
                     }
                   >
-                    {p.stock === 0 ? "Out of Stock" : p.stock < 15 ? "Low Stock" : "In Stock"}
+                    {p.stock === 0 ? "Out of Stock" : isLowStock(p) ? "Low Stock" : "In Stock"}
                   </Badge>
                 </TableCell>
               </TableRow>

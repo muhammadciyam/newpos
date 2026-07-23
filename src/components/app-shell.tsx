@@ -19,6 +19,21 @@ import { authStore, useCurrentUser } from "@/lib/auth-store";
 import { logAudit, useAuditLogs, useAuditLogPolling } from "@/lib/audit-log-store";
 import { pendingSaleStore } from "@/lib/pending-sale-store";
 import { usePendingBills, syncPendingBills } from "@/lib/bills-store";
+import {
+  useProductsSync,
+  usePendingProductsCount,
+  syncPendingProducts,
+} from "@/lib/products-store";
+import {
+  useCustomersSync,
+  usePendingCustomersCount,
+  syncPendingCustomers,
+} from "@/lib/customers-store";
+import {
+  useExpensesSync,
+  usePendingExpensesCount,
+  syncPendingExpenses,
+} from "@/lib/expenses-store";
 import { settingsStore } from "@/lib/settings-store";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { accentColors, setAccentColor, useAccentColor } from "@/lib/theme-store";
@@ -49,10 +64,20 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   const hasUnseen = activity.length > 0 && activity[0].at !== lastSeenAt;
   const accent = useAccentColor();
   const pendingBills = usePendingBills();
+  // Background retry for products/customers/expenses' own local-first queues — bills' own
+  // retry loop is already driven by usePendingBills() above.
+  useProductsSync();
+  useCustomersSync();
+  useExpensesSync();
+  const pendingProducts = usePendingProductsCount();
+  const pendingCustomers = usePendingCustomersCount();
+  const pendingExpenses = usePendingExpensesCount();
+  const pendingOtherCount = pendingProducts + pendingCustomers + pendingExpenses;
   const [retrying, setRetrying] = useState(false);
 
   async function retrySync() {
     setRetrying(true);
+    await Promise.all([syncPendingProducts(), syncPendingCustomers(), syncPendingExpenses()]);
     await syncPendingBills();
     setRetrying(false);
   }
@@ -128,7 +153,7 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
             <SidebarTrigger />
             <div className="ml-auto flex items-center gap-3">
               <LiveClock />
-              {pendingBills.length > 0 && (
+              {(pendingBills.length > 0 || pendingOtherCount > 0) && (
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>
                     <Button
@@ -137,16 +162,39 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                       className="gap-1.5 border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
                     >
                       <CloudOff className="h-4 w-4" />
-                      {pendingBills.length} bill{pendingBills.length > 1 ? "s" : ""} pending sync
+                      {pendingBills.length + pendingOtherCount} item
+                      {pendingBills.length + pendingOtherCount > 1 ? "s" : ""} pending sync
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent align="end" className="w-80">
                     <DropdownMenuLabel>Saved locally, not yet synced</DropdownMenuLabel>
                     <DropdownMenuSeparator />
                     <p className="px-2 pb-2 text-xs text-muted-foreground">
-                      These sales were saved on this device because Supabase couldn't be reached.
-                      They'll sync automatically once the connection is back.
+                      These were saved on this device because Supabase couldn't be reached. They'll
+                      sync automatically once the connection is back.
                     </p>
+                    {(pendingProducts > 0 || pendingCustomers > 0 || pendingExpenses > 0) && (
+                      <>
+                        <div className="space-y-1 px-2 pb-2 text-sm text-foreground">
+                          {pendingProducts > 0 && (
+                            <p>
+                              {pendingProducts} product{pendingProducts > 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {pendingCustomers > 0 && (
+                            <p>
+                              {pendingCustomers} customer{pendingCustomers > 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {pendingExpenses > 0 && (
+                            <p>
+                              {pendingExpenses} expense{pendingExpenses > 1 ? "s" : ""}
+                            </p>
+                          )}
+                        </div>
+                        {pendingBills.length > 0 && <DropdownMenuSeparator />}
+                      </>
+                    )}
                     {pendingBills.slice(0, 8).map((p) => (
                       <DropdownMenuItem
                         key={p.bill.number}

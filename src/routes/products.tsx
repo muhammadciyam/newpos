@@ -30,6 +30,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Search, Filter, Pencil, Trash2, Upload, Loader2 } from "lucide-react";
+import { DEFAULT_LOW_STOCK_THRESHOLD, isLowStock } from "@/lib/pos-data";
 import { useProducts, useProductsPolling, productsStore } from "@/lib/products-store";
 import { useCategories, categoriesStore } from "@/lib/categories-store";
 import { findProductImage } from "@/lib/image-search";
@@ -61,6 +62,7 @@ const emptyForm = {
   category: "drinks",
   barcode: "",
   supplier: "",
+  lowStockThreshold: "",
   image: "",
   countable: true,
   gstApplicable: true,
@@ -141,6 +143,7 @@ function ProductsPage() {
       category: p.category,
       barcode: p.barcode ?? "",
       supplier: p.supplier ?? "",
+      lowStockThreshold: p.lowStockThreshold != null ? String(p.lowStockThreshold) : "",
       image: p.image,
       countable: p.countable ?? true,
       gstApplicable,
@@ -175,6 +178,9 @@ function ProductsPage() {
       category: form.category,
       barcode: barcode || undefined,
       supplier: form.supplier.trim() || undefined,
+      lowStockThreshold: form.lowStockThreshold.trim()
+        ? parseInt(form.lowStockThreshold, 10) || 0
+        : undefined,
       countable: form.countable,
       gstApplicable: form.gstApplicable,
     };
@@ -339,7 +345,7 @@ function ProductsPage() {
                     {currency} {p.price.toFixed(2)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={p.stock < 15 ? "destructive" : "secondary"}>{p.stock}</Badge>
+                    <Badge variant={isLowStock(p) ? "destructive" : "secondary"}>{p.stock}</Badge>
                   </TableCell>
                   <TableCell>
                     <Badge
@@ -594,6 +600,16 @@ function ProductsPage() {
                 value={form.supplier}
                 onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
                 placeholder="e.g. Bulk Supply"
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Low Stock Alert</Label>
+              <Input
+                type="number"
+                min="0"
+                value={form.lowStockThreshold}
+                onChange={(e) => setForm((f) => ({ ...f, lowStockThreshold: e.target.value }))}
+                placeholder={`Default ${DEFAULT_LOW_STOCK_THRESHOLD}`}
               />
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">

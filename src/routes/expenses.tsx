@@ -70,16 +70,12 @@ function ExpensesPage() {
 
   async function addExpense() {
     const amount = parseFloat(form.amount) || 0;
-    const result = await expensesStore.create({
+    await expensesStore.create({
       description: form.description,
       category: form.category || "Uncategorised",
       amount,
       date: form.date,
     });
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
-    }
     toast.success(`Expense "${form.description}" added`);
     setForm(emptyForm);
     setOpen(false);

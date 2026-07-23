@@ -21,6 +21,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Search, AlertTriangle } from "lucide-react";
+import { isLowStock } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useCategories } from "@/lib/categories-store";
 import { useSettings } from "@/lib/settings-store";
@@ -28,11 +29,6 @@ import { useHasPermission } from "@/lib/permissions";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useOutlets } from "@/lib/outlets-store";
 import { RestrictedPage } from "@/components/restricted-page";
-
-// Same threshold the Products page and Stock Report already flag "Low Stock" at — kept
-// consistent across every stock indicator in the app rather than introducing a second,
-// separately-configurable number just for this page.
-const LOW_STOCK_THRESHOLD = 15;
 
 export const Route = createFileRoute("/inventory-items")({
   head: () => ({
@@ -57,17 +53,14 @@ function InventoryItemsPage() {
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [lowStockOnly, setLowStockOnly] = useState(false);
 
-  const lowStockCount = useMemo(
-    () => products.filter((p) => p.stock < LOW_STOCK_THRESHOLD).length,
-    [products],
-  );
+  const lowStockCount = useMemo(() => products.filter(isLowStock).length, [products]);
 
   const filtered = useMemo(
     () =>
       products.filter(
         (p) =>
           (categoryFilter === "all" || p.category === categoryFilter) &&
-          (!lowStockOnly || p.stock < LOW_STOCK_THRESHOLD) &&
+          (!lowStockOnly || isLowStock(p)) &&
           (p.name.toLowerCase().includes(search.toLowerCase()) ||
             (p.sku ?? "").toLowerCase().includes(search.toLowerCase()) ||
             (p.barcode ?? "").includes(search) ||
@@ -186,9 +179,7 @@ function InventoryItemsPage() {
                     {categoryName(p.category)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={p.stock < LOW_STOCK_THRESHOLD ? "destructive" : "secondary"}>
-                      {p.stock}
-                    </Badge>
+                    <Badge variant={isLowStock(p) ? "destructive" : "secondary"}>{p.stock}</Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {p.cost != null ? `${currency} ${p.cost.toFixed(2)}` : "—"}

@@ -2,7 +2,8 @@ import { useEffect, useMemo, useSyncExternalStore } from "react";
 import { type Bill, type BillLineItem } from "@/lib/pos-data";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
-import { productsStore } from "@/lib/products-store";
+import { productsStore, resolveProductId } from "@/lib/products-store";
+import { resolveCustomerId } from "@/lib/customers-store";
 import { settingsStore } from "@/lib/settings-store";
 import { outletsStore } from "@/lib/outlets-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
@@ -240,11 +241,26 @@ export function resolveBillNumber(number: string): string {
 // createBillOnServer and create two real bills for one sale.
 const inFlight = new Set<string>();
 
+// Re-resolved fresh on every sync attempt (not just once, at Save Bill time) — the customer
+// and/or products on this bill may themselves still be local-only records queued in their own
+// stores' outboxes (see products-store.ts/customers-store.ts), so whatever temporary id they
+// had when this bill was rung up may since have been replaced by a real, server-assigned one.
+// Sending the temp id after that point would reference a record the server never heard of.
+function resolveBillInputIds(input: NormalizedBillInput): NormalizedBillInput {
+  return {
+    ...input,
+    customerId: input.customerId ? resolveCustomerId(input.customerId) : input.customerId,
+    items: input.items.map((item) => ({ ...item, productId: resolveProductId(item.productId) })),
+  };
+}
+
 async function trySyncOne(pending: PendingBill): Promise<"synced" | "failed" | "skipped"> {
   if (inFlight.has(pending.bill.number)) return "skipped";
   inFlight.add(pending.bill.number);
   try {
-    const result = await safeServerCall(() => createBillOnServer({ data: pending.input }));
+    const result = await safeServerCall(() =>
+      createBillOnServer({ data: resolveBillInputIds(pending.input) }),
+    );
     if ("networkError" in result) {
       pendingStore.set((queue) =>
         queue.map((p) =>

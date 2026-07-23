@@ -24,7 +24,21 @@ export type Product = {
   // Whether GST applies to this product when sold. Undefined counts as true (existing
   // products default to GST-applicable) — only an explicit `false` marks it exempt.
   gstApplicable?: boolean;
+  // Stock level at/below which this product is flagged "Low Stock" (Products, Stock Report,
+  // Inventory Items). Undefined uses DEFAULT_LOW_STOCK_THRESHOLD — only set when a product
+  // needs its own reorder point instead of the app-wide default.
+  lowStockThreshold?: number;
 };
+
+export const DEFAULT_LOW_STOCK_THRESHOLD = 15;
+
+export function lowStockThreshold(p: Pick<Product, "lowStockThreshold">): number {
+  return p.lowStockThreshold ?? DEFAULT_LOW_STOCK_THRESHOLD;
+}
+
+export function isLowStock(p: Pick<Product, "stock" | "lowStockThreshold">): boolean {
+  return p.stock < lowStockThreshold(p);
+}
 
 export const categories: Category[] = [
   { id: "all", name: "All Items" },
