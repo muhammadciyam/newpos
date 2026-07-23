@@ -60,6 +60,7 @@ const emptyForm = {
   priceIncGst: "",
   category: "drinks",
   barcode: "",
+  supplier: "",
   image: "",
   countable: true,
   gstApplicable: true,
@@ -139,6 +140,7 @@ function ProductsPage() {
       priceIncGst: gstApplicable ? priceWithGst(price, settings.tax.gstPercent) : price,
       category: p.category,
       barcode: p.barcode ?? "",
+      supplier: p.supplier ?? "",
       image: p.image,
       countable: p.countable ?? true,
       gstApplicable,
@@ -172,6 +174,7 @@ function ProductsPage() {
       price: parseFloat(form.price) || 0,
       category: form.category,
       barcode: barcode || undefined,
+      supplier: form.supplier.trim() || undefined,
       countable: form.countable,
       gstApplicable: form.gstApplicable,
     };
@@ -584,6 +587,14 @@ function ProductsPage() {
                   </Button>
                 </div>
               )}
+            </div>
+            <div className="space-y-1.5">
+              <Label>Supplier</Label>
+              <Input
+                value={form.supplier}
+                onChange={(e) => setForm((f) => ({ ...f, supplier: e.target.value }))}
+                placeholder="e.g. Bulk Supply"
+              />
             </div>
             <div className="flex items-center justify-between rounded-lg border border-border p-3">
               <div>
