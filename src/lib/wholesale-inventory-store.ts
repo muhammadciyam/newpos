@@ -1,7 +1,10 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
+import { createOutboxStore, createSyncScheduler } from "@/lib/offline-store";
+import { resolveWholesalerId } from "@/lib/wholesalers-store";
 import {
   fetchWholesaleInventory,
   createWholesaleInventoryItemOnServer,
@@ -55,20 +58,118 @@ function ensureInitialFetch() {
   void refreshFromServer();
 }
 
+// ---------------------------------------------------------------------------
+// Local-first add/edit/delete — same model as products-store.ts/customers-store.ts/
+// wholesalers-store.ts. See offline-store.ts.
+// ---------------------------------------------------------------------------
+
+type ItemInput = Omit<WholesaleInventoryItem, "id" | "createdAt">;
+
+const outbox = createOutboxStore<ItemInput>("dhipos-wholesale-inventory-outbox");
+const inFlight = new Set<string>();
+
+async function trySyncEntry(
+  id: string,
+): Promise<"synced" | "failed-network" | "rejected" | "skipped"> {
+  if (inFlight.has(id)) return "skipped";
+  const entry = outbox.get()[id];
+  if (!entry) return "skipped";
+  inFlight.add(id);
+  try {
+    if (entry.op === "create") {
+      // Re-resolved fresh right before syncing — the wholesaler this entry belongs to may
+      // itself still have been a locally-queued, not-yet-synced record when this item was
+      // created (see wholesalers-store.ts's own outbox); sending its temp id after that
+      // point would reference a wholesaler the server never heard of.
+      const payload = {
+        ...entry.payload,
+        wholesalerId: resolveWholesalerId(entry.payload.wholesalerId),
+      };
+      const result = await safeServerCall(() =>
+        createWholesaleInventoryItemOnServer({ data: { ...payload, callerRole: callerRole() } }),
+      );
+      if ("networkError" in result) {
+        outbox.markFailed(id, result.error);
+        return "failed-network";
+      }
+      if ("error" in result) {
+        setItems(items.filter((i) => i.id !== id));
+        outbox.resolve(id);
+        toast.error(`"${entry.payload.productName}" couldn't be saved: ${result.error}`);
+        return "rejected";
+      }
+      setItems([result.item, ...items.filter((i) => i.id !== id)]);
+      outbox.resolve(id);
+      logAudit(actor(), "create", `Wholesale Inventory / ${result.item.productName} (synced)`);
+      return "synced";
+    }
+
+    if (entry.op === "update") {
+      const result = await safeServerCall(() =>
+        updateWholesaleInventoryItemOnServer({
+          data: { id, patch: entry.patch, callerRole: callerRole() },
+        }),
+      );
+      if ("networkError" in result) {
+        outbox.markFailed(id, result.error);
+        return "failed-network";
+      }
+      outbox.resolve(id);
+      if ("error" in result) {
+        toast.error(`A change couldn't be saved: ${result.error}`);
+        await refreshFromServer(); // this device's optimistic patch is now known-wrong
+        return "rejected";
+      }
+      return "synced";
+    }
+
+    // remove
+    const result = await safeServerCall(() =>
+      removeWholesaleInventoryItemOnServer({ data: { id, callerRole: callerRole() } }),
+    );
+    if ("networkError" in result) {
+      outbox.markFailed(id, result.error);
+      return "failed-network";
+    }
+    outbox.resolve(id);
+    if ("error" in result) {
+      toast.error(`Couldn't delete this item: ${result.error}`);
+      await refreshFromServer(); // bring the still-existing item back
+      return "rejected";
+    }
+    return "synced";
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
+const scheduler = createSyncScheduler(async () => {
+  for (const id of Object.keys(outbox.get())) {
+    const outcome = await trySyncEntry(id);
+    if (outcome === "failed-network") break;
+  }
+});
+
+// Mounted once via AppShell, alongside the other stores' equivalents.
+export const useWholesaleInventorySync = scheduler.usePendingSync;
+export const syncPendingWholesaleInventory = scheduler.run;
+
+// For the header's combined "pending sync" indicator (see AppShell).
+export function usePendingWholesaleInventoryCount(): number {
+  return Object.keys(outbox.useOutbox()).length;
+}
+
 export const wholesaleInventoryStore = {
   get: () => items,
 
-  async create(
-    input: Omit<WholesaleInventoryItem, "id" | "createdAt">,
-  ): Promise<WholesaleInventoryItem | { error: string }> {
-    const result = await safeServerCall(() =>
-      createWholesaleInventoryItemOnServer({ data: { ...input, callerRole: callerRole() } }),
-    );
-    if ("networkError" in result) return { error: result.error };
-    if ("error" in result) return result;
-    setItems([result.item, ...items]);
-    logAudit(actor(), "create", `Wholesale Inventory / ${result.item.productName}`);
-    return result.item;
+  async create(input: ItemInput): Promise<WholesaleInventoryItem> {
+    const id = `local-${crypto.randomUUID().slice(0, 8)}`;
+    const item: WholesaleInventoryItem = { ...input, id, createdAt: new Date().toISOString() };
+    setItems([item, ...items]);
+    outbox.queueCreate(id, input);
+    logAudit(actor(), "create", `Wholesale Inventory / ${item.productName} (saved on device)`);
+    void scheduler.run();
+    return item;
   },
 
   async update(
@@ -76,29 +177,25 @@ export const wholesaleInventoryStore = {
     patch: Partial<Omit<WholesaleInventoryItem, "id" | "createdAt">>,
   ): Promise<{ ok: true } | { error: string }> {
     const existing = items.find((i) => i.id === id);
-    const result = await safeServerCall(() =>
-      updateWholesaleInventoryItemOnServer({ data: { id, patch, callerRole: callerRole() } }),
-    );
-    if ("networkError" in result) return { error: result.error };
-    if ("error" in result) return result;
+    if (!existing) return { error: "Item not found" };
     setItems(items.map((i) => (i.id === id ? { ...i, ...patch } : i)));
+    outbox.queueUpdate(id, patch);
     logAudit(
       actor(),
       "update",
-      `Wholesale Inventory / ${patch.productName ?? existing?.productName ?? id}`,
+      `Wholesale Inventory / ${patch.productName ?? existing.productName}`,
     );
+    void scheduler.run();
     return { ok: true };
   },
 
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
     const existing = items.find((i) => i.id === id);
-    const result = await safeServerCall(() =>
-      removeWholesaleInventoryItemOnServer({ data: { id, callerRole: callerRole() } }),
-    );
-    if ("networkError" in result) return { error: result.error };
-    if ("error" in result) return result;
+    if (!existing) return { error: "Item not found" };
     setItems(items.filter((i) => i.id !== id));
-    logAudit(actor(), "delete", `Wholesale Inventory / ${existing?.productName ?? id}`);
+    outbox.queueRemove(id);
+    logAudit(actor(), "delete", `Wholesale Inventory / ${existing.productName}`);
+    void scheduler.run();
     return { ok: true };
   },
 };

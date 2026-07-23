@@ -1,7 +1,9 @@
 import { useEffect, useSyncExternalStore } from "react";
+import { toast } from "sonner";
 import { authStore } from "@/lib/auth-store";
 import { logAudit } from "@/lib/audit-log-store";
 import { safeServerCall } from "@/lib/server-fn-helpers";
+import { createOutboxStore, createSyncScheduler } from "@/lib/offline-store";
 import {
   fetchWholesalers,
   createWholesalerOnServer,
@@ -136,61 +138,156 @@ function ensureInitialFetch() {
   void refreshFromServer();
 }
 
+// ---------------------------------------------------------------------------
+// Local-first add/edit: create() and update() apply to this device's own copy of the
+// wholesaler directory (and, via update()'s `categories` patch, each wholesaler's product
+// catalogue — see "Add Product" in supply.home.tsx) immediately, and queue the change to sync
+// to Supabase in the background — same model as products-store.ts/customers-store.ts. See
+// offline-store.ts. remove()/setActive() stay immediate/online-only: both are already
+// Super-Admin-only, structural actions (see wholesalers-api.ts) better served by an
+// authoritative answer right away than an optimistic queue.
+// ---------------------------------------------------------------------------
+
+type WholesalerInput = Omit<Wholesaler, "id" | "createdAt">;
+
+const outbox = createOutboxStore<WholesalerInput>("dhipos-wholesalers-outbox");
+
+// Once a locally-created wholesaler's real, server-assigned id lands, this remembers
+// "local-xxx now means sup-1234" — see resolveProductId's identical reasoning. Exported so
+// wholesale-inventory-store.ts can resolve a still-pending wholesalerId before syncing an
+// inventory item that references it.
+const wholesalerIdRedirects = new Map<string, string>();
+
+export function resolveWholesalerId(id: string): string {
+  let current = id;
+  while (wholesalerIdRedirects.has(current)) current = wholesalerIdRedirects.get(current)!;
+  return current;
+}
+
+const inFlight = new Set<string>();
+
+async function trySyncEntry(
+  id: string,
+): Promise<"synced" | "failed-network" | "rejected" | "skipped"> {
+  if (inFlight.has(id)) return "skipped";
+  const entry = outbox.get()[id];
+  if (!entry) return "skipped";
+  inFlight.add(id);
+  try {
+    if (entry.op === "create") {
+      const result = await safeServerCall(() =>
+        createWholesalerOnServer({ data: { ...entry.payload, callerRole: callerRole() } }),
+      );
+      if ("networkError" in result) {
+        outbox.markFailed(id, result.error);
+        return "failed-network";
+      }
+      if ("error" in result) {
+        // The placeholder never really existed anywhere but here — just drop it.
+        setWholesalers(wholesalers.filter((w) => w.id !== id));
+        outbox.resolve(id);
+        toast.error(`"${entry.payload.name}" couldn't be saved: ${result.error}`);
+        return "rejected";
+      }
+      const synced = backfillWholesaler(result.wholesaler);
+      wholesalerIdRedirects.set(id, synced.id);
+      setWholesalers([synced, ...wholesalers.filter((w) => w.id !== id)]);
+      outbox.resolve(id);
+      logAudit(actor(), "create", `Wholesaler / ${synced.name} (synced)`);
+      return "synced";
+    }
+
+    // update — this store never queues a "remove" entry (see remove() below, which stays
+    // immediate/online), so this is the only other op create() can produce.
+    if (entry.op !== "update") return "skipped";
+    const result = await safeServerCall(() =>
+      updateWholesalerOnServer({ data: { id, patch: entry.patch, callerRole: callerRole() } }),
+    );
+    if ("networkError" in result) {
+      outbox.markFailed(id, result.error);
+      return "failed-network";
+    }
+    outbox.resolve(id);
+    if ("error" in result) {
+      toast.error(`A change couldn't be saved: ${result.error}`);
+      await refreshFromServer(); // this device's optimistic patch is now known-wrong
+      return "rejected";
+    }
+    return "synced";
+  } finally {
+    inFlight.delete(id);
+  }
+}
+
+const scheduler = createSyncScheduler(async () => {
+  for (const id of Object.keys(outbox.get())) {
+    const outcome = await trySyncEntry(id);
+    if (outcome === "failed-network") break;
+  }
+});
+
+// Mounted once via AppShell, alongside usePendingBills/useProductsSync/useCustomersSync.
+export const useWholesalersSync = scheduler.usePendingSync;
+export const syncPendingWholesalers = scheduler.run;
+
+// For the header's combined "pending sync" indicator (see AppShell).
+export function usePendingWholesalersCount(): number {
+  return Object.keys(outbox.useOutbox()).length;
+}
+
 export const wholesalersStore = {
   get: () => wholesalers,
 
-  async create(
-    input: Omit<Wholesaler, "id" | "createdAt">,
-  ): Promise<Wholesaler | { error: string }> {
-    const result = await safeServerCall(() =>
-      createWholesalerOnServer({ data: { ...input, callerRole: callerRole() } }),
-    );
-    if ("networkError" in result) return { error: result.error };
-    if ("error" in result) return result;
-    setWholesalers([result.wholesaler, ...wholesalers]);
-    logAudit(actor(), "create", `Wholesaler / ${result.wholesaler.name}`);
-    return result.wholesaler;
+  async create(input: WholesalerInput): Promise<Wholesaler> {
+    const id = `local-${crypto.randomUUID().slice(0, 8)}`;
+    const wholesaler: Wholesaler = { ...input, id, createdAt: new Date().toISOString() };
+    setWholesalers([wholesaler, ...wholesalers]);
+    outbox.queueCreate(id, input);
+    logAudit(actor(), "create", `Wholesaler / ${wholesaler.name} (saved on device)`);
+    void scheduler.run();
+    return wholesaler;
   },
 
   async update(
     id: string,
     patch: Partial<Omit<Wholesaler, "id" | "createdAt">>,
   ): Promise<{ ok: true } | { error: string }> {
-    const existing = wholesalers.find((w) => w.id === id);
-    const result = await safeServerCall(() =>
-      updateWholesalerOnServer({ data: { id, patch, callerRole: callerRole() } }),
-    );
-    if ("networkError" in result) return { error: result.error };
-    if ("error" in result) return result;
-    setWholesalers(wholesalers.map((w) => (w.id === id ? { ...w, ...patch } : w)));
-    logAudit(actor(), "update", `Wholesaler / ${patch.name ?? existing?.name ?? id}`);
+    const targetId = resolveWholesalerId(id);
+    const existing = wholesalers.find((w) => w.id === targetId);
+    if (!existing) return { error: "Wholesaler not found" };
+    setWholesalers(wholesalers.map((w) => (w.id === targetId ? { ...w, ...patch } : w)));
+    outbox.queueUpdate(targetId, patch);
+    logAudit(actor(), "update", `Wholesaler / ${patch.name ?? existing.name}`);
+    void scheduler.run();
     return { ok: true };
   },
 
   async remove(id: string): Promise<{ ok: true } | { error: string }> {
-    const existing = wholesalers.find((w) => w.id === id);
+    const targetId = resolveWholesalerId(id);
+    const existing = wholesalers.find((w) => w.id === targetId);
     const result = await safeServerCall(() =>
-      removeWholesalerOnServer({ data: { id, callerRole: callerRole() } }),
+      removeWholesalerOnServer({ data: { id: targetId, callerRole: callerRole() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
-    setWholesalers(wholesalers.filter((w) => w.id !== id));
-    logAudit(actor(), "delete", `Wholesaler / ${existing?.name ?? id}`);
+    setWholesalers(wholesalers.filter((w) => w.id !== targetId));
+    logAudit(actor(), "delete", `Wholesaler / ${existing?.name ?? targetId}`);
     return { ok: true };
   },
 
   async setActive(id: string, active: boolean): Promise<{ ok: true } | { error: string }> {
-    const existing = wholesalers.find((w) => w.id === id);
+    const targetId = resolveWholesalerId(id);
+    const existing = wholesalers.find((w) => w.id === targetId);
     const result = await safeServerCall(() =>
-      setWholesalerActiveOnServer({ data: { id, active, callerRole: callerRole() } }),
+      setWholesalerActiveOnServer({ data: { id: targetId, active, callerRole: callerRole() } }),
     );
     if ("networkError" in result) return { error: result.error };
     if ("error" in result) return result;
-    setWholesalers(wholesalers.map((w) => (w.id === id ? { ...w, active } : w)));
+    setWholesalers(wholesalers.map((w) => (w.id === targetId ? { ...w, active } : w)));
     logAudit(
       actor(),
       "update",
-      `Wholesaler / ${existing?.name ?? id} ${active ? "enabled" : "disabled"}`,
+      `Wholesaler / ${existing?.name ?? targetId} ${active ? "enabled" : "disabled"}`,
     );
     return { ok: true };
   },

@@ -472,12 +472,14 @@ function WholesalerHomePage() {
       price: parseFloat(inventoryPrice) || 0,
       productId: inventoryProductPickId || undefined,
     };
-    const result = editingInventoryId
-      ? await wholesaleInventoryStore.update(editingInventoryId, payload)
-      : await wholesaleInventoryStore.create(payload);
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
+    if (editingInventoryId) {
+      const result = await wholesaleInventoryStore.update(editingInventoryId, payload);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+    } else {
+      await wholesaleInventoryStore.create(payload);
     }
 
     // Wholesale Inventory is the only place a product's stockQty/isNewStock is ever set —
@@ -802,12 +804,14 @@ function WholesalerHomePage() {
         .filter((c) => c.name),
       active: form.active,
     };
-    const result = editingId
-      ? await wholesalersStore.update(editingId, payload)
-      : await wholesalersStore.create(payload);
-    if ("error" in result) {
-      toast.error(result.error);
-      return;
+    if (editingId) {
+      const result = await wholesalersStore.update(editingId, payload);
+      if ("error" in result) {
+        toast.error(result.error);
+        return;
+      }
+    } else {
+      await wholesalersStore.create(payload);
     }
     toast.success(`"${payload.name}" ${editingId ? "updated" : "added"}`);
     setOpen(false);

@@ -34,6 +34,16 @@ import {
   usePendingExpensesCount,
   syncPendingExpenses,
 } from "@/lib/expenses-store";
+import {
+  useWholesalersSync,
+  usePendingWholesalersCount,
+  syncPendingWholesalers,
+} from "@/lib/wholesalers-store";
+import {
+  useWholesaleInventorySync,
+  usePendingWholesaleInventoryCount,
+  syncPendingWholesaleInventory,
+} from "@/lib/wholesale-inventory-store";
 import { settingsStore } from "@/lib/settings-store";
 import { createPersistedStore, usePersistedStore } from "@/lib/persisted-store";
 import { accentColors, setAccentColor, useAccentColor } from "@/lib/theme-store";
@@ -64,20 +74,35 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
   const hasUnseen = activity.length > 0 && activity[0].at !== lastSeenAt;
   const accent = useAccentColor();
   const pendingBills = usePendingBills();
-  // Background retry for products/customers/expenses' own local-first queues — bills' own
-  // retry loop is already driven by usePendingBills() above.
+  // Background retry for products/customers/expenses/wholesalers/wholesale-inventory's own
+  // local-first queues — bills' own retry loop is already driven by usePendingBills() above.
   useProductsSync();
   useCustomersSync();
   useExpensesSync();
+  useWholesalersSync();
+  useWholesaleInventorySync();
   const pendingProducts = usePendingProductsCount();
   const pendingCustomers = usePendingCustomersCount();
   const pendingExpenses = usePendingExpensesCount();
-  const pendingOtherCount = pendingProducts + pendingCustomers + pendingExpenses;
+  const pendingWholesalers = usePendingWholesalersCount();
+  const pendingWholesaleInventory = usePendingWholesaleInventoryCount();
+  const pendingOtherCount =
+    pendingProducts +
+    pendingCustomers +
+    pendingExpenses +
+    pendingWholesalers +
+    pendingWholesaleInventory;
   const [retrying, setRetrying] = useState(false);
 
   async function retrySync() {
     setRetrying(true);
-    await Promise.all([syncPendingProducts(), syncPendingCustomers(), syncPendingExpenses()]);
+    await Promise.all([
+      syncPendingProducts(),
+      syncPendingCustomers(),
+      syncPendingExpenses(),
+      syncPendingWholesalers(),
+      syncPendingWholesaleInventory(),
+    ]);
     await syncPendingBills();
     setRetrying(false);
   }
@@ -173,7 +198,7 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                       These were saved on this device because Supabase couldn't be reached. They'll
                       sync automatically once the connection is back.
                     </p>
-                    {(pendingProducts > 0 || pendingCustomers > 0 || pendingExpenses > 0) && (
+                    {pendingOtherCount > 0 && (
                       <>
                         <div className="space-y-1 px-2 pb-2 text-sm text-foreground">
                           {pendingProducts > 0 && (
@@ -189,6 +214,17 @@ export function AppShell({ title, children }: { title?: string; children: ReactN
                           {pendingExpenses > 0 && (
                             <p>
                               {pendingExpenses} expense{pendingExpenses > 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {pendingWholesalers > 0 && (
+                            <p>
+                              {pendingWholesalers} wholesaler{pendingWholesalers > 1 ? "s" : ""}
+                            </p>
+                          )}
+                          {pendingWholesaleInventory > 0 && (
+                            <p>
+                              {pendingWholesaleInventory} wholesale inventory item
+                              {pendingWholesaleInventory > 1 ? "s" : ""}
                             </p>
                           )}
                         </div>
