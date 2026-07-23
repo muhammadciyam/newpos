@@ -13,6 +13,13 @@ function requireWholesaleManage(callerRole: string): { error: string } | null {
     : { error: "You don't have permission to manage wholesalers" };
 }
 
+// Deleting or disabling/enabling the wholesaler shop itself (as opposed to editing its
+// catalogue, which shares updateWholesalerOnServer and stays open to the roles above) is
+// Super Admin only.
+function requireSuperAdmin(callerRole: string, action: string): { error: string } | null {
+  return callerRole === "Super Admin" ? null : { error: `Only Super Admin can ${action}` };
+}
+
 export const fetchWholesalers = createServerFn({ method: "GET" }).handler(async () => {
   return getServerWholesalers();
 });
@@ -55,7 +62,7 @@ export const updateWholesalerOnServer = createServerFn({ method: "POST" })
 export const removeWholesalerOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; callerRole: string }) => data)
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole, "delete a wholesaler");
     if (authError) return authError;
     await mutateServerWholesalers((ws) => ws.filter((w) => w.id !== data.id));
     return { ok: true as const };
@@ -64,7 +71,7 @@ export const removeWholesalerOnServer = createServerFn({ method: "POST" })
 export const setWholesalerActiveOnServer = createServerFn({ method: "POST" })
   .validator((data: { id: string; active: boolean; callerRole: string }) => data)
   .handler(async ({ data }) => {
-    const authError = requireWholesaleManage(data.callerRole);
+    const authError = requireSuperAdmin(data.callerRole, "enable or disable a wholesaler");
     if (authError) return authError;
     await mutateServerWholesalers((ws) =>
       ws.map((w) => (w.id === data.id ? { ...w, active: data.active } : w)),

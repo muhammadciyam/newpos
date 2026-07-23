@@ -270,6 +270,9 @@ function UnitSelect({
 function WholesalerHomePage() {
   const currentUser = useCurrentUser();
   const canManage = useHasPermission("wholesale.manage");
+  // Editing/deleting a wholesaler shop itself (as opposed to managing its catalogue) is
+  // restricted further, to Super Admin only.
+  const isSuperAdmin = currentUser?.role === "Super Admin";
   const wholesalers = useWholesalers();
   const logoInputRef = useRef<HTMLInputElement>(null);
   const bannerInputRef = useRef<HTMLInputElement>(null);
@@ -923,7 +926,7 @@ function WholesalerHomePage() {
                 <BookOpen className="h-4 w-4" /> View Catalogue
               </Button>
 
-              {canManage && (
+              {canManage && isSuperAdmin && (
                 <div className="flex justify-end gap-2 border-t border-border pt-2">
                   <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
                     <Pencil className="h-3.5 w-3.5" />
