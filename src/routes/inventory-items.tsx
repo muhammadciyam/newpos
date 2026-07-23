@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   Select,
@@ -19,7 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Search } from "lucide-react";
+import { Search, AlertTriangle } from "lucide-react";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useCategories } from "@/lib/categories-store";
 import { useSettings } from "@/lib/settings-store";
@@ -27,6 +28,11 @@ import { useHasPermission } from "@/lib/permissions";
 import { useCurrentUser } from "@/lib/auth-store";
 import { useOutlets } from "@/lib/outlets-store";
 import { RestrictedPage } from "@/components/restricted-page";
+
+// Same threshold the Products page and Stock Report already flag "Low Stock" at — kept
+// consistent across every stock indicator in the app rather than introducing a second,
+// separately-configurable number just for this page.
+const LOW_STOCK_THRESHOLD = 15;
 
 export const Route = createFileRoute("/inventory-items")({
   head: () => ({
@@ -49,18 +55,25 @@ function InventoryItemsPage() {
   const currency = settings.general.currency;
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+
+  const lowStockCount = useMemo(
+    () => products.filter((p) => p.stock < LOW_STOCK_THRESHOLD).length,
+    [products],
+  );
 
   const filtered = useMemo(
     () =>
       products.filter(
         (p) =>
           (categoryFilter === "all" || p.category === categoryFilter) &&
+          (!lowStockOnly || p.stock < LOW_STOCK_THRESHOLD) &&
           (p.name.toLowerCase().includes(search.toLowerCase()) ||
             (p.sku ?? "").toLowerCase().includes(search.toLowerCase()) ||
             (p.barcode ?? "").includes(search) ||
             (p.supplier ?? "").toLowerCase().includes(search.toLowerCase())),
       ),
-    [products, search, categoryFilter],
+    [products, search, categoryFilter, lowStockOnly],
   );
 
   if (!canAccess) return <RestrictedPage />;
@@ -72,12 +85,23 @@ function InventoryItemsPage() {
   return (
     <AppShell>
       <div className="flex flex-col gap-4 p-4 md:p-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Inventory Items</h1>
-          <p className="text-sm text-muted-foreground">
-            {products.length} item{products.length === 1 ? "" : "s"} — stock, pricing, SKU, barcode,
-            GST and supplier in one place.
-          </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground">Inventory Items</h1>
+            <p className="text-sm text-muted-foreground">
+              {products.length} item{products.length === 1 ? "" : "s"} — stock, pricing, SKU,
+              barcode, GST and supplier in one place.
+            </p>
+          </div>
+          <Button
+            type="button"
+            variant={lowStockOnly ? "default" : "outline"}
+            className="gap-1.5"
+            onClick={() => setLowStockOnly((v) => !v)}
+          >
+            <AlertTriangle className="h-4 w-4" />
+            {lowStockOnly ? "Showing Low Stock" : `Low Stock (${lowStockCount})`}
+          </Button>
         </div>
 
         <Card className="p-3">
@@ -132,7 +156,7 @@ function InventoryItemsPage() {
                     colSpan={isSuperAdmin ? 10 : 9}
                     className="py-10 text-center text-muted-foreground"
                   >
-                    No items match your search.
+                    {lowStockOnly ? "No low stock items right now." : "No items match your search."}
                   </TableCell>
                 </TableRow>
               )}
@@ -162,7 +186,9 @@ function InventoryItemsPage() {
                     {categoryName(p.category)}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={p.stock < 15 ? "destructive" : "secondary"}>{p.stock}</Badge>
+                    <Badge variant={p.stock < LOW_STOCK_THRESHOLD ? "destructive" : "secondary"}>
+                      {p.stock}
+                    </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground">
                     {p.cost != null ? `${currency} ${p.cost.toFixed(2)}` : "—"}
