@@ -319,6 +319,8 @@ function WholesalerHomePage() {
 
   const wholesaleOrders = useWholesaleOrders();
   const [orderHistoryOpen, setOrderHistoryOpen] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [orderPage, setOrderPage] = useState(1);
 
   const wholesaleInventory = useWholesaleInventory();
   const [inventoryOpen, setInventoryOpen] = useState(false);
