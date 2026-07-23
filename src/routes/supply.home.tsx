@@ -62,6 +62,8 @@ import {
   Image as ImageIcon,
   Check,
   Sparkles,
+  X,
+  PackageOpen,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -333,6 +335,22 @@ function WholesalerHomePage() {
   const visible = canManage ? wholesalers : wholesalers.filter((s) => s.active);
   const cartCount = cart.reduce((sum, item) => sum + item.qty, 0);
   const cartTotal = cart.reduce((sum, item) => sum + item.qty * item.price, 0);
+  const currency = settings.general.currency;
+  // Grouped by wholesaler so a cart spanning more than one shows a clear section per
+  // supplier, same grouping placeOrder() already relies on for the notify-by-wholesaler step.
+  // Plain derived value (not useMemo) — this runs after the early `if (!currentUser)` return
+  // above, where a hook can't safely live.
+  const cartGroupsMap = new Map<string, { wholesalerName: string; items: CartItem[] }>();
+  for (const item of cart) {
+    const group = cartGroupsMap.get(item.wholesalerId);
+    if (group) group.items.push(item);
+    else cartGroupsMap.set(item.wholesalerId, { wholesalerName: item.wholesalerName, items: [item] });
+  }
+  const cartGroups = Array.from(cartGroupsMap.entries()).map(([wholesalerId, group]) => ({
+    wholesalerId,
+    ...group,
+    subtotal: group.items.reduce((sum, i) => sum + i.qty * i.price, 0),
+  }));
 
   async function addToCart(wholesaler: Wholesaler, product: WholesalerProduct) {
     const result = await cartStore.addToCart(wholesaler, product);
@@ -1630,133 +1648,172 @@ function WholesalerHomePage() {
             if (!v) setOrderNotifyGroups([]);
           }}
         >
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>{orderNotifyGroups.length > 0 ? "Order Placed" : "Cart"}</DialogTitle>
+          <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 p-0">
+            <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
+              <DialogTitle className="flex items-center gap-2">
+                <ShoppingCart className="h-5 w-5 text-primary" />
+                {orderNotifyGroups.length > 0
+                  ? "Order Placed"
+                  : `${cartCount} Item${cartCount === 1 ? "" : "s"}`}
+              </DialogTitle>
             </DialogHeader>
-            {orderNotifyGroups.length > 0 ? (
-              <div className="flex flex-col gap-3">
-                <p className="text-sm text-muted-foreground">
-                  Notify each wholesaler about their part of the order:
-                </p>
-                {orderNotifyGroups.map((group) => (
-                  <div
-                    key={group.wholesalerId}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-2.5"
-                  >
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {group.wholesalerName}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">{group.phone}</p>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {orderNotifyGroups.length > 0 ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-sm text-muted-foreground">
+                    Notify each wholesaler about their part of the order:
+                  </p>
+                  {orderNotifyGroups.map((group) => (
+                    <div
+                      key={group.wholesalerId}
+                      className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium text-foreground">
+                          {group.wholesalerName}
+                        </p>
+                        <p className="truncate text-xs text-muted-foreground">{group.phone}</p>
+                      </div>
+                      <div className="flex gap-2">
+                        <a href={group.whatsAppUrl} target="_blank" rel="noopener noreferrer">
+                          <Button type="button" size="sm" className="gap-1.5">
+                            <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
+                          </Button>
+                        </a>
+                        <a href={group.viberUrl} target="_blank" rel="noopener noreferrer">
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5">
+                            <MessageCircle className="h-3.5 w-3.5" /> Viber
+                          </Button>
+                        </a>
+                        <a href={group.smsUrl}>
+                          <Button type="button" variant="outline" size="sm" className="gap-1.5">
+                            <MessageSquare className="h-3.5 w-3.5" /> SMS
+                          </Button>
+                        </a>
+                      </div>
                     </div>
-                    <div className="flex gap-2">
-                      <a href={group.whatsAppUrl} target="_blank" rel="noopener noreferrer">
-                        <Button type="button" size="sm" className="gap-1.5">
-                          <MessageCircle className="h-3.5 w-3.5" /> WhatsApp
-                        </Button>
-                      </a>
-                      <a href={group.viberUrl} target="_blank" rel="noopener noreferrer">
-                        <Button type="button" variant="outline" size="sm" className="gap-1.5">
-                          <MessageCircle className="h-3.5 w-3.5" /> Viber
-                        </Button>
-                      </a>
-                      <a href={group.smsUrl}>
-                        <Button type="button" variant="outline" size="sm" className="gap-1.5">
-                          <MessageSquare className="h-3.5 w-3.5" /> SMS
-                        </Button>
-                      </a>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : cart.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                Your cart is empty. Add products from a wholesaler's catalogue.
-              </p>
-            ) : (
-              <div className="flex flex-col gap-3">
-                {cart.map((item) => (
-                  <div
-                    key={item.productId}
-                    className="flex items-center gap-3 rounded-lg border border-border p-2.5"
-                  >
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-foreground">
-                        {item.productName}
-                      </p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {item.wholesalerName}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setCartQty(item.productId, item.qty - 1)}
-                      >
-                        <Minus className="h-3 w-3" />
-                      </Button>
-                      <span className="w-6 text-center text-sm">{item.qty}</span>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => setCartQty(item.productId, item.qty + 1)}
-                      >
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <p className="w-16 shrink-0 text-right text-sm font-semibold text-foreground">
-                      {(item.price * item.qty).toLocaleString(undefined, {
-                        minimumFractionDigits: 2,
-                        maximumFractionDigits: 2,
-                      })}
-                    </p>
-                    <AlertDialog>
-                      <AlertDialogTrigger asChild>
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </AlertDialogTrigger>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>
-                            Remove "{item.productName}" from cart?
-                          </AlertDialogTitle>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => removeFromCart(item.productId)}>
-                            Remove
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
-                ))}
-                <div className="flex items-center justify-between border-t border-border pt-3">
-                  <p className="text-sm font-semibold text-foreground">Total</p>
-                  <p className="text-base font-bold text-foreground">
-                    {cartTotal.toLocaleString(undefined, {
-                      minimumFractionDigits: 2,
-                      maximumFractionDigits: 2,
-                    })}
+                  ))}
+                </div>
+              ) : cart.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-14 text-center">
+                  <PackageOpen className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-foreground">Your cart is empty</p>
+                  <p className="text-xs text-muted-foreground">
+                    Add products from a wholesaler's catalogue to get started.
                   </p>
                 </div>
-              </div>
-            )}
-            <DialogFooter>
-              {orderNotifyGroups.length > 0 ? (
+              ) : (
+                <div className="flex flex-col gap-4">
+                  {cartGroups.map((group) => (
+                    <div
+                      key={group.wholesalerId}
+                      className="overflow-hidden rounded-lg border border-border"
+                    >
+                      <div className="bg-muted px-3 py-2 text-center text-xs font-bold uppercase tracking-wide text-muted-foreground">
+                        {group.wholesalerName}
+                      </div>
+                      <div className="divide-y divide-border">
+                        {group.items.map((item) => (
+                          <div key={item.productId} className="flex items-center gap-3 p-3">
+                            <div className="flex shrink-0 flex-col items-center gap-1 rounded-full border border-border bg-muted/40 px-1.5 py-1.5">
+                              <button
+                                type="button"
+                                className="flex h-5 w-5 items-center justify-center text-foreground hover:text-primary"
+                                onClick={() => setCartQty(item.productId, item.qty + 1)}
+                              >
+                                <Plus className="h-3.5 w-3.5" />
+                              </button>
+                              <span className="text-sm font-semibold text-foreground">
+                                {item.qty}
+                              </span>
+                              <button
+                                type="button"
+                                className="flex h-5 w-5 items-center justify-center text-foreground hover:text-destructive"
+                                onClick={() => setCartQty(item.productId, item.qty - 1)}
+                              >
+                                <Minus className="h-3.5 w-3.5" />
+                              </button>
+                            </div>
+                            {item.imageUrl ? (
+                              <img
+                                src={item.imageUrl}
+                                alt=""
+                                className="h-14 w-14 shrink-0 rounded-md border border-border object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-md border border-border bg-muted text-muted-foreground">
+                                <ImageIcon className="h-5 w-5" />
+                              </div>
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm font-bold uppercase text-foreground">
+                                {item.productName}
+                              </p>
+                              <p className="text-sm font-semibold text-primary">
+                                {currency} {item.price.toFixed(2)}
+                              </p>
+                              {(item.packingDetails || item.size) && (
+                                <p className="truncate text-xs text-muted-foreground">
+                                  {[
+                                    item.packingDetails,
+                                    item.size ? `${item.size}${item.sizeUnit ?? ""}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ")}
+                                </p>
+                              )}
+                            </div>
+                            <div className="flex shrink-0 flex-col items-end gap-1.5">
+                              <p className="text-sm font-bold text-foreground">
+                                {(item.price * item.qty).toFixed(2)}
+                              </p>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className="text-destructive hover:text-destructive/70"
+                                    title="Remove"
+                                  >
+                                    <X className="h-4 w-4" />
+                                  </button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      Remove "{item.productName}" from cart?
+                                    </AlertDialogTitle>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                    <AlertDialogAction
+                                      onClick={() => removeFromCart(item.productId)}
+                                    >
+                                      Remove
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {group.items.length > 1 && (
+                        <div className="flex items-center justify-between bg-muted/40 px-3 py-1.5 text-xs">
+                          <span className="text-muted-foreground">Subtotal</span>
+                          <span className="font-semibold text-foreground">
+                            {currency} {group.subtotal.toFixed(2)}
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            {orderNotifyGroups.length > 0 ? (
+              <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
                 <Button
+                  className="w-full rounded-full"
                   onClick={() => {
                     setOrderNotifyGroups([]);
                     setCartOpen(false);
@@ -1764,79 +1821,129 @@ function WholesalerHomePage() {
                 >
                   Done
                 </Button>
-              ) : (
-                <>
-                  {cart.length > 0 && (
-                    <>
-                      <Button variant="outline" onClick={clearCart}>
-                        Clear Cart
-                      </Button>
-                      <Button onClick={placeOrder}>Make Order</Button>
-                    </>
-                  )}
-                  <Button variant="outline" onClick={() => setCartOpen(false)}>
-                    Close
-                  </Button>
-                </>
-              )}
-            </DialogFooter>
+              </DialogFooter>
+            ) : cart.length > 0 ? (
+              <DialogFooter className="flex-col gap-3 shrink-0 border-t border-border px-5 py-4 sm:flex-col">
+                <div className="flex w-full items-center justify-between">
+                  <p className="text-sm font-semibold text-foreground">Total</p>
+                  <p className="text-lg font-bold text-foreground">
+                    {currency} {cartTotal.toFixed(2)}
+                  </p>
+                </div>
+                <Button
+                  size="lg"
+                  className="w-full rounded-full text-base font-semibold"
+                  onClick={placeOrder}
+                >
+                  Checkout
+                </Button>
+                <div className="flex w-full items-center justify-center gap-4 text-xs">
+                  <button
+                    type="button"
+                    onClick={clearCart}
+                    className="text-muted-foreground hover:text-destructive hover:underline"
+                  >
+                    Clear Cart
+                  </button>
+                  <span className="text-border">·</span>
+                  <button
+                    type="button"
+                    onClick={() => setCartOpen(false)}
+                    className="text-muted-foreground hover:text-primary hover:underline"
+                  >
+                    Continue Shopping
+                  </button>
+                </div>
+              </DialogFooter>
+            ) : (
+              <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
+                <Button variant="outline" className="w-full" onClick={() => setCartOpen(false)}>
+                  Close
+                </Button>
+              </DialogFooter>
+            )}
           </DialogContent>
         </Dialog>
 
         {/* Order History — read-only snapshots created by "Make Order" in the Cart */}
         <Dialog open={orderHistoryOpen} onOpenChange={setOrderHistoryOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Order History</DialogTitle>
+          <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 p-0">
+            <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
+              <DialogTitle className="flex items-center gap-2">
+                <History className="h-5 w-5 text-primary" />
+                Order History
+                {wholesaleOrders.length > 0 && (
+                  <Badge variant="outline" className="ml-1 font-normal">
+                    {wholesaleOrders.length}
+                  </Badge>
+                )}
+              </DialogTitle>
             </DialogHeader>
-            {wholesaleOrders.length === 0 ? (
-              <p className="py-6 text-center text-sm text-muted-foreground">
-                No orders placed yet.
-              </p>
-            ) : (
-              <div className="flex max-h-96 flex-col gap-3 overflow-y-auto">
-                {wholesaleOrders.map((order) => (
-                  <div
-                    key={order.id}
-                    className="flex flex-col gap-2 rounded-lg border border-border p-3"
-                  >
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(order.createdAt).toLocaleString()} · {order.placedBy}
-                      </p>
-                      <p className="text-sm font-bold text-foreground">
-                        {order.total.toLocaleString(undefined, {
-                          minimumFractionDigits: 2,
-                          maximumFractionDigits: 2,
-                        })}
-                      </p>
-                    </div>
-                    <div className="flex flex-col gap-1">
-                      {order.items.map((item) => (
-                        <div
-                          key={item.productId}
-                          className="flex items-center justify-between text-xs text-muted-foreground"
-                        >
-                          <span className="truncate">
-                            {item.qty} × {item.productName}{" "}
-                            <span className="text-muted-foreground/70">
-                              ({item.wholesalerName})
-                            </span>
+            <div className="flex-1 overflow-y-auto px-5 py-4">
+              {wholesaleOrders.length === 0 ? (
+                <div className="flex flex-col items-center gap-2 py-14 text-center">
+                  <History className="h-10 w-10 text-muted-foreground/40" />
+                  <p className="text-sm font-medium text-foreground">No orders yet</p>
+                  <p className="text-xs text-muted-foreground">
+                    Orders you place from the Cart will show up here.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {wholesaleOrders.map((order) => {
+                    const itemCount = order.items.reduce((sum, i) => sum + i.qty, 0);
+                    const wholesalerNames = Array.from(
+                      new Set(order.items.map((i) => i.wholesalerName)),
+                    );
+                    return (
+                      <div
+                        key={order.id}
+                        className="overflow-hidden rounded-lg border border-border"
+                      >
+                        <div className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-semibold text-foreground">
+                              {wholesalerNames.join(", ")}
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(order.createdAt).toLocaleString()} · {order.placedBy}
+                            </p>
+                          </div>
+                          <Badge className="shrink-0 gap-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                            <Check className="h-3 w-3" /> Placed
+                          </Badge>
+                        </div>
+                        <div className="flex flex-col gap-1.5 px-3 py-2.5">
+                          {order.items.map((item) => (
+                            <div
+                              key={item.productId}
+                              className="flex items-center justify-between text-xs"
+                            >
+                              <span className="truncate text-muted-foreground">
+                                <span className="font-medium text-foreground">{item.qty}×</span>{" "}
+                                {item.productName}
+                              </span>
+                              <span className="shrink-0 pl-2 text-foreground">
+                                {currency} {(item.qty * item.price).toFixed(2)}
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                        <div className="flex items-center justify-between border-t border-border px-3 py-2">
+                          <span className="text-xs text-muted-foreground">
+                            {itemCount} item{itemCount === 1 ? "" : "s"}
                           </span>
-                          <span className="shrink-0 pl-2">
-                            {(item.qty * item.price).toLocaleString(undefined, {
-                              minimumFractionDigits: 2,
-                              maximumFractionDigits: 2,
-                            })}
+                          <span className="text-sm font-bold text-foreground">
+                            {currency} {order.total.toFixed(2)}
                           </span>
                         </div>
-                      ))}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-            <DialogFooter>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
               <Button variant="outline" onClick={() => setOrderHistoryOpen(false)}>
                 Close
               </Button>

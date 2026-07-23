@@ -17,6 +17,13 @@ export type CartItem = {
   productName: string;
   price: number;
   qty: number;
+  // Snapshotted from the catalogue product at add-to-cart time, purely for display — if the
+  // product is later edited, an already-carted line keeps showing what it looked like when
+  // added. Optional since older carted rows (added before this existed) won't have them.
+  imageUrl?: string;
+  packingDetails?: string;
+  size?: number;
+  sizeUnit?: string;
 };
 
 let items: CartItem[] = [];
@@ -62,7 +69,15 @@ export const cartStore = {
   // cart rather than creating a duplicate row.
   addToCart(
     wholesaler: { id: string; name: string },
-    product: { id: string; name: string; price: number },
+    product: {
+      id: string;
+      name: string;
+      price: number;
+      imageUrl?: string;
+      packingDetails?: string;
+      size?: number;
+      sizeUnit?: string;
+    },
   ): Promise<{ ok: true } | { error: string }> {
     return serialize(async () => {
       const existing = items.find((i) => i.productId === product.id);
@@ -73,6 +88,10 @@ export const cartStore = {
         productName: product.name,
         price: product.price,
         qty: (existing?.qty ?? 0) + 1,
+        imageUrl: product.imageUrl,
+        packingDetails: product.packingDetails,
+        size: product.size,
+        sizeUnit: product.sizeUnit,
       };
       const result = await safeServerCall(() => setCartItemOnServer({ data: item }));
       if ("networkError" in result) return { error: result.error };
