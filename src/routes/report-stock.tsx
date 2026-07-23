@@ -30,10 +30,15 @@ function StockReportPage() {
   useProductsPolling();
   const [search, setSearch] = useState("");
 
-  const filtered = useMemo(
-    () => products.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase())),
-    [products, search],
-  );
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return products.filter(
+      (p) =>
+        p.name.toLowerCase().includes(q) ||
+        (p.sku ?? "").toLowerCase().includes(q) ||
+        (p.barcode ?? "").toLowerCase().includes(q),
+    );
+  }, [products, search]);
 
   if (!canView) return <RestrictedPage />;
 
@@ -52,7 +57,7 @@ function StockReportPage() {
           <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search product..."
+            placeholder="Search name, SKU, or barcode..."
             className="w-56 pl-8"
           />
         </div>

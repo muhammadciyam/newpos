@@ -205,7 +205,9 @@ function SellPage() {
         (p) =>
           p.outletId === currentOutletId &&
           (category === "all" || p.category === category) &&
-          (p.name.toLowerCase().includes(query.toLowerCase()) || (p.barcode ?? "").includes(query)),
+          (p.name.toLowerCase().includes(query.toLowerCase()) ||
+            (p.barcode ?? "").includes(query) ||
+            (p.sku ?? "").toLowerCase().includes(query.toLowerCase())),
       ),
     [products, currentOutletId, category, query],
   );
@@ -679,7 +681,7 @@ function SellPage() {
                   onChange={(e) => setQuery(e.target.value)}
                   onFocus={() => setSearchFocused(true)}
                   onBlur={() => setTimeout(() => setSearchFocused(false), 150)}
-                  placeholder="Enter product name, brand or barcode (...)"
+                  placeholder="Enter product name, SKU, or barcode..."
                   className="pl-8"
                 />
                 {showSuggestions && (

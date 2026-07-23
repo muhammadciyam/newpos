@@ -21,17 +21,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
-import {
   Table,
   TableBody,
   TableCell,
@@ -50,7 +39,6 @@ import {
   type PurchaseInvoice,
 } from "@/lib/purchase-invoices-store";
 import { useHasPermission } from "@/lib/permissions";
-import { useCurrentUser } from "@/lib/auth-store";
 import { RestrictedPage } from "@/components/restricted-page";
 import { useOutlets } from "@/lib/outlets-store";
 import { useScopeOutletId } from "@/lib/outlet-scope";
@@ -70,10 +58,6 @@ const statusColor: Record<string, string> = {
 function InventoryPage() {
   const canAccess = useHasPermission("inventory.access");
   const canApprove = useHasPermission("inventory.approve");
-  const currentUser = useCurrentUser();
-  // Deliberately stricter than the usual inventory.approve permission (which Manager also
-  // has) — clearing wipes every invoice record outright, so it's Admin/Super Admin only.
-  const canClearInventory = currentUser?.role === "Admin" || currentUser?.role === "Super Admin";
   const invoices = usePurchaseInvoices();
   const products = useProducts();
   useProductsPolling();
@@ -251,46 +235,6 @@ function InventoryPage() {
             <Button onClick={() => setOpen(true)} className="gap-1.5">
               <Plus className="h-4 w-4" /> New Purchase Invoice
             </Button>
-            {canClearInventory && invoices.length > 0 && (
-              <AlertDialog>
-                <AlertDialogTrigger asChild>
-                  <Button variant="destructive" className="gap-1.5">
-                    <Trash2 className="h-4 w-4" /> Clear Inventory
-                  </Button>
-                </AlertDialogTrigger>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      Delete all {invoices.length} Purchase Invoices?
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      This permanently deletes every purchase invoice record{" "}
-                      {scopeOutletId ? "for this outlet" : "across every outlet"} — pending,
-                      received, approved, and rejected. It does not reverse stock that an
-                      already-approved invoice has already added; only the invoice records
-                      themselves are removed. This can't be undone.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={async () => {
-                        const result = await purchaseInvoicesStore.clearAll(
-                          invoices.map((i) => i.id),
-                        );
-                        if ("error" in result) {
-                          toast.error(result.error);
-                          return;
-                        }
-                        toast.success("Purchase Invoices deleted");
-                      }}
-                    >
-                      Delete All
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            )}
           </div>
         </div>
 
