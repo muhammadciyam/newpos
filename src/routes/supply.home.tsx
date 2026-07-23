@@ -344,7 +344,8 @@ function WholesalerHomePage() {
   for (const item of cart) {
     const group = cartGroupsMap.get(item.wholesalerId);
     if (group) group.items.push(item);
-    else cartGroupsMap.set(item.wholesalerId, { wholesalerName: item.wholesalerName, items: [item] });
+    else
+      cartGroupsMap.set(item.wholesalerId, { wholesalerName: item.wholesalerName, items: [item] });
   }
   const cartGroups = Array.from(cartGroupsMap.entries()).map(([wholesalerId, group]) => ({
     wholesalerId,
