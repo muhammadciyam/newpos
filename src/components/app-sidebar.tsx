@@ -36,6 +36,7 @@ import {
   MapPin,
   UserCog,
   SlidersHorizontal,
+  Boxes,
 } from "lucide-react";
 import {
   Sidebar,
@@ -109,6 +110,7 @@ const items: NavItem[] = [
     children: [
       { title: "Purchase Invoices", url: "/inventory", icon: ClipboardList, color: "indigo" },
       { title: "Stock Count", url: "/stock-count", icon: ClipboardCheck, color: "teal" },
+      { title: "Items", url: "/inventory-items", icon: Boxes, color: "blue" },
     ],
   },
   { title: "Wholesaler", url: "/supply/home", icon: Store, color: "violet" },

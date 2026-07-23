@@ -15,6 +15,9 @@ export type Product = {
   sku?: string;
   // Last known unit cost, set from the most recently approved Purchase Invoice line for this product.
   cost?: number;
+  // Last known supplier, set alongside `cost` from the most recently approved Purchase
+  // Invoice this product appeared on (see purchase-invoices-store.ts's approve()).
+  supplier?: string;
   // Whether this product shows up on the Stock Count page. Undefined counts as true
   // (existing products default to countable) — only an explicit `false` excludes it.
   countable?: boolean;

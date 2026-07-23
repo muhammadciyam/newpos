@@ -26,6 +26,7 @@ import { Route as ReportCustomerSalesRouteImport } from './routes/report-custome
 import { Route as ProductsRouteImport } from './routes/products'
 import { Route as MyProfileRouteImport } from './routes/my-profile'
 import { Route as LoginRouteImport } from './routes/login'
+import { Route as InventoryItemsRouteImport } from './routes/inventory-items'
 import { Route as InventoryRouteImport } from './routes/inventory'
 import { Route as ExpensesRouteImport } from './routes/expenses'
 import { Route as CustomersRouteImport } from './routes/customers'
@@ -136,6 +137,11 @@ const MyProfileRoute = MyProfileRouteImport.update({
 const LoginRoute = LoginRouteImport.update({
   id: '/login',
   path: '/login',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const InventoryItemsRoute = InventoryItemsRouteImport.update({
+  id: '/inventory-items',
+  path: '/inventory-items',
   getParentRoute: () => rootRouteImport,
 } as any)
 const InventoryRoute = InventoryRouteImport.update({
@@ -274,6 +280,7 @@ export interface FileRoutesByFullPath {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
+  '/inventory-items': typeof InventoryItemsRoute
   '/login': typeof LoginRoute
   '/my-profile': typeof MyProfileRoute
   '/products': typeof ProductsRoute
@@ -319,6 +326,7 @@ export interface FileRoutesByTo {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
+  '/inventory-items': typeof InventoryItemsRoute
   '/login': typeof LoginRoute
   '/my-profile': typeof MyProfileRoute
   '/products': typeof ProductsRoute
@@ -365,6 +373,7 @@ export interface FileRoutesById {
   '/customers': typeof CustomersRoute
   '/expenses': typeof ExpensesRoute
   '/inventory': typeof InventoryRoute
+  '/inventory-items': typeof InventoryItemsRoute
   '/login': typeof LoginRoute
   '/my-profile': typeof MyProfileRoute
   '/products': typeof ProductsRoute
@@ -412,6 +421,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inventory'
+    | '/inventory-items'
     | '/login'
     | '/my-profile'
     | '/products'
@@ -457,6 +467,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inventory'
+    | '/inventory-items'
     | '/login'
     | '/my-profile'
     | '/products'
@@ -502,6 +513,7 @@ export interface FileRouteTypes {
     | '/customers'
     | '/expenses'
     | '/inventory'
+    | '/inventory-items'
     | '/login'
     | '/my-profile'
     | '/products'
@@ -548,6 +560,7 @@ export interface RootRouteChildren {
   CustomersRoute: typeof CustomersRoute
   ExpensesRoute: typeof ExpensesRoute
   InventoryRoute: typeof InventoryRoute
+  InventoryItemsRoute: typeof InventoryItemsRoute
   LoginRoute: typeof LoginRoute
   MyProfileRoute: typeof MyProfileRoute
   ProductsRoute: typeof ProductsRoute
@@ -708,6 +721,13 @@ declare module '@tanstack/react-router' {
       path: '/login'
       fullPath: '/login'
       preLoaderRoute: typeof LoginRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/inventory-items': {
+      id: '/inventory-items'
+      path: '/inventory-items'
+      fullPath: '/inventory-items'
+      preLoaderRoute: typeof InventoryItemsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/inventory': {
@@ -900,6 +920,7 @@ const rootRouteChildren: RootRouteChildren = {
   CustomersRoute: CustomersRoute,
   ExpensesRoute: ExpensesRoute,
   InventoryRoute: InventoryRoute,
+  InventoryItemsRoute: InventoryItemsRoute,
   LoginRoute: LoginRoute,
   MyProfileRoute: MyProfileRoute,
   ProductsRoute: ProductsRoute,

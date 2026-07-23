@@ -13,6 +13,7 @@ import {
   setProductCountableOnServer,
   setProductImageOnServer,
   setProductCostOnServer,
+  setProductSupplierOnServer,
   increaseStockOnServer,
   setStockCountOnServer,
 } from "@/lib/products-api";
@@ -169,6 +170,15 @@ export const productsStore = {
   async setCost(id: string, cost: number): Promise<void> {
     const result = await safeServerCall(() => setProductCostOnServer({ data: { id, cost } }));
     if (!("networkError" in result)) patchProduct(id, { cost });
+  },
+
+  // Silent — keeps the product's "last known supplier" in sync alongside setCost, when a
+  // Purchase Invoice for it is approved.
+  async setSupplier(id: string, supplier: string): Promise<void> {
+    const result = await safeServerCall(() =>
+      setProductSupplierOnServer({ data: { id, supplier } }),
+    );
+    if (!("networkError" in result)) patchProduct(id, { supplier });
   },
 
   // Stock Count — sets a product's stock to a manually counted quantity, up or down, with

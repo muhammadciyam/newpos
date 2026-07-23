@@ -212,6 +212,17 @@ export const setProductCostOnServer = createServerFn({ method: "POST" })
     return { ok: true as const };
   });
 
+// Silent — keeps the product's "last known supplier" in sync alongside setProductCostOnServer,
+// when a Purchase Invoice for it is approved.
+export const setProductSupplierOnServer = createServerFn({ method: "POST" })
+  .validator((data: { id: string; supplier: string }) => data)
+  .handler(async ({ data }) => {
+    await mutateServerProducts((ps) =>
+      ps.map((p) => (p.id === data.id ? { ...p, supplier: data.supplier } : p)),
+    );
+    return { ok: true as const };
+  });
+
 // The only client-callable way stock is ever added — called when a Purchase Invoice is
 // approved. Sales instead decrement stock atomically inside bills-api.ts's handlers.
 export const increaseStockOnServer = createServerFn({ method: "POST" })

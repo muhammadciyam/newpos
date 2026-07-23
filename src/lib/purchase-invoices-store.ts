@@ -170,6 +170,7 @@ export const purchaseInvoicesStore = {
     for (const item of invoice.items) {
       await productsStore.increaseStock(item.productId, item.qty);
       await productsStore.setCost(item.productId, item.costPrice);
+      await productsStore.setSupplier(item.productId, invoice.supplierName);
     }
     const at = formatNow();
     const by = actor();
