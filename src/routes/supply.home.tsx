@@ -81,7 +81,11 @@ import {
   type WholesaleInventoryItem,
 } from "@/lib/wholesale-inventory-store";
 import { useCart, cartStore, type CartItem } from "@/lib/cart-store";
-import { useWholesaleOrders, wholesaleOrdersStore } from "@/lib/wholesale-orders-store";
+import {
+  useWholesaleOrders,
+  wholesaleOrdersStore,
+  type WholesaleOrder,
+} from "@/lib/wholesale-orders-store";
 import { useCurrentUser } from "@/lib/auth-store";
 import { findProductPhoto } from "@/lib/product-photo-search";
 import { logAudit } from "@/lib/audit-log-store";
@@ -354,6 +358,22 @@ function WholesalerHomePage() {
     ...group,
     subtotal: group.items.reduce((sum, i) => sum + i.qty * i.price, 0),
   }));
+
+  // A short, stable, human-friendly number for an order — derived from its own real id
+  // (never fabricated) so it's unique but reads like the "Order #245058" style shop owners
+  // are used to seeing from real supplier portals.
+  function orderDisplayNumber(order: WholesaleOrder): string {
+    return order.id.replace(/\D/g, "").slice(-6);
+  }
+
+  const ORDERS_PER_PAGE = 6;
+  const orderTotalPages = Math.max(1, Math.ceil(wholesaleOrders.length / ORDERS_PER_PAGE));
+  const pagedOrders = wholesaleOrders.slice(
+    (orderPage - 1) * ORDERS_PER_PAGE,
+    orderPage * ORDERS_PER_PAGE,
+  );
+  const selectedOrder =
+    wholesaleOrders.find((o) => o.id === selectedOrderId) ?? wholesaleOrders[0] ?? null;
 
   async function addToCart(wholesaler: Wholesaler, product: WholesalerProduct) {
     const result = await cartStore.addToCart(wholesaler, product);
@@ -1873,8 +1893,17 @@ function WholesalerHomePage() {
         </Dialog>
 
         {/* Order History — read-only snapshots created by "Make Order" in the Cart */}
-        <Dialog open={orderHistoryOpen} onOpenChange={setOrderHistoryOpen}>
-          <DialogContent className="flex max-h-[85vh] max-w-lg flex-col gap-0 p-0">
+        <Dialog
+          open={orderHistoryOpen}
+          onOpenChange={(v) => {
+            setOrderHistoryOpen(v);
+            if (v) {
+              setSelectedOrderId(wholesaleOrders[0]?.id ?? null);
+              setOrderPage(1);
+            }
+          }}
+        >
+          <DialogContent className="flex h-[85vh] max-w-4xl flex-col gap-0 p-0">
             <DialogHeader className="shrink-0 border-b border-border px-5 py-4">
               <DialogTitle className="flex items-center gap-2">
                 <History className="h-5 w-5 text-primary" />
@@ -1886,70 +1915,178 @@ function WholesalerHomePage() {
                 )}
               </DialogTitle>
             </DialogHeader>
-            <div className="flex-1 overflow-y-auto px-5 py-4">
-              {wholesaleOrders.length === 0 ? (
-                <div className="flex flex-col items-center gap-2 py-14 text-center">
-                  <History className="h-10 w-10 text-muted-foreground/40" />
-                  <p className="text-sm font-medium text-foreground">No orders yet</p>
-                  <p className="text-xs text-muted-foreground">
-                    Orders you place from the Cart will show up here.
+
+            {wholesaleOrders.length === 0 ? (
+              <div className="flex flex-1 flex-col items-center justify-center gap-2 text-center">
+                <History className="h-10 w-10 text-muted-foreground/40" />
+                <p className="text-sm font-medium text-foreground">No orders yet</p>
+                <p className="text-xs text-muted-foreground">
+                  Orders you place from the Cart will show up here.
+                </p>
+              </div>
+            ) : (
+              <div className="grid min-h-0 flex-1 grid-cols-1 sm:grid-cols-[280px_1fr]">
+                {/* My Orders */}
+                <div className="flex min-h-0 flex-col border-b border-border sm:border-b-0 sm:border-r">
+                  <p className="shrink-0 px-4 pt-3 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    My Orders
                   </p>
-                </div>
-              ) : (
-                <div className="flex flex-col gap-3">
-                  {wholesaleOrders.map((order) => {
-                    const itemCount = order.items.reduce((sum, i) => sum + i.qty, 0);
-                    const wholesalerNames = Array.from(
-                      new Set(order.items.map((i) => i.wholesalerName)),
-                    );
-                    return (
-                      <div
-                        key={order.id}
-                        className="overflow-hidden rounded-lg border border-border"
-                      >
-                        <div className="flex items-center justify-between gap-2 bg-muted/40 px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="truncate text-sm font-semibold text-foreground">
-                              {wholesalerNames.join(", ")}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              {new Date(order.createdAt).toLocaleString()} · {order.placedBy}
-                            </p>
+                  <div className="flex-1 overflow-y-auto">
+                    {pagedOrders.map((order) => {
+                      const selected = order.id === selectedOrder?.id;
+                      return (
+                        <button
+                          key={order.id}
+                          type="button"
+                          onClick={() => setSelectedOrderId(order.id)}
+                          className={cn(
+                            "block w-full border-l-4 border-b border-border px-3 py-2.5 text-left transition-colors hover:bg-muted/50",
+                            selected ? "border-l-primary bg-primary/5" : "border-l-transparent",
+                          )}
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-bold text-foreground">
+                              Order #{orderDisplayNumber(order)}
+                            </span>
+                            <Badge className="shrink-0 gap-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
+                              <Check className="h-3 w-3" /> Placed
+                            </Badge>
                           </div>
-                          <Badge className="shrink-0 gap-1 bg-emerald-100 text-emerald-700 hover:bg-emerald-100">
-                            <Check className="h-3 w-3" /> Placed
-                          </Badge>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {new Date(order.createdAt).toLocaleString()}
+                          </p>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {orderTotalPages > 1 && (
+                    <div className="flex shrink-0 flex-wrap items-center justify-center gap-1 border-t border-border p-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={orderPage === 1}
+                        onClick={() => setOrderPage((p) => p - 1)}
+                      >
+                        Prev
+                      </Button>
+                      {Array.from({ length: orderTotalPages }, (_, i) => i + 1).map((p) => (
+                        <Button
+                          key={p}
+                          size="sm"
+                          variant={p === orderPage ? "default" : "outline"}
+                          className="w-8 px-0"
+                          onClick={() => setOrderPage(p)}
+                        >
+                          {p}
+                        </Button>
+                      ))}
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={orderPage === orderTotalPages}
+                        onClick={() => setOrderPage((p) => p + 1)}
+                      >
+                        Next
+                      </Button>
+                    </div>
+                  )}
+                </div>
+
+                {/* Order Details */}
+                <div className="min-h-0 overflow-y-auto px-5 py-4">
+                  {selectedOrder && (
+                    <div className="flex flex-col gap-5">
+                      <h3 className="text-lg font-bold text-foreground">
+                        Order Details - {orderDisplayNumber(selectedOrder)}
+                      </h3>
+
+                      <div className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
+                        <div>
+                          <p className="text-xs text-muted-foreground">Placed By</p>
+                          <p className="font-medium text-foreground">{selectedOrder.placedBy}</p>
                         </div>
-                        <div className="flex flex-col gap-1.5 px-3 py-2.5">
-                          {order.items.map((item) => (
-                            <div
-                              key={item.productId}
-                              className="flex items-center justify-between text-xs"
-                            >
-                              <span className="truncate text-muted-foreground">
-                                <span className="font-medium text-foreground">{item.qty}×</span>{" "}
-                                {item.productName}
-                              </span>
-                              <span className="shrink-0 pl-2 text-foreground">
-                                {currency} {(item.qty * item.price).toFixed(2)}
-                              </span>
-                            </div>
-                          ))}
+                        <div>
+                          <p className="text-xs text-muted-foreground">Placed At</p>
+                          <p className="font-medium text-foreground">
+                            {new Date(selectedOrder.createdAt).toLocaleString()}
+                          </p>
                         </div>
-                        <div className="flex items-center justify-between border-t border-border px-3 py-2">
-                          <span className="text-xs text-muted-foreground">
-                            {itemCount} item{itemCount === 1 ? "" : "s"}
-                          </span>
-                          <span className="text-sm font-bold text-foreground">
-                            {currency} {order.total.toFixed(2)}
+                        <div>
+                          <p className="text-xs text-muted-foreground">Wholesaler(s)</p>
+                          <p className="font-medium text-foreground">
+                            {Array.from(
+                              new Set(selectedOrder.items.map((i) => i.wholesalerName)),
+                            ).join(", ")}
+                          </p>
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-sm font-semibold text-foreground">Status</p>
+                        <div className="flex items-center gap-2">
+                          <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-emerald-500 text-white">
+                            <Check className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-medium text-foreground">Order Placed</span>
+                          <span className="h-px flex-1 bg-border" />
+                        </div>
+                        <p className="mt-1.5 text-xs text-muted-foreground">
+                          Dhipos sends this straight to the wholesaler by message — it doesn't track
+                          quotation, payment, or delivery status. Contact the wholesaler directly
+                          for updates.
+                        </p>
+                      </div>
+
+                      <div>
+                        <p className="mb-2 text-sm font-semibold text-foreground">Items</p>
+                        <div className="overflow-hidden rounded-lg border border-border">
+                          <table className="w-full text-sm">
+                            <thead>
+                              <tr className="border-b border-border bg-muted/40 text-xs text-muted-foreground">
+                                <th className="px-3 py-2 text-left font-medium">Item</th>
+                                <th className="px-3 py-2 text-right font-medium">Qty</th>
+                                <th className="px-3 py-2 text-left font-medium">Unit</th>
+                                <th className="px-3 py-2 text-right font-medium">Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-border">
+                              {selectedOrder.items.map((item) => (
+                                <tr key={item.productId}>
+                                  <td className="px-3 py-2">
+                                    <p className="font-medium text-foreground">
+                                      {item.productName}
+                                    </p>
+                                    <p className="text-xs italic text-muted-foreground">
+                                      {item.wholesalerName}
+                                    </p>
+                                  </td>
+                                  <td className="px-3 py-2 text-right text-foreground">
+                                    {item.qty}
+                                  </td>
+                                  <td className="px-3 py-2 text-muted-foreground">
+                                    {item.packingDetails || "—"}
+                                  </td>
+                                  <td className="px-3 py-2 text-right font-medium text-foreground">
+                                    {currency} {(item.qty * item.price).toFixed(2)}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                        <div className="mt-2 flex items-center justify-end gap-2">
+                          <span className="text-sm text-muted-foreground">Total</span>
+                          <span className="text-base font-bold text-foreground">
+                            {currency} {selectedOrder.total.toFixed(2)}
                           </span>
                         </div>
                       </div>
-                    );
-                  })}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
+              </div>
+            )}
+
             <DialogFooter className="shrink-0 border-t border-border px-5 py-4">
               <Button variant="outline" onClick={() => setOrderHistoryOpen(false)}>
                 Close

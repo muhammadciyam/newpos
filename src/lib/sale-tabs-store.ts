@@ -143,6 +143,32 @@ export const saleTabsStore = {
 // changes the other hasn't saved yet.
 let linkedRegister: RegisterName | null = null;
 
+// A quotation's items, queued by Quotations' "Convert to Sale" to land in a fresh Sell page
+// tab. Deliberately NOT written straight into `store` at queue time — the Sell page's own
+// mount effect below re-hydrates `store` from whatever's held on the target register (async,
+// runs after navigation), which would otherwise silently overwrite a tab added just before
+// it. Queuing here and draining it only once that hydration (or the "already linked, no
+// hydration needed" fast path) has had its say keeps the import from ever getting clobbered.
+let pendingQuotationImport: { items: CartLine[]; customerId: string | null } | null = null;
+
+export function queueQuotationImport(items: CartLine[], customerId: string | null) {
+  pendingQuotationImport = { items, customerId };
+}
+
+function applyPendingQuotationImport() {
+  const pending = pendingQuotationImport;
+  if (!pending) return;
+  pendingQuotationImport = null;
+  store.set((s) => {
+    const newId = s.nextTabId;
+    return {
+      tabs: [...s.tabs, { ...emptySaleTab(newId), items: pending.items, customerId: pending.customerId }],
+      activeTab: newId,
+      nextTabId: newId + 1,
+    };
+  });
+}
+
 // Ties the held/parked sale(s) to whichever register is currently open on this device:
 // switching to a register loads whatever was already held on it (possibly from a
 // different device, if it was force-closed and reopened here), and every change while a
@@ -158,7 +184,12 @@ export function useSaleTabs(): SaleTabsState {
       linkedRegister = null;
       return;
     }
-    if (linkedRegister === registerName) return;
+    if (linkedRegister === registerName) {
+      // Already mirroring this register this session, so nothing is about to overwrite
+      // `store` out from under a queued import — safe to apply immediately.
+      applyPendingQuotationImport();
+      return;
+    }
     linkedRegister = registerName;
     let cancelled = false;
     // Must wait for the registers fetch to actually land before deciding whether to
@@ -170,6 +201,7 @@ export function useSaleTabs(): SaleTabsState {
       if (cancelled || linkedRegister !== registerName) return;
       const heldBill = getServerRegisters()[registerName]?.heldBill;
       store.set(isSaleTabsState(heldBill) ? normalizeState(heldBill) : emptySaleTabsState());
+      applyPendingQuotationImport();
     });
     return () => {
       cancelled = true;
