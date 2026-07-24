@@ -40,7 +40,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Plus, MoreHorizontal, FileDown, Pencil, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, FileDown, Pencil, Trash2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { useCustomers, customersStore } from "@/lib/customers-store";
 import type { Customer } from "@/lib/pos-data";
@@ -177,6 +177,20 @@ function CustomersPage() {
     setOpen(false);
   }
 
+  // My Dhipos (Settings > My Dhipos) normally reaches a customer via the QR code printed on
+  // their receipt — this covers the gap for an existing customer who wants access without
+  // buying something new, by handing staff the exact same link to send however they like
+  // (SMS, WhatsApp, etc.). Same URL the receipt's QR code encodes — see receipt.tsx.
+  async function copyMyDhiposLink(c: Customer) {
+    const url = `${window.location.origin}/my-dhipos/${encodeURIComponent(c.id)}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      toast.success(`Link copied for ${c.name}`);
+    } catch {
+      toast.error("Couldn't copy the link — copy it manually: " + url);
+    }
+  }
+
   function exportCsv() {
     downloadCsv("customers.csv", [
       ["Name", "Mobile", "Email", "Outstanding", "Credit Limit", "Total Spent", "Loyalty"],
@@ -299,6 +313,14 @@ function CustomersPage() {
                             <DropdownMenuItem onClick={() => openEdit(c)} className="gap-1.5">
                               <Pencil className="h-3.5 w-3.5" /> Edit
                             </DropdownMenuItem>
+                            {settings.myDhipos.enabled && (
+                              <DropdownMenuItem
+                                onClick={() => copyMyDhiposLink(c)}
+                                className="gap-1.5"
+                              >
+                                <Link2 className="h-3.5 w-3.5" /> Copy My Dhipos Link
+                              </DropdownMenuItem>
+                            )}
                             <AlertDialog>
                               <AlertDialogTrigger asChild>
                                 <DropdownMenuItem
