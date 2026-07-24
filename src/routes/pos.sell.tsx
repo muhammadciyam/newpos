@@ -55,7 +55,7 @@ import {
   X,
   Percent,
 } from "lucide-react";
-import { type Product, type Bill } from "@/lib/pos-data";
+import { type Product, type Bill, isLowStock } from "@/lib/pos-data";
 import { useProducts, useProductsPolling } from "@/lib/products-store";
 import { useCategories } from "@/lib/categories-store";
 import { billsStore, useBills, resolveBillNumber } from "@/lib/bills-store";
@@ -704,7 +704,17 @@ function SellPage() {
                           <span className="font-medium text-foreground">{p.name}</span>
                         </span>
                         <span className="flex items-center gap-2 text-muted-foreground">
-                          <span>{p.stock} in stock</span>
+                          <span
+                            className={
+                              p.stock <= 0
+                                ? "font-medium text-destructive"
+                                : isLowStock(p)
+                                  ? "font-medium text-amber-600"
+                                  : undefined
+                            }
+                          >
+                            {p.stock} in stock
+                          </span>
                           <span className="font-semibold text-primary">${p.price.toFixed(2)}</span>
                         </span>
                       </button>
@@ -732,20 +742,32 @@ function SellPage() {
                 <TableBody>
                   {tab.items.map((i) => {
                     const liveProduct = products.find((p) => p.id === i.product.id);
-                    const liveStock = (liveProduct ?? i.product).stock;
+                    const liveProductData = liveProduct ?? i.product;
+                    const liveStock = liveProductData.stock;
+                    const notEnough = liveStock < i.qty;
                     return (
                       <TableRow key={i.product.id}>
                         <TableCell>
                           <p className="font-medium text-foreground">{i.product.name}</p>
-                          {liveStock < i.qty && (
+                          {notEnough ? (
                             <p className="mt-1 inline-block rounded bg-destructive/10 px-2 py-0.5 text-xs text-destructive">
                               Not enough stock
                             </p>
+                          ) : (
+                            isLowStock(liveProductData) && (
+                              <p className="mt-1 inline-block rounded bg-amber-100 px-2 py-0.5 text-xs text-amber-700">
+                                Low stock
+                              </p>
+                            )
                           )}
                         </TableCell>
                         <TableCell
                           className={
-                            liveStock < i.qty ? "text-destructive" : "text-muted-foreground"
+                            notEnough
+                              ? "font-medium text-destructive"
+                              : isLowStock(liveProductData)
+                                ? "font-medium text-amber-600"
+                                : "text-muted-foreground"
                           }
                         >
                           {liveStock}
