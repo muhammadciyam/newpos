@@ -175,7 +175,7 @@ const defaults: AppSettings = {
     hooks: [],
   },
   myDhipos: {
-    enabled: false,
+    enabled: true,
     eBillQrEnabled: true,
   },
   product: {
