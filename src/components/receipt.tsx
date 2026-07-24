@@ -11,6 +11,13 @@ function eBillUrl(billNumber: string): string {
   return `${origin}/e-bill/${encodeURIComponent(billNumber)}`;
 }
 
+// My Dhipos (Settings > My Dhipos) — lets a known customer see every bill linked to their
+// account, not just this one. Only meaningful for a bill tied to an actual customer record.
+function myDhiposUrl(customerId: string): string {
+  const origin = typeof window !== "undefined" ? window.location.origin : "";
+  return `${origin}/my-dhipos/${encodeURIComponent(customerId)}`;
+}
+
 export function Receipt({
   bill,
   template,
@@ -23,6 +30,7 @@ export function Receipt({
   const settings = useSettings();
   const { registers } = useRegister();
   const showQr = template.showQrCode && settings.myDhipos.eBillQrEnabled;
+  const showMyDhiposQr = template.showQrCode && settings.myDhipos.enabled && !!bill.customerId;
   const currency = settings.general.currency;
   const gstPercent = settings.tax.gstPercent;
 
@@ -184,10 +192,20 @@ export function Receipt({
         </div>
       )}
 
-      {showQr && (
-        <div className="mt-3 flex flex-col items-center gap-1">
-          <QRCodeSVG value={eBillUrl(bill.number)} size={64} level="M" />
-          <p className="text-[10px]">Scan to view e-bill</p>
+      {(showQr || showMyDhiposQr) && (
+        <div className="mt-3 flex items-start justify-center gap-4">
+          {showQr && (
+            <div className="flex flex-col items-center gap-1">
+              <QRCodeSVG value={eBillUrl(bill.number)} size={64} level="M" />
+              <p className="text-[10px]">Scan to view e-bill</p>
+            </div>
+          )}
+          {showMyDhiposQr && (
+            <div className="flex flex-col items-center gap-1">
+              <QRCodeSVG value={myDhiposUrl(bill.customerId as string)} size={64} level="M" />
+              <p className="text-[10px]">Scan to view all your purchases</p>
+            </div>
+          )}
         </div>
       )}
 

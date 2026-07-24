@@ -38,6 +38,7 @@ import { Route as PosRegisterRouteImport } from './routes/pos.register'
 import { Route as PosQuotationsRouteImport } from './routes/pos.quotations'
 import { Route as PosOnlinePaymentsRouteImport } from './routes/pos.online-payments'
 import { Route as PosBillHistoryRouteImport } from './routes/pos.bill-history'
+import { Route as MyDhiposCustomerIdRouteImport } from './routes/my-dhipos.$customerId'
 import { Route as EBillNumberRouteImport } from './routes/e-bill.$number'
 import { Route as AnalyticsSalesRouteImport } from './routes/analytics.sales'
 import { Route as AnalyticsInventoryRouteImport } from './routes/analytics.inventory'
@@ -199,6 +200,11 @@ const PosBillHistoryRoute = PosBillHistoryRouteImport.update({
   path: '/pos/bill-history',
   getParentRoute: () => rootRouteImport,
 } as any)
+const MyDhiposCustomerIdRoute = MyDhiposCustomerIdRouteImport.update({
+  id: '/my-dhipos/$customerId',
+  path: '/my-dhipos/$customerId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const EBillNumberRoute = EBillNumberRouteImport.update({
   id: '/e-bill/$number',
   path: '/e-bill/$number',
@@ -313,6 +319,7 @@ export interface FileRoutesByFullPath {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
+  '/my-dhipos/$customerId': typeof MyDhiposCustomerIdRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -359,6 +366,7 @@ export interface FileRoutesByTo {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
+  '/my-dhipos/$customerId': typeof MyDhiposCustomerIdRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -406,6 +414,7 @@ export interface FileRoutesById {
   '/analytics/inventory': typeof AnalyticsInventoryRoute
   '/analytics/sales': typeof AnalyticsSalesRoute
   '/e-bill/$number': typeof EBillNumberRoute
+  '/my-dhipos/$customerId': typeof MyDhiposCustomerIdRoute
   '/pos/bill-history': typeof PosBillHistoryRoute
   '/pos/online-payments': typeof PosOnlinePaymentsRoute
   '/pos/quotations': typeof PosQuotationsRoute
@@ -454,6 +463,7 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
+    | '/my-dhipos/$customerId'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -500,6 +510,7 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
+    | '/my-dhipos/$customerId'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -546,6 +557,7 @@ export interface FileRouteTypes {
     | '/analytics/inventory'
     | '/analytics/sales'
     | '/e-bill/$number'
+    | '/my-dhipos/$customerId'
     | '/pos/bill-history'
     | '/pos/online-payments'
     | '/pos/quotations'
@@ -593,6 +605,7 @@ export interface RootRouteChildren {
   AnalyticsInventoryRoute: typeof AnalyticsInventoryRoute
   AnalyticsSalesRoute: typeof AnalyticsSalesRoute
   EBillNumberRoute: typeof EBillNumberRoute
+  MyDhiposCustomerIdRoute: typeof MyDhiposCustomerIdRoute
   PosBillHistoryRoute: typeof PosBillHistoryRoute
   PosOnlinePaymentsRoute: typeof PosOnlinePaymentsRoute
   PosQuotationsRoute: typeof PosQuotationsRoute
@@ -807,6 +820,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof PosBillHistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/my-dhipos/$customerId': {
+      id: '/my-dhipos/$customerId'
+      path: '/my-dhipos/$customerId'
+      fullPath: '/my-dhipos/$customerId'
+      preLoaderRoute: typeof MyDhiposCustomerIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/e-bill/$number': {
       id: '/e-bill/$number'
       path: '/e-bill/$number'
@@ -953,6 +973,7 @@ const rootRouteChildren: RootRouteChildren = {
   AnalyticsInventoryRoute: AnalyticsInventoryRoute,
   AnalyticsSalesRoute: AnalyticsSalesRoute,
   EBillNumberRoute: EBillNumberRoute,
+  MyDhiposCustomerIdRoute: MyDhiposCustomerIdRoute,
   PosBillHistoryRoute: PosBillHistoryRoute,
   PosOnlinePaymentsRoute: PosOnlinePaymentsRoute,
   PosQuotationsRoute: PosQuotationsRoute,
