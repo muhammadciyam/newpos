@@ -15,6 +15,17 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -790,19 +801,36 @@ function SettingsPage() {
                       <TableRow key={k}>
                         <TableCell>{k}</TableCell>
                         <TableCell>
-                          <Button
-                            variant="destructive"
-                            size="icon"
-                            className="h-8 w-8"
-                            onClick={() =>
-                              settingsStore.updateSection("inventory", {
-                                stockAdjustmentTypes:
-                                  settings.inventory.stockAdjustmentTypes.filter((t) => t !== k),
-                              })
-                            }
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button variant="destructive" size="icon" className="h-8 w-8">
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Delete "{k}"?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  This removes the stock adjustment type. This can't be undone.
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                <AlertDialogAction
+                                  onClick={() =>
+                                    settingsStore.updateSection("inventory", {
+                                      stockAdjustmentTypes:
+                                        settings.inventory.stockAdjustmentTypes.filter(
+                                          (t) => t !== k,
+                                        ),
+                                    })
+                                  }
+                                >
+                                  Delete
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
                         </TableCell>
                       </TableRow>
                     ))}
