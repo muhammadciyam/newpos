@@ -404,8 +404,10 @@ function WholesalerHomePage() {
       return;
     }
 
-    // Group by wholesaler so each one only gets notified about their own items — a cart
-    // can span multiple wholesalers at once.
+    // Each outlet's cart can only ever hold one wholesaler's items at a time (see
+    // cartStore.addToCart's mixing guard) — this still groups by wholesaler mainly to read
+    // out that one group cleanly, and to stay correct for any pre-existing order placed
+    // before that restriction existed.
     const groups = new Map<string, CartItem[]>();
     for (const item of cart) {
       groups.set(item.wholesalerId, [...(groups.get(item.wholesalerId) ?? []), item]);
@@ -1852,7 +1854,9 @@ function WholesalerHomePage() {
             ) : cart.length > 0 ? (
               <DialogFooter className="flex-col gap-3 shrink-0 border-t border-border px-5 py-4 sm:flex-col">
                 <div className="flex w-full items-center justify-between">
-                  <p className="text-sm font-semibold text-foreground">Total</p>
+                  <p className="text-sm font-semibold text-foreground">
+                    Total — {cartGroups[0]?.wholesalerName}
+                  </p>
                   <p className="text-lg font-bold text-foreground">
                     {currency} {cartTotal.toFixed(2)}
                   </p>
@@ -1862,7 +1866,7 @@ function WholesalerHomePage() {
                   className="w-full rounded-full text-base font-semibold"
                   onClick={placeOrder}
                 >
-                  Checkout
+                  Place Order
                 </Button>
                 <div className="flex w-full items-center justify-center gap-4 text-xs">
                   <button

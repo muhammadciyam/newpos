@@ -97,6 +97,18 @@ export const cartStore = {
   ): Promise<{ ok: true } | { error: string }> {
     return serialize(async () => {
       const outletId = authStore.getCurrentUser()?.outletId ?? null;
+      // Each shop gets its own independent cart/order — never mix two wholesalers' items
+      // into one cart, since Make Order turns the whole cart into a single order + payment
+      // for whoever it's sent to. Adding from a different wholesaler while this outlet's
+      // cart already holds another one's items is blocked rather than silently merged.
+      const otherWholesaler = items.find(
+        (i) => i.outletId === outletId && i.wholesalerId !== wholesaler.id,
+      );
+      if (otherWholesaler) {
+        return {
+          error: `Your cart already has items from ${otherWholesaler.wholesalerName}. Place or clear that order before adding from ${wholesaler.name}.`,
+        };
+      }
       const existing = items.find((i) => sameLine(i, product.id, outletId));
       const item: CartItem = {
         wholesalerId: wholesaler.id,
