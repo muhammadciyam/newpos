@@ -663,13 +663,27 @@ function SettingsPage() {
                                 Edit
                               </Button>
                               {methodId(m) !== "Cash" && (
-                                <Button
-                                  variant="destructive"
-                                  size="sm"
-                                  onClick={() => deleteMethod(methodId(m))}
-                                >
-                                  Delete
-                                </Button>
+                                <AlertDialog>
+                                  <AlertDialogTrigger asChild>
+                                    <Button variant="destructive" size="sm">
+                                      Delete
+                                    </Button>
+                                  </AlertDialogTrigger>
+                                  <AlertDialogContent>
+                                    <AlertDialogHeader>
+                                      <AlertDialogTitle>Delete "{m.name}"?</AlertDialogTitle>
+                                      <AlertDialogDescription>
+                                        This removes the payment method. This can't be undone.
+                                      </AlertDialogDescription>
+                                    </AlertDialogHeader>
+                                    <AlertDialogFooter>
+                                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                      <AlertDialogAction onClick={() => deleteMethod(methodId(m))}>
+                                        Delete
+                                      </AlertDialogAction>
+                                    </AlertDialogFooter>
+                                  </AlertDialogContent>
+                                </AlertDialog>
                               )}
                             </div>
                           </TableCell>
@@ -1016,13 +1030,27 @@ function SettingsPage() {
                             >
                               Edit
                             </Button>
-                            <Button
-                              variant="destructive"
-                              size="sm"
-                              onClick={() => removeDiscountPreset(p.id)}
-                            >
-                              Delete
-                            </Button>
+                            <AlertDialog>
+                              <AlertDialogTrigger asChild>
+                                <Button variant="destructive" size="sm">
+                                  Delete
+                                </Button>
+                              </AlertDialogTrigger>
+                              <AlertDialogContent>
+                                <AlertDialogHeader>
+                                  <AlertDialogTitle>Delete "{p.name}"?</AlertDialogTitle>
+                                  <AlertDialogDescription>
+                                    This removes the discount preset. This can't be undone.
+                                  </AlertDialogDescription>
+                                </AlertDialogHeader>
+                                <AlertDialogFooter>
+                                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                                  <AlertDialogAction onClick={() => removeDiscountPreset(p.id)}>
+                                    Delete
+                                  </AlertDialogAction>
+                                </AlertDialogFooter>
+                              </AlertDialogContent>
+                            </AlertDialog>
                           </div>
                         </TableCell>
                       </TableRow>
