@@ -66,6 +66,7 @@ import { useCurrentUser } from "@/lib/auth-store";
 import { useHasPermission } from "@/lib/permissions";
 import { useSettings, settingsStore } from "@/lib/settings-store";
 import { pendingSaleStore } from "@/lib/pending-sale-store";
+import { quotationsStore } from "@/lib/quotations-store";
 import { PrintBillDialog } from "@/components/print-bill-dialog";
 import {
   type CartLine,
@@ -328,6 +329,7 @@ function SellPage() {
       currencyRate: null,
       discountType: null,
       discountValue: "",
+      fromQuotation: null,
     });
     setCustomerQuery("");
   }
@@ -335,7 +337,12 @@ function SellPage() {
   // Closes the current sale tab outright when there are others open (so it disappears from
   // the tab bar, not just an emptied-out tab sitting there) — with only one tab left, there's
   // nothing to close down to, so it's reset in place instead (same end result either way).
+  // If this tab's items came from Quotations' "Convert to Sale" (see quotations-store.ts),
+  // that quotation was already marked Converted the moment it landed here — discarding
+  // instead of actually saving a bill needs to undo that, or the quotation would be stuck
+  // showing Converted with no bill behind it and could never be converted again.
   function closeOrResetTab() {
+    if (tab.fromQuotation) void quotationsStore.revertConversion(tab.fromQuotation);
     if (tabs.length > 1) {
       saleTabsStore.closeTab(activeTab);
     } else {

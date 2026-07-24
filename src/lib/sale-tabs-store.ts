@@ -43,6 +43,12 @@ export type SaleTab = {
   // Ignored while `foc` is on, since FOC already zeroes the whole bill out.
   discountType: "percent" | "amount" | null;
   discountValue: string;
+  // Set when this tab's items were loaded in via Quotations' "Convert to Sale" — the
+  // quotation was already marked Converted at that point (see quotations-store.ts), so if
+  // this tab gets discarded instead of actually saved as a bill, that conversion needs to be
+  // undone (back to Accepted) rather than silently leaving a "Converted" quotation with no
+  // bill behind it. Cleared once this tab's outcome (saved or discarded) is settled either way.
+  fromQuotation: string | null;
 };
 
 export function emptySaleTab(id: number): SaleTab {
@@ -66,6 +72,7 @@ export function emptySaleTab(id: number): SaleTab {
     currencyRate: null,
     discountType: null,
     discountValue: "",
+    fromQuotation: null,
   };
 }
 
@@ -149,10 +156,18 @@ let linkedRegister: RegisterName | null = null;
 // runs after navigation), which would otherwise silently overwrite a tab added just before
 // it. Queuing here and draining it only once that hydration (or the "already linked, no
 // hydration needed" fast path) has had its say keeps the import from ever getting clobbered.
-let pendingQuotationImport: { items: CartLine[]; customerId: string | null } | null = null;
+let pendingQuotationImport: {
+  items: CartLine[];
+  customerId: string | null;
+  quotationNumber: string;
+} | null = null;
 
-export function queueQuotationImport(items: CartLine[], customerId: string | null) {
-  pendingQuotationImport = { items, customerId };
+export function queueQuotationImport(
+  items: CartLine[],
+  customerId: string | null,
+  quotationNumber: string,
+) {
+  pendingQuotationImport = { items, customerId, quotationNumber };
 }
 
 function applyPendingQuotationImport() {
@@ -162,7 +177,15 @@ function applyPendingQuotationImport() {
   store.set((s) => {
     const newId = s.nextTabId;
     return {
-      tabs: [...s.tabs, { ...emptySaleTab(newId), items: pending.items, customerId: pending.customerId }],
+      tabs: [
+        ...s.tabs,
+        {
+          ...emptySaleTab(newId),
+          items: pending.items,
+          customerId: pending.customerId,
+          fromQuotation: pending.quotationNumber,
+        },
+      ],
       activeTab: newId,
       nextTabId: newId + 1,
     };

@@ -139,9 +139,20 @@ export const quotationsStore = {
     if (lines.length === 0) {
       return { error: "None of this quotation's items are available anymore" };
     }
-    queueQuotationImport(lines, quotation.customerId);
+    queueQuotationImport(lines, quotation.customerId, number);
     void this.updateStatus(number, "Converted");
     return { ok: true, skipped };
+  },
+
+  // Undoes convertToSale's status flip when the Sell page cart it was loaded into gets
+  // discarded (F2 / tab close) instead of actually saved as a bill — otherwise the quotation
+  // would be stuck showing "Converted" forever with no bill behind it, and could never be
+  // converted again. A no-op if it's not currently Converted (e.g. this already ran once, or
+  // the quotation moved on some other way) so it's safe to call unconditionally on discard.
+  async revertConversion(number: string): Promise<void> {
+    const quotation = quotations.find((q) => q.number === number);
+    if (!quotation || quotation.status !== "Converted") return;
+    await this.updateStatus(number, "Accepted");
   },
 };
 
